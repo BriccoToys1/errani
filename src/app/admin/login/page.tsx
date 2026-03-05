@@ -52,13 +52,16 @@ export default function AdminLoginPage() {
           <div className="cms-form-group">
             <label className="cms-label">Email</label>
             <input
-              type="email"
+              type="text"
               className="cms-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               autoFocus
-              placeholder="admin@errani.ru"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
             />
           </div>
 
@@ -70,7 +73,7 @@ export default function AdminLoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              placeholder="password"
+              autoComplete="new-password"
             />
           </div>
 
