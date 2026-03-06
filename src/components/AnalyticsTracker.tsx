@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
+const ENDPOINT = '/api/analytics/track';
+
 function getSessionId(): string {
   let sid = sessionStorage.getItem('_errani_sid');
   if (!sid) {
@@ -12,62 +14,49 @@ function getSessionId(): string {
   return sid;
 }
 
+function beacon(data: object) {
+  navigator.sendBeacon(
+    ENDPOINT,
+    new Blob([JSON.stringify(data)], { type: 'application/json' })
+  );
+}
+
 export function AnalyticsTracker() {
   const pathname = usePathname();
   const startRef = useRef(Date.now());
   const prevPath = useRef<string | null>(null);
 
   useEffect(() => {
-    // Skip admin pages
     if (pathname.startsWith('/admin')) return;
 
     const sessionId = getSessionId();
     const lang = localStorage.getItem('errani_lang') || navigator.language.slice(0, 2);
 
-    // Send duration for previous page
+    // Отправляем время на предыдущей странице
     if (prevPath.current && prevPath.current !== pathname) {
-      const duration = Math.round((Date.now() - startRef.current) / 1000);
-      navigator.sendBeacon(
-        '/api/analytics/track',
-        JSON.stringify({
-          sessionId,
-          path: prevPath.current,
-          referrer: '',
-          lang,
-          duration,
-        })
-      );
+      beacon({
+        sessionId,
+        path: prevPath.current,
+        referrer: '',
+        lang,
+        duration: Math.round((Date.now() - startRef.current) / 1000),
+      });
     }
 
-    // Track new page view
     startRef.current = Date.now();
     prevPath.current = pathname;
 
-    fetch('/api/analytics/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    // Трекаем новую страницу
+    beacon({ sessionId, path: pathname, referrer: document.referrer || '', lang, duration: 0 });
+
+    const handleUnload = () => {
+      beacon({
         sessionId,
         path: pathname,
-        referrer: document.referrer || '',
+        referrer: '',
         lang,
-        duration: 0,
-      }),
-    }).catch(() => {});
-
-    // On page unload, send final duration
-    const handleUnload = () => {
-      const duration = Math.round((Date.now() - startRef.current) / 1000);
-      navigator.sendBeacon(
-        '/api/analytics/track',
-        JSON.stringify({
-          sessionId,
-          path: pathname,
-          referrer: '',
-          lang,
-          duration,
-        })
-      );
+        duration: Math.round((Date.now() - startRef.current) / 1000),
+      });
     };
 
     window.addEventListener('beforeunload', handleUnload);
