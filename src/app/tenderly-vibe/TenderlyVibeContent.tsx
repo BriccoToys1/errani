@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useCallback, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { t, SPEC_KEYS } from '@/lib/i18n';
+import { t } from '@/lib/i18n';
 import { AddToCartSection } from './AddToCartSection';
 
 const GALLERY_IMAGES = [
@@ -98,20 +98,7 @@ export function TenderlyVibeContent() {
         </div>
       </section>
 
-      {/* Specifications */}
-      <section className="specs-section">
-        <h2 className="specs-heading">{t(lang, 'product.specs')}</h2>
-        <table className="specs-table">
-          <tbody>
-            {SPEC_KEYS.map((key) => (
-              <tr key={key}>
-                <td>{t(lang, key)}</td>
-                <td>{t(lang, `${key}.value`)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+
 
       {/* Gallery */}
       <section className="gallery-section">
