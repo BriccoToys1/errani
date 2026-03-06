@@ -8,7 +8,8 @@
 /* --- Custom Fonts --- */
 @font-face {
   font-family: 'Zalando Sans';
-  src: url('/fonts/ZalandoSans-VariableFont_wdth,wght.ttf') format('truetype');
+  src: url('/fonts/ZalandoSans.woff2') format('woff2'),
+       url('/fonts/ZalandoSans-VariableFont_wdth,wght.ttf') format('truetype');
   font-weight: 200 900;
   font-style: normal;
   font-display: swap;
@@ -16,7 +17,8 @@
 
 @font-face {
   font-family: 'Zalando Sans';
-  src: url('/fonts/ZalandoSans-Italic-VariableFont_wdth,wght.ttf') format('truetype');
+  src: url('/fonts/ZalandoSans-Italic.woff2') format('woff2'),
+       url('/fonts/ZalandoSans-Italic-VariableFont_wdth,wght.ttf') format('truetype');
   font-weight: 200 900;
   font-style: italic;
   font-display: swap;
@@ -34,8 +36,8 @@
   --text-secondary: #8a8a8a;
   --text-muted: #4a4a4a;
   --border: rgba(255, 255, 255, 0.07);
-  --font-display: 'Zalando Sans', 'Montserrat', sans-serif;
-  --font-body: 'Montserrat', sans-serif;
+  --font-display: 'Zalando Sans', sans-serif;
+  --font-body: 'Zalando Sans', sans-serif;
 }
 
 /* --- Base --- */
