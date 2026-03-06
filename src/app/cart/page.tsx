@@ -189,12 +189,12 @@ export default function CartPage() {
       <div className="checkout-steps">
         <div className={`checkout-step ${step === 'cart' ? 'active' : 'completed'}`}>
           <span className="checkout-step-number">{step === 'cart' ? '1' : '✓'}</span>
-          <span>{lang === 'ru' ? 'Корзина' : 'Cart'}</span>
+              {t(lang, 'cart.title')}</span>
         </div>
         <div className={`checkout-step-connector ${step !== 'cart' ? 'completed' : ''}`} />
         <div className={`checkout-step ${step === 'checkout' ? 'active' : ''}`}>
           <span className="checkout-step-number">2</span>
-          <span>{lang === 'ru' ? 'Оформление' : 'Checkout'}</span>
+          <span>{t(lang, 'cart.checkout.heading')}</span>
         </div>
       </div>
 
@@ -250,9 +250,9 @@ export default function CartPage() {
       ) : (
         <form onSubmit={handleSubmit}>
           <div className="checkout-form" style={{ borderTop: 'none', marginTop: 0, paddingTop: 0 }}>
-            <h2 className="checkout-heading">Контактные данные</h2>
+            <h2 className="checkout-heading">{lang === 'ru' ? 'Контактные данные' : 'Contact details'}</h2>
             <div className="checkout-grid">
-              <Field label="ФИО" value={formData.name} error={errors.name} className="full-width"
+              <Field label={lang === 'ru' ? 'ФИО' : 'Full name'} value={formData.name} error={errors.name} className="full-width"
                 onChange={(v) => setFormData({ ...formData, name: v })} />
               <Field label="Email" type="email" value={formData.email} error={errors.email}
                 onChange={(v) => setFormData({ ...formData, email: v })} />
@@ -267,10 +267,10 @@ export default function CartPage() {
           </div>
 
           <div className="checkout-form">
-            <h2 className="checkout-heading">Адрес доставки</h2>
+            <h2 className="checkout-heading">{lang === 'ru' ? 'Адрес доставки' : 'Shipping address'}</h2>
             <div className="checkout-grid">
               <div className="full-width">
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Страна</label>
+                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>{lang === 'ru' ? 'Страна' : 'Country'}</label>
                 <select
                   className="form-field"
                   value={formData.country}
@@ -279,45 +279,31 @@ export default function CartPage() {
                   {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
                 </select>
               </div>
-              <Field label="Город" value={formData.city} error={errors.city}
+              <Field label={lang === 'ru' ? 'Город' : 'City'} value={formData.city} error={errors.city}
                 onChange={(v) => setFormData({ ...formData, city: v })} />
-              <Field label="Индекс" value={formData.zipCode} error={errors.zipCode}
+              <Field label={lang === 'ru' ? 'Индекс' : 'ZIP / Postal code'} value={formData.zipCode} error={errors.zipCode}
                 onChange={(v) => setFormData({ ...formData, zipCode: v })} />
-              <Field label="Улица" value={formData.street} error={errors.street}
+              <Field label={lang === 'ru' ? 'Улица' : 'Street'} value={formData.street} error={errors.street}
                 onChange={(v) => setFormData({ ...formData, street: v })} />
-              <Field label="Дом" value={formData.house} error={errors.house}
+              <Field label={lang === 'ru' ? 'Дом' : 'House / Apt'} value={formData.house} error={errors.house}
                 onChange={(v) => setFormData({ ...formData, house: v })} />
-              <Field label="Квартира" value={formData.apartment}
+              <Field label={lang === 'ru' ? 'Квартира' : 'Apartment'} value={formData.apartment}
                 onChange={(v) => setFormData({ ...formData, apartment: v })} />
             </div>
           </div>
 
           <div className="checkout-form">
-            <h2 className="checkout-heading">Способ доставки</h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {shippingMethods.map(m => (
-                <label
-                  key={m.key}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    padding: '1rem',
-                    border: `1px solid ${formData.shippingMethod === m.key ? 'var(--orange)' : 'var(--border)'}`,
-                    cursor: 'pointer',
-                    transition: 'border-color 0.2s',
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="shipping"
-                    checked={formData.shippingMethod === m.key}
-                    onChange={() => setFormData({ ...formData, shippingMethod: m.key })}
-                    style={{ accentColor: 'var(--orange)' }}
-                  />
-                  <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{m.label}</span>
-                </label>
-              ))}
+            <h2 className="checkout-heading">{lang === 'ru' ? 'Способ доставки' : 'Shipping method'}</h2>
+            <div>
+              <select
+                className="form-field"
+                value={formData.shippingMethod}
+                onChange={(e) => setFormData({ ...formData, shippingMethod: e.target.value })}
+              >
+                {shippingMethods.map(m => (
+                  <option key={m.key} value={m.key}>{m.label}</option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -328,7 +314,7 @@ export default function CartPage() {
               <span className="cart-total-price">{formatPrice(total)}</span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem' }}>
-              {isRussia ? 'Оплата через ЮKassa' : 'Оплата картой'}
+              {isRussia ? 'Оплата через ЮKassa' : (lang === 'ru' ? 'Оплата картой' : 'Pay by card')}
             </p>
           </div>
 
