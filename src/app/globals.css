@@ -22,6 +22,11 @@
   font-display: swap;
 }
 
+/* --- Tailwind Theme Override --- */
+@theme {
+  --font-sans: 'Montserrat', sans-serif;
+}
+
 /* --- Variables --- */
 :root {
   --orange: #E8722A;
