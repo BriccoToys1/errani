@@ -12,6 +12,11 @@ export default function HomePage() {
       {/* Divider */}
       <div className="home-divider anim-line-reveal" />
 
+      {/* DEPLOY TEST — удалить после проверки */}
+      <p style={{ fontSize: '11px', color: '#E8722A', position: 'absolute', top: '12px', right: '12px', opacity: 0.7 }}>
+        v{new Date('2026-03-06').getTime().toString(36)}
+      </p>
+
       {/* Main Text */}
       <h1 className="home-display anim-fade-up anim-fade-up-d2">
         {t(lang, 'home.title')}
