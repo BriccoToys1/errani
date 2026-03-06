@@ -189,7 +189,7 @@ export default function CartPage() {
       <div className="checkout-steps">
         <div className={`checkout-step ${step === 'cart' ? 'active' : 'completed'}`}>
           <span className="checkout-step-number">{step === 'cart' ? '1' : '✓'}</span>
-              {t(lang, 'cart.title')}</span>
+          <span>{t(lang, 'cart.title')}</span>
         </div>
         <div className={`checkout-step-connector ${step !== 'cart' ? 'completed' : ''}`} />
         <div className={`checkout-step ${step === 'checkout' ? 'active' : ''}`}>
