@@ -72,7 +72,7 @@ export default function RootLayout({
       <head>
         <link
           rel="preload"
-          href="/fonts/ZalandoSans.woff2"
+          href="/fonts/Montserrat.woff2"
           as="font"
           type="font/woff2"
           crossOrigin="anonymous"

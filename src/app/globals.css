@@ -7,19 +7,17 @@
 
 /* --- Custom Fonts --- */
 @font-face {
-  font-family: 'Zalando Sans';
-  src: url('/fonts/ZalandoSans.woff2') format('woff2'),
-       url('/fonts/ZalandoSans-VariableFont_wdth,wght.ttf') format('truetype');
-  font-weight: 200 900;
+  font-family: 'Montserrat';
+  src: url('/fonts/Montserrat.woff2') format('woff2');
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Zalando Sans';
-  src: url('/fonts/ZalandoSans-Italic.woff2') format('woff2'),
-       url('/fonts/ZalandoSans-Italic-VariableFont_wdth,wght.ttf') format('truetype');
-  font-weight: 200 900;
+  font-family: 'Montserrat';
+  src: url('/fonts/Montserrat-Italic.woff2') format('woff2');
+  font-weight: 100 900;
   font-style: italic;
   font-display: swap;
 }
@@ -36,8 +34,8 @@
   --text-secondary: #8a8a8a;
   --text-muted: #4a4a4a;
   --border: rgba(255, 255, 255, 0.07);
-  --font-display: 'Zalando Sans', sans-serif;
-  --font-body: 'Zalando Sans', sans-serif;
+  --font-display: 'Montserrat', sans-serif;
+  --font-body: 'Montserrat', sans-serif;
 }
 
 /* --- Base --- */
@@ -380,13 +378,9 @@ img {
 }
 
 .site-footer {
-  position: relative;
-  background: var(--bg-surface);
-  border-radius: 2.5rem 2.5rem 0 0;
-  box-shadow: 0 -12px 60px rgba(0, 0, 0, 0.45);
+  border-top: 1px solid var(--border);
   padding: clamp(3rem, 6vw, 5rem) clamp(1.5rem, 4vw, 3rem);
   padding-bottom: calc(clamp(3rem, 6vw, 5rem) + 64px);
-  margin-top: -2.5rem;
 }
 
 .footer-inner {
@@ -394,27 +388,14 @@ img {
   margin: 0 auto;
   display: grid;
   grid-template-columns: 1fr;
-  gap: 2.5rem;
+  gap: 3rem;
 }
 
 @media (min-width: 768px) {
   .footer-inner {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
     gap: 4rem;
-    align-items: center;
-  }
-}
-
-.footer-right {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  align-items: flex-start;
-}
-
-@media (min-width: 768px) {
-  .footer-right {
-    align-items: flex-end;
+    align-items: start;
   }
 }
 
@@ -466,7 +447,7 @@ img {
   color: var(--text);
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: 99px;
+  border-radius: 0;
   cursor: pointer;
   transition: all 0.3s;
 }
