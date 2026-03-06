@@ -898,43 +898,52 @@ img {
    ============================================================ */
 
 .catalog-section {
-  padding: clamp(8rem, 12vw, 10rem) clamp(1.5rem, 4vw, 3rem) clamp(4rem, 8vw, 8rem);
-  max-width: 1200px;
+  padding: clamp(7rem, 10vw, 9rem) clamp(1.5rem, 4vw, 3rem) clamp(4rem, 8vw, 6rem);
+  max-width: 800px;
   margin: 0 auto;
 }
 
 .catalog-heading {
   font-family: var(--font-display);
-  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 800;
-  margin-bottom: 4rem;
+  margin-bottom: 3rem;
 }
 
 .catalog-card {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  overflow: hidden;
-  transition: border-color 0.3s;
+  display: flex;
+  gap: 1.25rem;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.2s;
 }
 
 .catalog-card:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+  opacity: 0.85;
 }
 
 @media (min-width: 768px) {
   .catalog-card {
-    grid-template-columns: 1fr 1fr;
+    gap: 1.75rem;
   }
 }
 
 .catalog-card-image {
   position: relative;
-  aspect-ratio: 3/4;
+  width: 80px;
+  height: 100px;
+  flex-shrink: 0;
   overflow: hidden;
-  background: var(--bg-elevated);
+  background: var(--bg-surface);
+}
+
+@media (min-width: 768px) {
+  .catalog-card-image {
+    width: 100px;
+    height: 130px;
+  }
 }
 
 .catalog-card-image img {
@@ -946,42 +955,47 @@ img {
 }
 
 .catalog-card-info {
+  flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: clamp(2rem, 4vw, 3rem);
+  padding: 0.25rem 0;
 }
 
 .catalog-card-label {
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--orange);
-  margin-bottom: 1rem;
+  margin-bottom: 0.25rem;
 }
 
 .catalog-card-title {
-  font-family: var(--font-display);
-  font-size: clamp(1.5rem, 3vw, 2.5rem);
-  font-weight: 700;
-  line-height: 1.1;
-  margin-bottom: 1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
 }
 
 .catalog-card-desc {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
-  line-height: 1.6;
-  margin-bottom: 2rem;
-  max-width: 350px;
+  line-height: 1.5;
+  margin-bottom: 0;
+  display: none;
+}
+
+@media (min-width: 480px) {
+  .catalog-card-desc {
+    display: block;
+  }
 }
 
 .catalog-card-price {
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: auto;
+  padding-top: 0.5rem;
 }
 
 .catalog-card-link {
@@ -992,21 +1006,22 @@ img {
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--text);
+  color: var(--text-muted);
+  margin-top: 0.5rem;
   transition: color 0.3s;
 }
 
-.catalog-card-link:hover {
-  color: var(--orange);
+.catalog-card:hover .catalog-card-link {
+  color: var(--text);
 }
 
 .catalog-card-link svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   transition: transform 0.3s;
 }
 
-.catalog-card-link:hover svg {
+.catalog-card:hover .catalog-card-link svg {
   transform: translateX(4px);
 }
 
