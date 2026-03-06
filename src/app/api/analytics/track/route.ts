@@ -12,30 +12,49 @@ async function saveAnalytics(data: {
   duration: number;
 }) {
   try {
-    await prisma.pageView.create({ data: { ...data, city: '' } });
-
     const today = new Date().toISOString().slice(0, 10);
     const todayStart = new Date(`${today}T00:00:00Z`);
     const todayEnd = new Date(`${today}T23:59:59Z`);
 
-    const [existing, uniqueVisitors] = await Promise.all([
-      prisma.dailyStat.findUnique({ where: { date: today } }),
-      prisma.pageView.findMany({
-        where: { createdAt: { gte: todayStart, lt: todayEnd } },
-        distinct: ['sessionId'],
-        select: { sessionId: true },
-      }),
-    ]);
+    if (data.duration === 0) {
+      // Arrival beacon — create new PageView and increment counter
+      await prisma.pageView.create({ data: { ...data, city: '' } });
 
-    if (existing) {
-      await prisma.dailyStat.update({
-        where: { date: today },
-        data: { views: { increment: 1 }, visitors: uniqueVisitors.length },
-      });
+      const [existing, uniqueVisitors] = await Promise.all([
+        prisma.dailyStat.findUnique({ where: { date: today } }),
+        prisma.pageView.findMany({
+          where: { createdAt: { gte: todayStart, lt: todayEnd } },
+          distinct: ['sessionId'],
+          select: { sessionId: true },
+        }),
+      ]);
+
+      if (existing) {
+        await prisma.dailyStat.update({
+          where: { date: today },
+          data: { views: { increment: 1 }, visitors: uniqueVisitors.length },
+        });
+      } else {
+        await prisma.dailyStat.create({
+          data: { date: today, views: 1, visitors: 1 },
+        });
+      }
     } else {
-      await prisma.dailyStat.create({
-        data: { date: today, views: 1, visitors: 1 },
+      // Departure beacon — just update duration on most recent matching record
+      const recent = await prisma.pageView.findFirst({
+        where: {
+          sessionId: data.sessionId,
+          path: data.path,
+          createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+        },
+        orderBy: { createdAt: 'desc' },
       });
+      if (recent) {
+        await prisma.pageView.update({
+          where: { id: recent.id },
+          data: { duration: data.duration },
+        });
+      }
     }
   } catch (e) {
     console.error('Analytics save error:', e);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { adminGuard } from '@/lib/admin-auth';
 
 interface Params {
   params: Promise<{ key: string }>;
@@ -26,6 +27,9 @@ export async function GET(req: NextRequest, { params }: Params) {
 
 // PUT update content (admin only)
 export async function PUT(req: NextRequest, { params }: Params) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const { key } = await params;
     const body = await req.json();

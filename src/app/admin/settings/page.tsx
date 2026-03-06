@@ -159,6 +159,13 @@ function MemoryManagement({ getToken, notify }: { getToken: () => string | null;
 
       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
         <button 
+          className="cms-btn cms-btn-sm cms-btn-primary" 
+          onClick={() => setConfirmClean('recalculate_stats')}
+          disabled={cleaning !== null}
+        >
+          Пересчитать статистику
+        </button>
+        <button 
           className="cms-btn cms-btn-sm" 
           onClick={() => setConfirmClean('old_pageviews')}
           disabled={cleaning !== null}
@@ -182,7 +189,7 @@ function MemoryManagement({ getToken, notify }: { getToken: () => string | null;
       </div>
 
       <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--cms-text-muted)" }}>
-        💡 Очистка старых данных поможет уменьшить размер базы данных и ускорить работу сайта
+        Если счётчики просмотров завышены — нажмите «Пересчитать статистику»
       </div>
 
       {/* Confirm Modal */}
@@ -199,6 +206,7 @@ function MemoryManagement({ getToken, notify }: { getToken: () => string | null;
                 {confirmClean === 'old_pageviews' && 'Будут удалены записи просмотров страниц старше 30 дней.'}
                 {confirmClean === 'closed_inquiries' && 'Будут удалены все закрытые обращения.'}
                 {confirmClean === 'all_pageviews' && 'Будут удалены ВСЕ записи аналитики. Это действие нельзя отменить!'}
+                {confirmClean === 'recalculate_stats' && 'Дневная статистика будет пересчитана из реальных данных. Завышенные счётчики будут исправлены.'}
               </p>
             </div>
             <div className="cms-modal-footer">
@@ -395,8 +403,22 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
-    const saved = localStorage.getItem("cms_settings");
-    if (saved) { try { setSettings(JSON.parse(saved)); } catch {} }
+
+    // Load from DB first, fallback to localStorage
+    fetch("/api/admin/settings?key=general_settings", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => {
+        if (data.value) {
+          try { setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(data.value) }); } catch {}
+        } else {
+          const saved = localStorage.getItem("cms_settings");
+          if (saved) { try { setSettings(JSON.parse(saved)); } catch {} }
+        }
+      })
+      .catch(() => {
+        const saved = localStorage.getItem("cms_settings");
+        if (saved) { try { setSettings(JSON.parse(saved)); } catch {} }
+      });
 
     // Fetch DB stats
     fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } })
@@ -420,10 +442,20 @@ export default function AdminSettingsPage() {
     }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
-    localStorage.setItem("cms_settings", JSON.stringify(settings));
-    notify("Настройки сохранены");
+    const token = getToken();
+    try {
+      await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ key: "general_settings", value: JSON.stringify(settings) }),
+      });
+      localStorage.setItem("cms_settings", JSON.stringify(settings));
+      notify("Настройки сохранены");
+    } catch {
+      notify("Ошибка сохранения");
+    }
     setSaving(false);
   };
 

@@ -55,17 +55,31 @@ export default function AdminSeoPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
-    // Load saved SEO data from localStorage (or could be from API)
-    const saved = localStorage.getItem("cms_seo_pages");
-    if (saved) {
-      try { setPages(JSON.parse(saved)); } catch {}
-    }
-    const savedRobots = localStorage.getItem("cms_seo_robots");
-    if (savedRobots) setRobots(savedRobots);
 
-    // Generate sitemap URLs
-    const indexed = (saved ? JSON.parse(saved) : DEFAULT_PAGES).filter((p: SeoPage) => p.indexed);
-    setSitemapUrls(indexed.map((p: SeoPage) => `https://errani.ru${p.path}`));
+    // Load from DB
+    fetch("/api/admin/settings?key=seo_pages", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => {
+        if (data.value) {
+          try {
+            const parsed = JSON.parse(data.value);
+            setPages(parsed);
+            setSitemapUrls(parsed.filter((p: SeoPage) => p.indexed).map((p: SeoPage) => `https://errani.ru${p.path}`));
+          } catch {}
+        } else {
+          const saved = localStorage.getItem("cms_seo_pages");
+          if (saved) { try { setPages(JSON.parse(saved)); } catch {} }
+        }
+      })
+      .catch(() => {
+        const saved = localStorage.getItem("cms_seo_pages");
+        if (saved) { try { setPages(JSON.parse(saved)); } catch {} }
+      });
+
+    fetch("/api/admin/settings?key=seo_robots", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => { if (data.value) setRobots(data.value); else { const s = localStorage.getItem("cms_seo_robots"); if (s) setRobots(s); } })
+      .catch(() => { const s = localStorage.getItem("cms_seo_robots"); if (s) setRobots(s); });
   }, [getToken, router]);
 
   const handleSavePage = () => {
@@ -75,12 +89,29 @@ export default function AdminSeoPage() {
     notify("SEO страницы обновлён");
   };
 
-  const handleSaveAll = () => {
+  const handleSaveAll = async () => {
     setSaving(true);
-    localStorage.setItem("cms_seo_pages", JSON.stringify(pages));
-    localStorage.setItem("cms_seo_robots", robots);
-    setSitemapUrls(pages.filter((p) => p.indexed).map((p) => `https://errani.ru${p.path}`));
-    notify("Настройки SEO сохранены");
+    const token = getToken();
+    try {
+      await Promise.all([
+        fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ key: "seo_pages", value: JSON.stringify(pages) }),
+        }),
+        fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ key: "seo_robots", value: robots }),
+        }),
+      ]);
+      localStorage.setItem("cms_seo_pages", JSON.stringify(pages));
+      localStorage.setItem("cms_seo_robots", robots);
+      setSitemapUrls(pages.filter((p) => p.indexed).map((p) => `https://errani.ru${p.path}`));
+      notify("Настройки SEO сохранены в базе данных");
+    } catch {
+      notify("Ошибка сохранения");
+    }
     setSaving(false);
   };
 

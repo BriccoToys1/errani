@@ -107,6 +107,55 @@ export async function POST(request: Request) {
         });
       }
 
+      case 'recalculate_stats': {
+        // Recalculate dailyStats from actual PageView records (fixes inflated counts)
+        // Get all distinct dates from PageViews
+        const allViews = await prisma.pageView.findMany({
+          select: { createdAt: true, sessionId: true },
+          orderBy: { createdAt: 'asc' },
+        });
+
+        // Group by UTC date
+        const byDate: Record<string, { views: Set<string>; all: number }> = {};
+        for (const v of allViews) {
+          const date = v.createdAt.toISOString().slice(0, 10);
+          if (!byDate[date]) byDate[date] = { views: new Set(), all: 0 };
+          byDate[date].views.add(v.sessionId);
+          byDate[date].all++;
+        }
+
+        // Recalculate orders per day
+        const allOrders = await prisma.order.findMany({
+          select: { createdAt: true, totalAmount: true },
+        });
+        const ordersByDate: Record<string, { count: number; revenue: number }> = {};
+        for (const o of allOrders) {
+          const date = o.createdAt.toISOString().slice(0, 10);
+          if (!ordersByDate[date]) ordersByDate[date] = { count: 0, revenue: 0 };
+          ordersByDate[date].count++;
+          ordersByDate[date].revenue += o.totalAmount;
+        }
+
+        // Upsert dailyStats
+        await prisma.dailyStat.deleteMany({});
+        for (const [date, stat] of Object.entries(byDate)) {
+          await prisma.dailyStat.create({
+            data: {
+              date,
+              views: stat.all,
+              visitors: stat.views.size,
+              orders: ordersByDate[date]?.count ?? 0,
+              revenue: ordersByDate[date]?.revenue ?? 0,
+            },
+          });
+        }
+
+        return NextResponse.json({ 
+          success: true, 
+          message: `Статистика пересчитана по ${Object.keys(byDate).length} дням` 
+        });
+      }
+
       default:
         return NextResponse.json({ error: 'Invalid cleanup type' }, { status: 400 });
     }
