@@ -313,7 +313,7 @@ export default function AdminContentPage() {
               <div style={{ display: "grid", gap: "12px" }}>
                 {Object.keys(parsedFields).length === 0 && (
                   <div style={{ padding: "20px", textAlign: "center", color: "var(--cms-text-muted)", background: "var(--cms-surface)", borderRadius: "8px" }}>
-                    <div style={{ fontSize: "24px", marginBottom: "8px" }}>📝</div>
+                    <div style={{ marginBottom: "8px" }}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--cms-text-muted)" strokeWidth="1.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>
                     <div>Нет контента для этого языка</div>
                     <div style={{ fontSize: "12px", marginTop: "4px" }}>Скопируйте из другого языка или добавьте новое поле</div>
                   </div>

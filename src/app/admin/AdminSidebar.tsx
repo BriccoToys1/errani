@@ -49,9 +49,14 @@ export function AdminSidebar() {
   return (
     <aside className="cms-sidebar">
       <div className="cms-sidebar-brand">
-        <div className="cms-sidebar-brand-logo">e</div>
+        <svg className="cms-sidebar-brand-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+          <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+          <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+          <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+        </svg>
         <div className="cms-sidebar-brand-text">
-          errani<span>— CMS</span>
+          errani<span>CMS</span>
         </div>
       </div>
 

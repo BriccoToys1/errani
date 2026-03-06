@@ -4,13 +4,32 @@ import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
 const ENDPOINT = '/api/analytics/track';
+const SESSION_DURATION = 30 * 60 * 1000; // 30 minutes
 
 function getSessionId(): string {
-  let sid = sessionStorage.getItem('_errani_sid');
-  if (!sid) {
-    sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    sessionStorage.setItem('_errani_sid', sid);
+  try {
+    const stored = localStorage.getItem('_errani_session');
+    if (stored) {
+      const { sid, expires } = JSON.parse(stored);
+      if (Date.now() < expires) {
+        // Extend session on activity
+        localStorage.setItem('_errani_session', JSON.stringify({ 
+          sid, 
+          expires: Date.now() + SESSION_DURATION 
+        }));
+        return sid;
+      }
+    }
+  } catch {
+    // Invalid JSON, create new session
   }
+  
+  // Create new session
+  const sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem('_errani_session', JSON.stringify({ 
+    sid, 
+    expires: Date.now() + SESSION_DURATION 
+  }));
   return sid;
 }
 

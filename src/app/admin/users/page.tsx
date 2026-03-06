@@ -148,7 +148,7 @@ export default function AdminUsersPage() {
               <div style={{ padding: "32px", textAlign: "center", color: "var(--cms-text-muted)" }}>Загрузка...</div>
             ) : users.length === 0 ? (
               <div style={{ padding: "48px", textAlign: "center", color: "var(--cms-text-muted)" }}>
-                <div style={{ fontSize: "32px", marginBottom: "8px" }}>👤</div>
+                <div style={{ marginBottom: "8px" }}><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cms-text-muted)" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
                 {search ? "Ничего не найдено" : "Нет зарегистрированных пользователей"}
               </div>
             ) : (

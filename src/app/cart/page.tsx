@@ -7,6 +7,7 @@ import { getCart, updateQuantity, removeFromCart, clearCart, getCartTotal, CartI
 import { formatPrice, COUNTRIES, SHIPPING_METHODS_RU, SHIPPING_METHODS_INT } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
+import { PhoneInput } from '@/components/PhoneInput';
 
 export default function CartPage() {
   const { lang } = useLanguage();
@@ -50,13 +51,58 @@ export default function CartPage() {
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!formData.name.trim()) e.name = 'Введите ФИО';
-    if (!formData.email.trim() || !/\S+@\S+\.\S+/.test(formData.email)) e.email = 'Введите корректный email';
-    if (!formData.phone.trim()) e.phone = 'Введите телефон';
-    if (!formData.city.trim()) e.city = 'Введите город';
-    if (!formData.zipCode.trim()) e.zipCode = 'Введите индекс';
-    if (!formData.street.trim()) e.street = 'Введите улицу';
-    if (!formData.house.trim()) e.house = 'Введите дом';
+    
+    // Name validation - at least 2 words, only letters and spaces
+    const nameTrimmed = formData.name.trim();
+    if (!nameTrimmed) {
+      e.name = 'Введите ФИО';
+    } else if (nameTrimmed.split(/\s+/).length < 2) {
+      e.name = 'Введите имя и фамилию';
+    } else if (!/^[\p{L}\s\-']+$/u.test(nameTrimmed)) {
+      e.name = 'ФИО может содержать только буквы';
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!formData.email.trim()) {
+      e.email = 'Введите email';
+    } else if (!emailRegex.test(formData.email.trim())) {
+      e.email = 'Введите корректный email';
+    }
+    
+    // Phone validation - minimum 10 digits
+    const phoneDigits = formData.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      e.phone = 'Введите корректный телефон (минимум 10 цифр)';
+    }
+    
+    // City validation
+    if (!formData.city.trim()) {
+      e.city = 'Введите город';
+    } else if (formData.city.trim().length < 2) {
+      e.city = 'Название города слишком короткое';
+    }
+    
+    // Zip code validation
+    const zipTrimmed = formData.zipCode.trim();
+    if (!zipTrimmed) {
+      e.zipCode = 'Введите индекс';
+    } else if (formData.country === 'RU' && !/^\d{6}$/.test(zipTrimmed)) {
+      e.zipCode = 'Индекс должен содержать 6 цифр';
+    } else if (formData.country !== 'RU' && zipTrimmed.length < 3) {
+      e.zipCode = 'Введите корректный индекс';
+    }
+    
+    // Street validation
+    if (!formData.street.trim()) {
+      e.street = 'Введите улицу';
+    }
+    
+    // House validation
+    if (!formData.house.trim()) {
+      e.house = 'Введите дом';
+    }
+    
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -139,6 +185,19 @@ export default function CartPage() {
 
   return (
     <main className="cart-section">
+      {/* Step Indicator */}
+      <div className="checkout-steps">
+        <div className={`checkout-step ${step === 'cart' ? 'active' : 'completed'}`}>
+          <span className="checkout-step-number">{step === 'cart' ? '1' : '✓'}</span>
+          <span>{lang === 'ru' ? 'Корзина' : 'Cart'}</span>
+        </div>
+        <div className={`checkout-step-connector ${step !== 'cart' ? 'completed' : ''}`} />
+        <div className={`checkout-step ${step === 'checkout' ? 'active' : ''}`}>
+          <span className="checkout-step-number">2</span>
+          <span>{lang === 'ru' ? 'Оформление' : 'Checkout'}</span>
+        </div>
+      </div>
+
       <h1 className="cart-heading">
         {step === 'cart' ? t(lang, 'cart.title') : t(lang, 'cart.checkout.heading')}
       </h1>
@@ -197,8 +256,13 @@ export default function CartPage() {
                 onChange={(v) => setFormData({ ...formData, name: v })} />
               <Field label="Email" type="email" value={formData.email} error={errors.email}
                 onChange={(v) => setFormData({ ...formData, email: v })} />
-              <Field label="Телефон" type="tel" value={formData.phone} error={errors.phone}
-                onChange={(v) => setFormData({ ...formData, phone: v })} />
+              <PhoneInput
+                label="Телефон"
+                value={formData.phone}
+                onChange={(v) => setFormData({ ...formData, phone: v })}
+                countryCode={formData.country}
+                error={errors.phone}
+              />
             </div>
           </div>
 

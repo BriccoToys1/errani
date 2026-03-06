@@ -7,6 +7,9 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   try {
+    const { searchParams } = new URL(req.url);
+    const period = Math.min(Math.max(parseInt(searchParams.get('period') || '30', 10), 7), 90);
+    
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
     const todayStart = new Date(`${today}T00:00:00Z`);
@@ -34,19 +37,19 @@ export async function GET(req: NextRequest) {
       where: { createdAt: { gte: todayStart, lte: todayEnd } },
     });
 
-    // --- Last 30 days chart data ---
-    const last30 = [];
-    for (let i = 29; i >= 0; i--) {
+    // --- Chart data for selected period ---
+    const days = [];
+    for (let i = period - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      last30.push(d.toISOString().slice(0, 10));
+      days.push(d.toISOString().slice(0, 10));
     }
     const dailyStats = await prisma.dailyStat.findMany({
-      where: { date: { in: last30 } },
+      where: { date: { in: days } },
       orderBy: { date: 'asc' },
     });
     const dailyMap = new Map(dailyStats.map((s) => [s.date, s]));
-    const chartData = last30.map((date) => ({
+    const chartData = days.map((date) => ({
       date,
       views: dailyMap.get(date)?.views ?? 0,
       visitors: dailyMap.get(date)?.visitors ?? 0,

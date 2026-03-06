@@ -285,7 +285,7 @@ function IntegrationsTab({ notify, getToken }: { notify: (msg: string) => void; 
     <div style={{ display: "grid", gap: "16px" }}>
       <SettingSection title="Avito API">
         <div style={{ marginBottom: "16px", padding: "12px", background: avitoStatus.configured ? "rgba(34, 197, 94, 0.1)" : "rgba(245, 158, 11, 0.1)", borderRadius: "8px", display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "20px" }}>{avitoStatus.configured ? "✅" : "⚠️"}</span>
+          <span style={{ display: "flex", alignItems: "center" }}>{avitoStatus.configured ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}</span>
           <div>
             <div style={{ fontWeight: 600, fontSize: "14px" }}>
               {avitoStatus.configured ? "API настроен" : "API не настроен"}
@@ -298,14 +298,22 @@ function IntegrationsTab({ notify, getToken }: { notify: (msg: string) => void; 
             </div>
           </div>
           {avitoStatus.configured && (
-            <button 
-              className="cms-btn cms-btn-sm cms-btn-primary" 
-              style={{ marginLeft: "auto" }}
-              onClick={syncAvito}
-              disabled={syncing}
-            >
-              {syncing ? "Синхронизация..." : "Синхронизировать"}
-            </button>
+            <div style={{ display: "flex", gap: "8px", marginLeft: "auto" }}>
+              <a 
+                href="/api/avito/export" 
+                className="cms-btn cms-btn-sm"
+                download="avito-feed.xml"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> XML фид
+              </a>
+              <button 
+                className="cms-btn cms-btn-sm cms-btn-primary" 
+                onClick={syncAvito}
+                disabled={syncing}
+              >
+                {syncing ? "Синхронизация..." : "Синхронизировать"}
+              </button>
+            </div>
           )}
         </div>
 

@@ -214,9 +214,14 @@ function MultiImageUploader({
 interface Product {
   id: string;
   name: string;
+  nameRu: string;
   slug: string;
   description: string;
+  descriptionRu: string;
   price: number;
+  oldPrice: number | null;
+  discount: number;
+  stock: number;
   currency: string;
   image: string;
   images: string;
@@ -224,14 +229,16 @@ interface Product {
   isPreorder: boolean;
   isHit: boolean;
   isAuthor: boolean;
+  isActive: boolean;
   sortOrder: number;
   createdAt: string;
 }
 
 const emptyProduct = {
-  name: "", slug: "", description: "", price: 0, currency: "RUB",
-  image: "", images: "[]", inStock: true, isPreorder: false,
-  isHit: false, isAuthor: false, sortOrder: 0,
+  name: "", nameRu: "", slug: "", description: "", descriptionRu: "",
+  price: 0, oldPrice: null as number | null, discount: 0, stock: 0,
+  currency: "RUB", image: "", images: "[]", inStock: true, isPreorder: false,
+  isHit: false, isAuthor: false, isActive: true, sortOrder: 0,
 };
 
 export default function AdminProductsPage() {
@@ -270,10 +277,13 @@ export default function AdminProductsPage() {
     setSelected(product);
     setIsNew(false);
     setForm({
-      name: product.name, slug: product.slug, description: product.description,
-      price: product.price, currency: product.currency, image: product.image,
+      name: product.name, nameRu: product.nameRu || "", slug: product.slug,
+      description: product.description, descriptionRu: product.descriptionRu || "",
+      price: product.price, oldPrice: product.oldPrice, discount: product.discount,
+      stock: product.stock, currency: product.currency, image: product.image,
       images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
-      isHit: product.isHit, isAuthor: product.isAuthor, sortOrder: product.sortOrder,
+      isHit: product.isHit, isAuthor: product.isAuthor, isActive: product.isActive,
+      sortOrder: product.sortOrder,
     });
   };
 
@@ -288,7 +298,14 @@ export default function AdminProductsPage() {
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...form, price: Number(form.price), sortOrder: Number(form.sortOrder) }),
+      body: JSON.stringify({
+        ...form,
+        price: Number(form.price),
+        oldPrice: form.oldPrice ? Number(form.oldPrice) : null,
+        discount: Number(form.discount),
+        stock: Number(form.stock),
+        sortOrder: Number(form.sortOrder),
+      }),
     });
     if (res.ok) {
       notify(isNew ? "Product created" : "Product updated");
@@ -352,8 +369,8 @@ export default function AdminProductsPage() {
           <h1 className="cms-header-title">Товары</h1>
           <div className="cms-header-actions">
             <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>{products.length} всего</span>
-            <a href="/api/admin/export?type=products&format=csv" className="cms-btn cms-btn-sm" download>📥 CSV</a>
-            <a href="/api/admin/export?type=products&format=xls" className="cms-btn cms-btn-sm" download>📊 XLS</a>
+            <a href="/api/admin/export?type=products&format=csv" className="cms-btn cms-btn-sm" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</a>
+            <a href="/api/admin/export?type=products&format=xls" className="cms-btn cms-btn-sm" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> XLS</a>
             <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={openNew}>+ Новый товар</button>
           </div>
         </div>
@@ -388,11 +405,11 @@ export default function AdminProductsPage() {
                   <th>Название</th>
                   <th>Slug</th>
                   <th>Цена</th>
-                  <th>Наличие</th>
-                  <th>Предзаказ</th>
+                  <th>Скидка</th>
+                  <th>Остаток</th>
+                  <th>Активен</th>
                   <th>Хит</th>
                   <th>Авторская</th>
-                  <th>Порядок</th>
                   <th style={{ width: 80 }}>Действия</th>
                 </tr>
               </thead>
@@ -406,11 +423,11 @@ export default function AdminProductsPage() {
                     <td className="cms-td-bold">{p.name}</td>
                     <td className="cms-td-mono" style={{ fontSize: "11px" }}>{p.slug}</td>
                     <td>{formatPrice(p.price)}</td>
-                    <td>{p.inStock ? <span className="cms-badge cms-badge-green">Да</span> : <span className="cms-badge cms-badge-red">Нет</span>}</td>
-                    <td>{p.isPreorder ? <span className="cms-badge cms-badge-blue">Да</span> : "\u2014"}</td>
-                    <td>{p.isHit ? "\u2b50" : "\u2014"}</td>
-                    <td>{p.isAuthor ? "\U0001f3a8" : "\u2014"}</td>
-                    <td>{p.sortOrder}</td>
+                    <td>{p.discount > 0 ? <span className="cms-badge cms-badge-green">-{p.discount}%</span> : "\u2014"}</td>
+                    <td>{p.stock}</td>
+                    <td>{p.isActive ? <span className="cms-badge cms-badge-green">Да</span> : <span className="cms-badge cms-badge-red">Нет</span>}</td>
+                    <td>{p.isHit ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> : "\u2014"}</td>
+                    <td>{p.isAuthor ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#9b59b6"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> : "\u2014"}</td>
                     <td>
                       <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Edit">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -441,23 +458,47 @@ export default function AdminProductsPage() {
             <div className="cms-modal-body" style={{ maxHeight: "65vh", overflow: "auto" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <label className="cms-label">
-                  Название
+                  Название (EN)
                   <input className="cms-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                 </label>
+                <label className="cms-label">
+                  Название (RU)
+                  <input className="cms-input" value={form.nameRu} onChange={(e) => setForm({ ...form, nameRu: e.target.value })} />
+                </label>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px", marginBottom: "12px" }}>
                 <label className="cms-label">
                   Slug
                   <input className="cms-input" value={form.slug} onChange={(e) => setForm({ ...form, slug: e.target.value })} />
                 </label>
               </div>
               <label className="cms-label" style={{ marginBottom: "12px", display: "block" }}>
-                Описание
-                <textarea className="cms-textarea" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ width: "100%" }} />
+                Описание (EN)
+                <textarea className="cms-textarea" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ width: "100%" }} />
               </label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <label className="cms-label" style={{ marginBottom: "12px", display: "block" }}>
+                Описание (RU)
+                <textarea className="cms-textarea" rows={2} value={form.descriptionRu} onChange={(e) => setForm({ ...form, descriptionRu: e.target.value })} style={{ width: "100%" }} />
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <label className="cms-label">
                   Цена
                   <input className="cms-input" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
                 </label>
+                <label className="cms-label">
+                  Старая цена
+                  <input className="cms-input" type="number" value={form.oldPrice || ""} onChange={(e) => setForm({ ...form, oldPrice: e.target.value ? Number(e.target.value) : null })} placeholder="Для скидки" />
+                </label>
+                <label className="cms-label">
+                  Скидка %
+                  <input className="cms-input" type="number" min="0" max="100" value={form.discount} onChange={(e) => setForm({ ...form, discount: Number(e.target.value) })} />
+                </label>
+                <label className="cms-label">
+                  Остаток
+                  <input className="cms-input" type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} />
+                </label>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <label className="cms-label">
                   Валюта
                   <select className="cms-select" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
@@ -465,7 +506,7 @@ export default function AdminProductsPage() {
                   </select>
                 </label>
                 <label className="cms-label">
-                  Порядок
+                  Порядок сортировки
                   <input className="cms-input" type="number" value={form.sortOrder} onChange={(e) => setForm({ ...form, sortOrder: Number(e.target.value) })} />
                 </label>
               </div>
@@ -481,10 +522,10 @@ export default function AdminProductsPage() {
                 onChange={(json) => setForm({ ...form, images: json })}
               />
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                {(["inStock", "isPreorder", "isHit", "isAuthor"] as const).map((key) => (
+                {(["isActive", "inStock", "isPreorder", "isHit", "isAuthor"] as const).map((key) => (
                   <label key={key} className="cms-checkbox-label">
                     <input type="checkbox" checked={form[key] as boolean} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />
-                    {key === "inStock" ? "В наличии" : key === "isPreorder" ? "Предзаказ" : key === "isHit" ? "Хит" : "Авторская"}
+                    {key === "isActive" ? "Активен" : key === "inStock" ? "В наличии" : key === "isPreorder" ? "Предзаказ" : key === "isHit" ? "Хит" : "Авторская"}
                   </label>
                 ))}
               </div>

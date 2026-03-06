@@ -37,16 +37,22 @@ model User {
 model Product {
   id            String         @id @default(uuid())
   name          String
+  nameRu        String?        // Russian name
   slug          String         @unique
   description   String
+  descriptionRu String?        // Russian description
   price         Float
+  oldPrice      Float?         // Original price (for discount display)
+  discount      Int            @default(0) // Discount percentage 0-100
   currency      String         @default("RUB")
   image         String
   images        String         @default("[]") // JSON array of image URLs
+  stock         Int            @default(0) // Quantity in stock
   inStock       Boolean        @default(true)
   isPreorder    Boolean        @default(false)
   isHit         Boolean        @default(false)
   isAuthor      Boolean        @default(false) // авторская колода
+  isActive      Boolean        @default(true) // Show in catalog
   avitoUrl      String         @default("") // link to avito listing if parsed
   sortOrder     Int            @default(0)
   createdAt     DateTime       @default(now())

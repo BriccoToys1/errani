@@ -55,23 +55,16 @@
 .cms-sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 20px 18px;
   border-bottom: 1px solid var(--cms-border);
 }
 
-.cms-sidebar-brand-logo {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--cms-accent), #c05a1a);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 18px;
-  color: #fff;
-  font-style: italic;
+.cms-sidebar-brand-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--cms-accent);
+  flex-shrink: 0;
 }
 
 .cms-sidebar-brand-text {
@@ -84,9 +77,8 @@
 .cms-sidebar-brand-text span {
   font-weight: 400;
   color: var(--cms-text-muted);
-  font-size: 12px;
-  display: block;
-  margin-top: -2px;
+  font-size: 11px;
+  margin-left: 6px;
 }
 
 .cms-sidebar-nav {

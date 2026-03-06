@@ -57,13 +57,13 @@ function MiniBarChart({ data, valueKey, color = "var(--cms-accent)" }: {
   const max = Math.max(...data.map((d) => Number(d[valueKey]) || 0), 1);
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "80px" }}>
-      {data.slice(-14).map((d, i) => {
+      {data.map((d, i) => {
         const val = Number(d[valueKey]) || 0;
         const pct = (val / max) * 100;
         return (
           <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end" }}
             title={`${d.date}: ${val}`}>
-            <div style={{ width: "100%", minWidth: "3px", height: `${Math.max(pct, 4)}%`, background: color, borderRadius: "2px 2px 0 0", transition: "height 0.3s" }} />
+            <div style={{ width: "100%", minWidth: "2px", height: `${Math.max(pct, 4)}%`, background: color, borderRadius: "2px 2px 0 0", transition: "height 0.3s" }} />
           </div>
         );
       })}
@@ -104,6 +104,7 @@ export default function AdminDashboard() {
   const [serverStats, setServerStats] = useState<ServerStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [chartMode, setChartMode] = useState<"views" | "visitors" | "orders">("views");
+  const [period, setPeriod] = useState<"7" | "14" | "30" | "90">("30");
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
@@ -113,7 +114,7 @@ export default function AdminDashboard() {
 
     const [dashRes, analyticsRes, serverRes] = await Promise.all([
       fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } }),
-      fetch("/api/admin/analytics", { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`/api/admin/analytics?period=${period}`, { headers: { Authorization: `Bearer ${token}` } }),
       fetch("/api/admin/server-stats", { headers: { Authorization: `Bearer ${token}` } }),
     ]);
 
@@ -127,13 +128,13 @@ export default function AdminDashboard() {
     if (analyticsData && !analyticsData.error) setAnalytics(analyticsData);
     if (serverData && !serverData.error) setServerStats(serverData);
     setLoading(false);
-  }, [getToken, router]);
+  }, [getToken, router, period]);
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, period]);
 
   const formatPrice = (n: number) =>
     new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(n);
@@ -226,21 +227,34 @@ export default function AdminDashboard() {
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "16px", marginTop: "20px" }}>
             {/* Chart */}
             <div className="cms-table-wrap" style={{ padding: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                <span style={{ fontWeight: 700, fontSize: "15px" }}>Тренд за 14 дней</span>
-                <div className="cms-tabs">
-                  {(["views", "visitors", "orders"] as const).map((m) => (
-                    <button key={m} className={`cms-tab ${chartMode === m ? "active" : ""}`} onClick={() => setChartMode(m)}>
-                      {m === "views" ? "Просмотры" : m === "visitors" ? "Посетители" : "Заказы"}
-                    </button>
-                  ))}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
+                <span style={{ fontWeight: 700, fontSize: "15px" }}>Тренд за {period} дней</span>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <select
+                    className="cms-select"
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value as typeof period)}
+                    style={{ padding: "4px 8px", fontSize: "12px" }}
+                  >
+                    <option value="7">7 дней</option>
+                    <option value="14">14 дней</option>
+                    <option value="30">30 дней</option>
+                    <option value="90">90 дней</option>
+                  </select>
+                  <div className="cms-tabs">
+                    {(["views", "visitors", "orders"] as const).map((m) => (
+                      <button key={m} className={`cms-tab ${chartMode === m ? "active" : ""}`} onClick={() => setChartMode(m)}>
+                        {m === "views" ? "Просмотры" : m === "visitors" ? "Посетители" : "Заказы"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               {analytics?.chart && (
                 <>
                   <MiniBarChart data={analytics.chart as unknown as Record<string, string | number>[]} valueKey={chartMode} color={chartColors[chartMode]} />
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--cms-text-muted)", marginTop: "6px" }}>
-                    <span>{analytics.chart.slice(-14)[0]?.date?.slice(5)}</span>
+                    <span>{analytics.chart[0]?.date?.slice(5)}</span>
                     <span>{analytics.chart[analytics.chart.length - 1]?.date?.slice(5)}</span>
                   </div>
                 </>
@@ -379,15 +393,15 @@ export default function AdminDashboard() {
           {/* Quick Links */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px", marginTop: "20px" }}>
             {[
-              { href: "/admin/orders", icon: "📦", label: "Заказы" },
-              { href: "/admin/products", icon: "🏷️", label: "Товары" },
-              { href: "/admin/inquiries", icon: "💬", label: "Обращения" },
-              { href: "/admin/content", icon: "📝", label: "Контент" },
-              { href: "/admin/analytics", icon: "📊", label: "Аналитика" },
-              { href: "/admin/settings", icon: "⚙️", label: "Настройки" },
+              { href: "/admin/orders", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>, label: "Заказы" },
+              { href: "/admin/products", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>, label: "Товары" },
+              { href: "/admin/inquiries", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>, label: "Обращения" },
+              { href: "/admin/content", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, label: "Контент" },
+              { href: "/admin/analytics", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M7 16l4-6 4 3 5-7"/></svg>, label: "Аналитика" },
+              { href: "/admin/settings", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>, label: "Настройки" },
             ].map((item) => (
               <Link key={item.href} href={item.href} className="cms-quick-link">
-                <span style={{ fontSize: "20px" }}>{item.icon}</span>
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>{item.icon}</span>
                 <span>{item.label}</span>
               </Link>
             ))}

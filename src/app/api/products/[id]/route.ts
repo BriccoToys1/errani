@@ -34,16 +34,24 @@ export async function PUT(req: NextRequest, { params }: Params) {
       where: { id },
       data: {
         name: body.name,
+        nameRu: body.nameRu ?? null,
         slug: body.slug,
         description: body.description,
+        descriptionRu: body.descriptionRu ?? null,
         price: body.price,
+        oldPrice: body.oldPrice ?? null,
+        discount: body.discount ?? 0,
         currency: body.currency,
         image: body.image,
-        images: body.images ? JSON.stringify(body.images) : undefined,
+        images: body.images !== undefined 
+          ? (typeof body.images === 'string' ? body.images : JSON.stringify(body.images)) 
+          : undefined,
+        stock: body.stock ?? 0,
         inStock: body.inStock,
         isPreorder: body.isPreorder,
         isHit: body.isHit,
         isAuthor: body.isAuthor,
+        isActive: body.isActive ?? true,
         sortOrder: body.sortOrder,
       },
     });

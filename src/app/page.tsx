@@ -9,9 +9,6 @@ export default function HomePage() {
 
   return (
     <main className="home-hero">
-      {/* Divider */}
-      <div className="home-divider anim-line-reveal" />
-
       {/* Main Text */}
       <h1 className="home-display anim-fade-up anim-fade-up-d2">
         {t(lang, 'home.title')}
