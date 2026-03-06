@@ -33,7 +33,7 @@
   min-height: 100vh;
   background: var(--cms-bg);
   color: var(--cms-text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Montserrat', sans-serif;
   font-size: 14px;
 }
 
