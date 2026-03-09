@@ -1,5 +1,6 @@
 {
   "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "alias": ["errani.ru", "www.errani.ru"]
 }
