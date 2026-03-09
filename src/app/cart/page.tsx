@@ -21,6 +21,8 @@ export default function CartPage() {
     email: '',
     phone: '',
     country: 'RU',
+    customCountry: '',
+    oblast: '',
     city: '',
     zipCode: '',
     street: '',
@@ -74,6 +76,11 @@ export default function CartPage() {
     const phoneDigits = formData.phone.replace(/\D/g, '');
     if (phoneDigits.length < 10) {
       e.phone = 'Введите корректный телефон (минимум 10 цифр)';
+    }
+
+    // Custom country validation
+    if (formData.country === 'OTHER' && !formData.customCountry.trim()) {
+      e.customCountry = 'Введите название страны';
     }
     
     // City validation
@@ -188,7 +195,9 @@ export default function CartPage() {
       {/* Step Indicator */}
       <div className="checkout-steps">
         <div className={`checkout-step ${step === 'cart' ? 'active' : 'completed'}`}>
-          <span className="checkout-step-number">{step === 'cart' ? '1' : '✓'}</span>
+          <span className="checkout-step-number">
+            {step === 'cart' ? '1' : <i className="fi fi-rr-octagon-check" style={{ fontSize: 13, display: 'flex' }} />}
+          </span>
           <span>{t(lang, 'cart.title')}</span>
         </div>
         <div className={`checkout-step-connector ${step !== 'cart' ? 'completed' : ''}`} />
@@ -273,11 +282,29 @@ export default function CartPage() {
                 <select
                   className="form-field"
                   value={formData.country}
-                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, country: e.target.value, customCountry: '' })}
                 >
                   {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
                 </select>
+                {formData.country === 'OTHER' && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <input
+                      type="text"
+                      className="form-field"
+                      placeholder={lang === 'ru' ? 'Название страны' : 'Country name'}
+                      value={formData.customCountry}
+                      onChange={(e) => setFormData({ ...formData, customCountry: e.target.value })}
+                      style={errors.customCountry ? { borderColor: '#ef4444' } : undefined}
+                    />
+                    {errors.customCountry && <p style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.25rem' }}>{errors.customCountry}</p>}
+                  </div>
+                )}
               </div>
+              <Field
+                label={lang === 'ru' ? 'Область / Регион (по желанию)' : 'Oblast / Region (optional)'}
+                value={formData.oblast}
+                onChange={(v) => setFormData({ ...formData, oblast: v })}
+              />
               <Field label={lang === 'ru' ? 'Город' : 'City'} value={formData.city} error={errors.city}
                 onChange={(v) => setFormData({ ...formData, city: v })} />
               <Field label={lang === 'ru' ? 'Индекс' : 'ZIP / Postal code'} value={formData.zipCode} error={errors.zipCode}
@@ -307,43 +334,20 @@ export default function CartPage() {
           </div>
 
           {/* Order total */}
-          <div className="cart-summary">
-            <div className="cart-total-row">
-              <span className="cart-total-label">К оплате</span>
-              <span className="cart-total-price">{formatPrice(total)}</span>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.75rem' }}>
-              {isRussia ? 'Оплата через ЮKassa' : (lang === 'ru' ? 'Оплата картой' : 'Pay by card')}
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => setStep('cart')}
-              style={{
-                background: 'none',
-                border: '1px solid var(--border)',
-                padding: '0.9rem 2rem',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                letterSpacing: '0.15em',
-                textTransform: 'uppercase' as const,
-              }}
-            >
+          <div className="cart-summary-inline" style={{ marginTop: '2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <button type="button" onClick={() => setStep('cart')} className="cart-back-btn">
               ← Назад
             </button>
-            <button
-              type="submit"
-              className="product-btn"
-              disabled={submitting}
-              style={{ flex: 1, justifyContent: 'center' }}
-            >
+            <span style={{ flex: 1 }} />
+            <span className="cart-total-label-inline">К оплате</span>
+            <span className="cart-total-price-inline">{formatPrice(total)}</span>
+            <button type="submit" className="cart-checkout-btn" disabled={submitting}>
               {submitting ? 'Обработка...' : 'Перейти к оплате'}
             </button>
           </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '0.5rem' }}>
+            {isRussia ? 'Оплата через ЮKassa' : (lang === 'ru' ? 'Оплата картой' : 'Pay by card')}
+          </p>
         </form>
       )}
     </main>

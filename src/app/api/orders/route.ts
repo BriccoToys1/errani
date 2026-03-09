@@ -35,11 +35,13 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, phone, country, city, zipCode, street, house, apartment, shippingMethod, items } = body as {
+    const { name, email, phone, country, customCountry, oblast, city, zipCode, street, house, apartment, shippingMethod, items } = body as {
       name: string;
       email: string;
       phone: string;
       country: string;
+      customCountry?: string;
+      oblast?: string;
       city: string;
       zipCode: string;
       street: string;
@@ -83,7 +85,8 @@ export async function POST(req: NextRequest) {
         customerName: name,
         customerEmail: email,
         customerPhone: phone || '',
-        country: country || 'RU',
+        country: (country === 'OTHER' ? (customCountry || 'Другая страна') : country) || 'RU',
+        oblast: oblast || '',
         city: city || '',
         zipCode: zipCode || '',
         street: street || '',

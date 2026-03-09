@@ -82,6 +82,7 @@ model Order {
   customerEmail   String
   customerPhone   String      @default("")
   country         String      @default("RU")
+  oblast          String      @default("")  // region / oblast
   city            String      @default("")
   zipCode         String      @default("")
   street          String      @default("")
