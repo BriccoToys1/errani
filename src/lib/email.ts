@@ -101,7 +101,7 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
 
   try {
     await resend.emails.send({
-      from: 'errani <onboarding@resend.dev>',
+      from: 'errani <orders@errani.ru>',
       to: data.customerEmail,
       subject: `Заказ #${data.orderNumber} подтверждён — errani`,
       html,
