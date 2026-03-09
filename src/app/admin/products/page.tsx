@@ -229,6 +229,7 @@ interface Product {
   isPreorder: boolean;
   isHit: boolean;
   isAuthor: boolean;
+  isLimited: boolean;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -238,7 +239,7 @@ const emptyProduct = {
   name: "", nameRu: "", slug: "", description: "", descriptionRu: "",
   price: 0, oldPrice: null as number | null, discount: 0, stock: 0,
   currency: "RUB", image: "", images: "[]", inStock: true, isPreorder: false,
-  isHit: false, isAuthor: false, isActive: true, sortOrder: 0,
+  isHit: false, isAuthor: false, isLimited: false, isActive: true, sortOrder: 0,
 };
 
 export default function AdminProductsPage() {
@@ -282,7 +283,7 @@ export default function AdminProductsPage() {
       price: product.price, oldPrice: product.oldPrice, discount: product.discount,
       stock: product.stock, currency: product.currency, image: product.image,
       images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
-      isHit: product.isHit, isAuthor: product.isAuthor, isActive: product.isActive,
+      isHit: product.isHit, isAuthor: product.isAuthor, isLimited: product.isLimited || false, isActive: product.isActive,
       sortOrder: product.sortOrder,
     });
   };
@@ -522,10 +523,10 @@ export default function AdminProductsPage() {
                 onChange={(json) => setForm({ ...form, images: json })}
               />
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                {(["isActive", "inStock", "isPreorder", "isHit", "isAuthor"] as const).map((key) => (
+                {(["isActive", "inStock", "isPreorder", "isHit", "isAuthor", "isLimited"] as const).map((key) => (
                   <label key={key} className="cms-checkbox-label">
                     <input type="checkbox" checked={form[key] as boolean} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />
-                    {key === "isActive" ? "Активен" : key === "inStock" ? "В наличии" : key === "isPreorder" ? "Предзаказ" : key === "isHit" ? "Хит" : "Авторская"}
+                    {key === "isActive" ? "Активен" : key === "inStock" ? "В наличии" : key === "isPreorder" ? "Предзаказ" : key === "isHit" ? "Хит" : key === "isAuthor" ? "Авторская" : "Лимитированный"}
                   </label>
                 ))}
               </div>

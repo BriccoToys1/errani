@@ -51,6 +51,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         isPreorder: body.isPreorder,
         isHit: body.isHit,
         isAuthor: body.isAuthor,
+        isLimited: body.isLimited,
         isActive: body.isActive ?? true,
         sortOrder: body.sortOrder,
       },

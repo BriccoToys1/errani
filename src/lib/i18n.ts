@@ -25,8 +25,8 @@ const translations: Translations = {
     'product.badge': 'Предзаказ',
     'product.title': 'Tenderly Vibe Tarot',
     'product.subtitle': 'Колода о мягкости, которую мы так часто прячем',
-    'product.price': '4 990 ₽',
-    'product.addToCart': 'В корзину',
+    'product.price': '4 590 ₽',
+    'product.addToCart': 'Добавить в корзину',
     'product.added': '✓ Добавлено',
     'product.goToCart': 'Перейти в корзину',
     'product.specs': 'Характеристики',
@@ -100,7 +100,7 @@ const translations: Translations = {
     // Catalog
     'catalog.title': 'Каталог',
     'catalog.preorder': 'Предзаказ',
-    'catalog.view': 'Подробнее',
+    'catalog.view': 'В корзину',
 
     // Cookie consent
     'cookie.text': 'Мы используем cookie для улучшения работы сайта.',
@@ -123,7 +123,7 @@ const translations: Translations = {
     'product.badge': 'Pre-order',
     'product.title': 'Tenderly Vibe Tarot',
     'product.subtitle': 'A deck about the softness we so often hide',
-    'product.price': '€59',
+    'product.price': '4 590 ₽',
     'product.addToCart': 'Add to cart',
     'product.added': '✓ Added',
     'product.goToCart': 'Go to cart',
@@ -191,7 +191,7 @@ const translations: Translations = {
 
     'catalog.title': 'Catalog',
     'catalog.preorder': 'Pre-order',
-    'catalog.view': 'View details',
+    'catalog.view': 'Add to cart',
 
     'cookie.text': 'We use cookies to improve your experience.',
     'cookie.accept': 'Accept',

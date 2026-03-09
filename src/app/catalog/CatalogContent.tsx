@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
+import { addToCart } from '@/lib/cart';
 import { useState, useEffect } from 'react';
 
 interface Product {
@@ -17,7 +18,8 @@ interface Product {
   oldPrice: number | null;
   discount: number;
   stock: number;
-  images: string[];
+  image: string;
+  images: string;
   isHit: boolean;
   isAuthor: boolean;
   isPreorder: boolean;
@@ -31,9 +33,11 @@ export function CatalogContent() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>('all');
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchProducts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
   const fetchProducts = async () => {
@@ -61,17 +65,30 @@ export function CatalogContent() {
     }
   };
 
+  const handleAddToCart = (e: React.MouseEvent, product: Product) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const imgs: string[] = (() => { try { return JSON.parse(product.images) || []; } catch { return []; } })();
+    addToCart({
+      productId: product.id,
+      name: lang === 'ru' && product.nameRu ? product.nameRu : product.name,
+      price: product.price,
+      currency: 'RUB',
+      image: product.image || imgs[0] || '',
+      isPreorder: product.isPreorder,
+    });
+    setAddedIds(prev => { const n = new Set(prev); n.add(product.id); return n; });
+    setTimeout(() => setAddedIds(prev => { const n = new Set(prev); n.delete(product.id); return n; }), 2000);
+  };
+
   const filters: { key: FilterType; label: string }[] = [
     { key: 'all', label: lang === 'ru' ? 'Все' : 'All' },
     { key: 'author', label: lang === 'ru' ? 'Авторские' : 'Author' },
     { key: 'preorder', label: lang === 'ru' ? 'Предзаказ' : 'Preorder' },
   ];
 
-  const formatPrice = (price: number) => {
-    return lang === 'ru' 
-      ? `${price.toLocaleString('ru-RU')} ₽` 
-      : `$${(price / 90).toFixed(0)}`;
-  };
+  const formatPrice = (price: number) =>
+    `${price.toLocaleString('ru-RU')} ₽`;
 
   return (
     <main>
@@ -100,48 +117,52 @@ export function CatalogContent() {
           </div>
         ) : (
           <div className="catalog-grid">
-            {products.map((product, index) => (
-              <Link 
-                href={`/${product.slug}`} 
-                key={product.id} 
-                className={`catalog-card anim-fade-up anim-fade-up-d${Math.min(index + 1, 5)}`}
-              >
-                <div className="catalog-card-image aspect-4-3">
-                  {product.images[0] && (
-                    <Image
-                      src={product.images[0]}
-                      alt={lang === 'ru' && product.nameRu ? product.nameRu : product.name}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 300px"
-                      quality={85}
-                    />
-                  )}
-                  <div className="catalog-card-badges">
-                    {product.isAuthor && <span className="badge badge-author"><i className="fi fi-rr-thumbtack" style={{ fontSize: 10, marginRight: 4 }} />{lang === 'ru' ? 'Авторская' : 'Author'}</span>}
-                    {product.discount > 0 && <span className="badge badge-discount">-{product.discount}%</span>}
-                    {product.isPreorder && <span className="badge badge-preorder">{lang === 'ru' ? 'Предзаказ' : 'Preorder'}</span>}
-                  </div>
-                </div>
-                <div className="catalog-card-info">
-                  <h2 className="catalog-card-title">
-                    {lang === 'ru' && product.nameRu ? product.nameRu : product.name}
-                  </h2>
-                  <div className="catalog-card-price-row">
-                    <span className="catalog-card-price">{formatPrice(product.price)}</span>
-                    {product.oldPrice && (
-                      <span className="catalog-card-old-price">{formatPrice(product.oldPrice)}</span>
+            {products.map((product, index) => {
+              const imgs: string[] = (() => { try { return JSON.parse(product.images) || []; } catch { return []; } })();
+              const heroImg = product.image || imgs[0] || '';
+              const displayName = lang === 'ru' && product.nameRu ? product.nameRu : product.name;
+              const isAdded = addedIds.has(product.id);
+              return (
+                <Link 
+                  href={`/${product.slug}`} 
+                  key={product.id} 
+                  className={`catalog-card anim-fade-up anim-fade-up-d${Math.min(index + 1, 5)}`}
+                >
+                  <div className="catalog-card-image aspect-4-3">
+                    {heroImg && (
+                      <Image
+                        src={heroImg}
+                        alt={displayName}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, 300px"
+                        quality={85}
+                      />
                     )}
+                    <div className="catalog-card-badges">
+                      {product.isAuthor && <span className="badge badge-author"><i className="fi fi-rr-thumbtack" style={{ fontSize: 10, marginRight: 4 }} />{lang === 'ru' ? 'Авторская' : 'Author'}</span>}
+                      {product.discount > 0 && <span className="badge badge-discount">-{product.discount}%</span>}
+                      {product.isPreorder && <span className="badge badge-preorder">{lang === 'ru' ? 'Предзаказ' : 'Preorder'}</span>}
+                    </div>
                   </div>
-                  <span className="catalog-card-link">
-                    {t(lang, 'catalog.view')}
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
-                  </span>
-                </div>
-              </Link>
-            ))}
+                  <div className="catalog-card-info">
+                    <h2 className="catalog-card-title">{displayName}</h2>
+                    <div className="catalog-card-price-row">
+                      <span className="catalog-card-price">{formatPrice(product.price)}</span>
+                      {product.oldPrice && (
+                        <span className="catalog-card-old-price">{formatPrice(product.oldPrice)}</span>
+                      )}
+                    </div>
+                    <button
+                      className="catalog-card-cart-btn"
+                      onClick={(e) => handleAddToCart(e, product)}
+                    >
+                      {isAdded ? (lang === 'ru' ? '✓ Добавлено' : '✓ Added') : t(lang, 'catalog.view')}
+                    </button>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>

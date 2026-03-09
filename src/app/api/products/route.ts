@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
         isPreorder: body.isPreorder ?? false,
         isHit: body.isHit ?? false,
         isAuthor: body.isAuthor ?? false,
+        isLimited: body.isLimited ?? false,
         isActive: body.isActive ?? true,
         sortOrder: body.sortOrder || 0,
       },

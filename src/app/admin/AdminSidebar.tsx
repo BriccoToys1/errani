@@ -10,13 +10,13 @@ const NAV_ITEMS = [
   { section: 'Управление' },
   { href: '/admin/orders', icon: 'orders', label: 'Заказы' },
   { href: '/admin/products', icon: 'products', label: 'Товары' },
-  { href: '/admin/users', icon: 'users', label: 'Пользователи' },
   { href: '/admin/inquiries', icon: 'inquiries', label: 'Обращения' },
   { href: '/admin/content', icon: 'content', label: 'Контент' },
   { section: 'Настройки' },
   { href: '/admin/files', icon: 'files', label: 'Файлы' },
   { href: '/admin/seo', icon: 'seo', label: 'SEO и индексация' },
   { href: '/admin/settings', icon: 'settings', label: 'Настройки' },
+  { href: '/admin/database', icon: 'database', label: 'База данных' },
 ];
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -30,6 +30,7 @@ const ICONS: Record<string, React.ReactNode> = {
   files: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>,
   seo: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
   settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
+  database: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>,
 };
 
 export function AdminSidebar() {
