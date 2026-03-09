@@ -106,11 +106,20 @@ export function ProductContent({ product }: { product: Product }) {
         </div>
 
         <div className="product-info-col">
-          {product.isPreorder && (
-            <span className="product-preorder-text anim-fade-up">
-              {lang === 'ru' ? 'Предзаказ' : 'Pre-order'}
-            </span>
-          )}
+          {/* Categories/badges */}
+          <div className="product-badges anim-fade-up">
+            {product.isAuthor && (
+              <span className="product-badge product-badge-author">
+                <i className="fi fi-rr-thumbtack" style={{ fontSize: 10, marginRight: 4 }} />
+                {lang === 'ru' ? 'Авторская колода' : 'Author deck'}
+              </span>
+            )}
+            {product.isPreorder && (
+              <span className="product-badge product-badge-preorder">
+                {lang === 'ru' ? 'Предзаказ' : 'Pre-order'}
+              </span>
+            )}
+          </div>
           <h1 className="product-title anim-fade-up anim-fade-up-d1">{displayName}</h1>
           <div className="product-price anim-fade-up anim-fade-up-d3">
             {`${price.toLocaleString('ru-RU')} ₽`}

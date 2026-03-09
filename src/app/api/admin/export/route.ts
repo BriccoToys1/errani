@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { adminGuard } from '@/lib/admin-auth';
 
 // Export orders to CSV/XLS format
 export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const { searchParams } = new URL(req.url);
     const format = searchParams.get('format') || 'csv';
@@ -83,7 +87,7 @@ export async function GET(req: NextRequest) {
       const products = await prisma.product.findMany({ orderBy: { sortOrder: 'asc' } });
 
       if (format === 'csv') {
-        const headers = ['Название', 'Slug', 'Описание', 'Цена', 'Валюта', 'В наличии', 'Предзаказ', 'Хит', 'Авторская', 'Порядок'];
+        const headers = ['Название', 'Slug', 'Описание', 'Цена', 'Валюта', 'В наличии', 'Предзаказ', 'Авторская', 'Порядок'];
         const rows = products.map(p => [
           p.name,
           p.slug,
@@ -92,7 +96,6 @@ export async function GET(req: NextRequest) {
           p.currency,
           p.inStock ? 'Да' : 'Нет',
           p.isPreorder ? 'Да' : 'Нет',
-          p.isHit ? 'Да' : 'Нет',
           p.isAuthor ? 'Да' : 'Нет',
           p.sortOrder.toString(),
         ]);
@@ -103,10 +106,10 @@ export async function GET(req: NextRequest) {
         filename = `products_${new Date().toISOString().split('T')[0]}.csv`;
         contentType = 'text/csv; charset=utf-8';
       } else if (format === 'xls') {
-        const headers = ['Название', 'Slug', 'Цена', 'Валюта', 'В наличии', 'Хит', 'Авторская'];
+        const headers = ['Название', 'Slug', 'Цена', 'Валюта', 'В наличии', 'Авторская'];
         const headerRow = headers.map(h => `<th style="background:#f0f0f0;font-weight:bold;border:1px solid #ccc;padding:8px">${h}</th>`).join('');
         const dataRows = products.map(p => {
-          const cells = [p.name, p.slug, p.price.toLocaleString('ru-RU'), p.currency, p.inStock ? 'Да' : 'Нет', p.isHit ? 'Да' : 'Нет', p.isAuthor ? 'Да' : 'Нет'];
+          const cells = [p.name, p.slug, p.price.toLocaleString('ru-RU'), p.currency, p.inStock ? 'Да' : 'Нет', p.isAuthor ? 'Да' : 'Нет'];
           return `<tr>${cells.map(c => `<td style="border:1px solid #ccc;padding:6px">${c}</td>`).join('')}</tr>`;
         }).join('');
 

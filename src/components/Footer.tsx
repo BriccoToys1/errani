@@ -31,6 +31,10 @@ export function Footer() {
                 {lang === 'ru' ? 'Политика конфиденциальности' : 'Privacy Policy'}
               </Link>
             </div>
+            {/* Meta disclaimer below legal links */}
+            <p style={{ fontSize: '0.58rem', color: 'var(--text-muted)', lineHeight: 1.4, marginTop: '0.75rem', maxWidth: '300px', opacity: 0.7 }}>
+              * Instagram принадлежит компании Meta, деятельность которой признана экстремистской и запрещена на территории РФ.
+            </p>
           </div>
 
           {/* Socials + Contact Button */}
@@ -55,11 +59,6 @@ export function Footer() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </a>
-
-            {/* Meta disclaimer */}
-            <p style={{ fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: 1.4, marginTop: '0.25rem', maxWidth: '260px' }}>
-              * Instagram принадлежит компании Meta, деятельность которой признана экстремистской и запрещена на территории РФ.
-            </p>
 
             {/* Contact Button */}
             <button

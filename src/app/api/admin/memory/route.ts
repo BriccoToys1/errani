@@ -1,16 +1,15 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import * as fs from 'fs';
 import * as path from 'path';
+import { adminGuard } from '@/lib/admin-auth';
 
 // Get database stats
-export async function GET(request: Request) {
-  try {
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
 
+  try {
     // Count page views
     const pageViews = await prisma.pageView.count();
 

@@ -227,7 +227,6 @@ interface Product {
   images: string;
   inStock: boolean;
   isPreorder: boolean;
-  isHit: boolean;
   isAuthor: boolean;
   isLimited: boolean;
   isActive: boolean;
@@ -239,7 +238,7 @@ const emptyProduct = {
   name: "", nameRu: "", slug: "", description: "", descriptionRu: "",
   price: 0, oldPrice: null as number | null, discount: 0, stock: 0,
   currency: "RUB", image: "", images: "[]", inStock: true, isPreorder: false,
-  isHit: false, isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true, sortOrder: 0,
+  isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true, sortOrder: 0,
 };
 
 export default function AdminProductsPage() {
@@ -283,7 +282,7 @@ export default function AdminProductsPage() {
       price: product.price, oldPrice: product.oldPrice, discount: product.discount,
       stock: product.stock, currency: product.currency, image: product.image,
       images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
-      isHit: product.isHit, isAuthor: product.isAuthor, isLimited: product.isLimited || false, limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "", isActive: product.isActive,
+      isAuthor: product.isAuthor, isLimited: product.isLimited || false, limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "", isActive: product.isActive,
       sortOrder: product.sortOrder,
     });
   };
@@ -351,7 +350,6 @@ export default function AdminProductsPage() {
     if (filterStock === "outOfStock" && p.inStock) return false;
     if (filterStock === "preorder" && !p.isPreorder) return false;
     // Type filter
-    if (filterType === "hit" && !p.isHit) return false;
     if (filterType === "author" && !p.isAuthor) return false;
     return true;
   });
@@ -410,7 +408,6 @@ export default function AdminProductsPage() {
                   <th>Скидка</th>
                   <th>Остаток</th>
                   <th>Активен</th>
-                  <th>Хит</th>
                   <th>Авторская</th>
                   <th style={{ width: 80 }}>Действия</th>
                 </tr>
@@ -428,7 +425,6 @@ export default function AdminProductsPage() {
                     <td>{p.discount > 0 ? <span className="cms-badge cms-badge-green">-{p.discount}%</span> : "\u2014"}</td>
                     <td>{p.stock}</td>
                     <td>{p.isActive ? <span className="cms-badge cms-badge-green">Да</span> : <span className="cms-badge cms-badge-red">Нет</span>}</td>
-                    <td>{p.isHit ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> : "\u2014"}</td>
                     <td>{p.isAuthor ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#9b59b6"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> : "\u2014"}</td>
                     <td>
                       <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Edit">
@@ -441,7 +437,7 @@ export default function AdminProductsPage() {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={11} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Товары не найдены</td></tr>
+                  <tr><td colSpan={10} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Товары не найдены</td></tr>
                 )}
               </tbody>
             </table>
@@ -524,10 +520,10 @@ export default function AdminProductsPage() {
                 onChange={(json) => setForm({ ...form, images: json })}
               />
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                {(["isActive", "inStock", "isPreorder", "isHit", "isAuthor", "isLimited"] as const).map((key) => (
+                {(["isActive", "inStock", "isPreorder", "isAuthor", "isLimited"] as const).map((key) => (
                   <label key={key} className="cms-checkbox-label">
                     <input type="checkbox" checked={form[key] as boolean} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />
-                    {key === "isActive" ? "Активен" : key === "inStock" ? "В наличии" : key === "isPreorder" ? "Предзаказ" : key === "isHit" ? "Хит" : key === "isAuthor" ? "Авторская" : "Лимитированный тираж"}
+                    {key === "isActive" ? "Активен" : key === "inStock" ? "В наличии" : key === "isPreorder" ? "Предзаказ" : key === "isAuthor" ? "Авторская" : "Лимитированный тираж"}
                   </label>
                 ))}
               </div>

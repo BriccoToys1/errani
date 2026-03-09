@@ -20,7 +20,6 @@ interface Product {
   stock: number;
   image: string;
   images: string;
-  isHit: boolean;
   isAuthor: boolean;
   isPreorder: boolean;
   isActive: boolean;

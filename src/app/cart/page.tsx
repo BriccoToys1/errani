@@ -163,7 +163,7 @@ export default function CartPage() {
   if (step === 'done') {
     return (
       <main className="cart-section" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', textAlign: 'center' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1.5rem' }}>✓</div>
+        <div style={{ fontSize: '3rem', marginBottom: '1.5rem' }}><i className="fi fi-rr-check" style={{ color: '#22c55e' }} /></div>
         <h1 className="cart-heading" style={{ marginBottom: '0.75rem' }}>{t(lang, 'cart.success.title')}</h1>
         {orderNumber && (
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
@@ -202,7 +202,7 @@ export default function CartPage() {
       <div className="checkout-steps">
         <div className={`checkout-step ${step === 'cart' ? 'active' : 'completed'}`}>
           <span className="checkout-step-number">
-            {step === 'cart' ? '1' : <i className="fi fi-rr-octagon-check" style={{ fontSize: 13, display: 'flex' }} />}
+            {step === 'cart' ? '1' : <i className="fi fi-rr-check" style={{ fontSize: 13, display: 'flex' }} />}
           </span>
           <span>{t(lang, 'cart.title')}</span>
         </div>

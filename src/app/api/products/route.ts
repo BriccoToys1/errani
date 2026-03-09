@@ -5,24 +5,21 @@ import prisma from '@/lib/db';
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const filter = searchParams.get('filter'); // hits, author, discount, preorder, all
+    const filter = searchParams.get('filter'); // author, discount, preorder, all
     const showAll = searchParams.get('showAll') === 'true'; // include out of stock
     
-    // Support both ?filter=hits and ?hits=true formats
-    const isHits = filter === 'hits' || searchParams.get('hits') === 'true';
     const isAuthor = filter === 'author' || searchParams.get('author') === 'true';
     const isDiscount = filter === 'discount' || searchParams.get('discount') === 'true';
     const isPreorder = filter === 'preorder' || searchParams.get('preorder') === 'true';
     
     let where: Record<string, unknown> = showAll ? {} : { inStock: true };
-    if (isHits) where = { ...where, isHit: true };
     if (isAuthor) where = { ...where, isAuthor: true };
     if (isDiscount) where = { ...where, discount: { gt: 0 } };
     if (isPreorder) where = { ...where, isPreorder: true };
     
     const products = await prisma.product.findMany({
       where,
-      orderBy: [{ isHit: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'desc' }],
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
     
     return NextResponse.json(products);
@@ -53,7 +50,6 @@ export async function POST(req: NextRequest) {
         stock: body.stock || 0,
         inStock: body.inStock ?? true,
         isPreorder: body.isPreorder ?? false,
-        isHit: body.isHit ?? false,
         isAuthor: body.isAuthor ?? false,
         isLimited: body.isLimited ?? false,
         limitedEditionText: body.limitedEditionText ?? '',

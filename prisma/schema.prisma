@@ -50,7 +50,6 @@ model Product {
   stock         Int            @default(0) // Quantity in stock
   inStock       Boolean        @default(true)
   isPreorder    Boolean        @default(false)
-  isHit         Boolean        @default(false)
   isAuthor      Boolean        @default(false) // авторская колода
   isLimited          Boolean        @default(false) // лимитированный тираж
   limitedEditionText String         @default("") // editable limited edition description

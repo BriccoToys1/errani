@@ -49,7 +49,6 @@ export async function PUT(req: NextRequest, { params }: Params) {
         stock: body.stock ?? 0,
         inStock: body.inStock,
         isPreorder: body.isPreorder,
-        isHit: body.isHit,
         isAuthor: body.isAuthor,
         isLimited: body.isLimited,
         limitedEditionText: body.limitedEditionText ?? '',
