@@ -1,14 +1,13 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useContext, useEffect, Suspense } from 'react';
+import { useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { LanguageContext } from '@/contexts/LanguageContext';
-import { t } from '@/lib/i18n';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { clearCart } from '@/lib/cart';
 
 function SuccessContent() {
-  const { lang } = useContext(LanguageContext);
+  const { lang } = useLanguage();
   const params = useSearchParams();
   const orderNumber = params.get('order');
 
