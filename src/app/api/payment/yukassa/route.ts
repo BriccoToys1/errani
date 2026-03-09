@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { sendOrderConfirmation } from '@/lib/email';
 
 // YuKassa webhook handler
 export async function POST(req: NextRequest) {
@@ -17,16 +18,29 @@ export async function POST(req: NextRequest) {
     const orderId = object.metadata.order_id;
 
     switch (event) {
-      case 'payment.succeeded':
-        await prisma.order.update({
+      case 'payment.succeeded': {
+        const order = await prisma.order.update({
           where: { id: orderId },
-          data: {
-            status: 'paid',
-            paymentId: object.id,
-          },
+          data: { status: 'paid', paymentId: object.id },
+          include: { items: { include: { product: true } } },
         });
         console.log(`Order ${orderId} marked as paid`);
+        await sendOrderConfirmation({
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          customerPhone: order.customerPhone,
+          city: order.city,
+          shippingMethod: order.shippingMethod,
+          totalAmount: order.totalAmount,
+          items: order.items.map(i => ({
+            name: i.product?.name ?? i.productId,
+            quantity: i.quantity,
+            price: i.price,
+          })),
+        });
         break;
+      }
 
       case 'payment.canceled':
         await prisma.order.update({
