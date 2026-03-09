@@ -27,34 +27,19 @@ export function BottomNav() {
       href: '/catalog',
       id: 'catalog',
       label: t(lang, 'nav.catalog'),
-      icon: (
-        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <rect x="3" y="3" width="7" height="7" rx="1.5" strokeWidth={1.5} />
-          <rect x="14" y="3" width="7" height="7" rx="1.5" strokeWidth={1.5} />
-          <rect x="3" y="14" width="7" height="7" rx="1.5" strokeWidth={1.5} />
-          <rect x="14" y="14" width="7" height="7" rx="1.5" strokeWidth={1.5} />
-        </svg>
-      ),
+      icon: <i className="fi fi-rr-apps" style={{ fontSize: 22 }} />,
     },
     {
       href: '/tenderly-vibe',
       id: 'product',
       label: t(lang, 'nav.product'),
-      icon: (
-        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-        </svg>
-      ),
+      icon: <i className="fi fi-rr-star" style={{ fontSize: 22 }} />,
     },
     {
       href: '/',
       id: 'home',
       label: t(lang, 'nav.home'),
-      icon: (
-        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z" />
-        </svg>
-      ),
+      icon: <i className="fi fi-rr-home" style={{ fontSize: 22 }} />,
     },
     {
       id: 'lang',
@@ -65,11 +50,7 @@ export function BottomNav() {
       href: '/cart',
       id: 'cart',
       label: t(lang, 'nav.cart'),
-      icon: (
-        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
-        </svg>
-      ),
+      icon: <i className="fi fi-rr-shopping-cart" style={{ fontSize: 22 }} />,
     },
   ];
 

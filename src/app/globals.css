@@ -221,7 +221,7 @@ img {
   justify-content: center;
   width: 50px;
   height: 50px;
-  color: rgba(60, 60, 60, 0.7);
+  color: #323232;
   transition: color 0.2s;
   position: relative;
 }
@@ -245,6 +245,10 @@ img {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
+.bottom-nav-item.active .bottom-nav-icon i {
+  color: white;
+}
+
 .bottom-nav-item.active {
   color: white;
 }
@@ -254,7 +258,7 @@ img {
 }
 
 .bottom-nav-item:not(.active):hover {
-  color: rgba(40, 40, 50, 0.9);
+  color: #323232;
 }
 
 /* Tooltips */
