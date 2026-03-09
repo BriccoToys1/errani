@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 
-const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/jpg'];
 const maxSize = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(req: NextRequest) {
@@ -14,7 +16,7 @@ export async function POST(req: NextRequest) {
 
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Invalid file type. Allowed: JPEG, PNG, WebP, GIF' },
+        { error: `Invalid file type: ${file.type}. Allowed: JPEG, PNG, WebP, GIF` },
         { status: 400 }
       );
     }
@@ -24,7 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate unique filename
-    const ext = file.name.split('.').pop() || 'jpg';
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
     const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
 
     // ── Vercel (Blob storage) ──────────────────────────────────────────────
@@ -41,12 +43,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Local / VPS (filesystem) ───────────────────────────────────────────
-    const fs = await import('fs');
-    const path = await import('path');
     const uploadDir = path.join(process.cwd(), 'public', 'media');
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
     fs.writeFileSync(path.join(uploadDir, filename), buffer);
 
     return NextResponse.json({
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Upload error:', error);
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: `Upload failed: ${msg}` }, { status: 500 });
   }
 }

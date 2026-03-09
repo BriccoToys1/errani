@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState, useCallback, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
-import { addToCart } from '@/lib/cart';
+import { addToCart, getCart } from '@/lib/cart';
 
 interface Product {
   id: string;
@@ -21,6 +21,7 @@ interface Product {
   images: string;
   isPreorder: boolean;
   isLimited: boolean;
+  limitedEditionText: string;
   isAuthor: boolean;
 }
 
@@ -28,7 +29,15 @@ export function ProductContent({ product }: { product: Product }) {
   const { lang } = useLanguage();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [added, setAdded] = useState(false);
-  const [showGoToCart, setShowGoToCart] = useState(false);
+
+  // Check if product is already in cart on mount
+  useEffect(() => {
+    const cart = getCart();
+    if (cart.some(item => item.productId === product.id)) {
+      setAdded(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id]);
 
   const galleryImages: string[] = (() => {
     try { return JSON.parse(product.images) || []; } catch { return []; }
@@ -76,8 +85,6 @@ export function ProductContent({ product }: { product: Product }) {
       isPreorder: product.isPreorder,
     });
     setAdded(true);
-    setShowGoToCart(true);
-    setTimeout(() => setAdded(false), 2000);
   };
 
   return (
@@ -113,17 +120,18 @@ export function ProductContent({ product }: { product: Product }) {
           </div>
 
           <div className="product-actions anim-fade-up anim-fade-up-d4">
-            <button
-              type="button"
-              className={`product-btn ${added ? 'added' : ''}`}
-              onClick={handleAdd}
-            >
-              {added ? t(lang, 'product.added') : t(lang, 'product.addToCart')}
-            </button>
-            {showGoToCart && (
-              <Link href="/cart" className="product-btn-secondary">
+            {added ? (
+              <Link href="/cart" className="product-btn">
                 {t(lang, 'product.goToCart')}
               </Link>
+            ) : (
+              <button
+                type="button"
+                className="product-btn"
+                onClick={handleAdd}
+              >
+                {t(lang, 'product.addToCart')}
+              </button>
             )}
           </div>
         </div>
@@ -141,7 +149,7 @@ export function ProductContent({ product }: { product: Product }) {
           {product.isLimited && (
             <div className="limited-edition-banner">
               <h3>{t(lang, 'product.limited.title')}</h3>
-              <p>{t(lang, 'product.limited.text')}</p>
+              <p>{product.limitedEditionText || t(lang, 'product.limited.text')}</p>
             </div>
           )}
         </section>

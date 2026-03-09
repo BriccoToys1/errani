@@ -5,21 +5,41 @@ import Link from 'next/link';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
 
+const CONSENT_KEY = 'errani_consent';
+
+function hasConsent(): boolean {
+  try {
+    if (localStorage.getItem(CONSENT_KEY) === '1') return true;
+    return document.cookie.split(';').some(c => c.trim().startsWith(`${CONSENT_KEY}=1`));
+  } catch {
+    return false;
+  }
+}
+
+function saveConsent() {
+  try {
+    localStorage.setItem(CONSENT_KEY, '1');
+    const exp = new Date();
+    exp.setFullYear(exp.getFullYear() + 1);
+    document.cookie = `${CONSENT_KEY}=1; expires=${exp.toUTCString()}; path=/; SameSite=Lax`;
+  } catch {
+    // ignore
+  }
+}
+
 export function CookieConsent() {
   const { lang } = useLanguage();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const accepted = localStorage.getItem('cookie_consent');
-    if (!accepted) {
-      // Small delay so it doesn't flash on page load
+    if (!hasConsent()) {
       const timer = setTimeout(() => setVisible(true), 800);
       return () => clearTimeout(timer);
     }
   }, []);
 
   const handleAccept = () => {
-    localStorage.setItem('cookie_consent', '1');
+    saveConsent();
     setVisible(false);
   };
 

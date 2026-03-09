@@ -239,7 +239,7 @@ const emptyProduct = {
   name: "", nameRu: "", slug: "", description: "", descriptionRu: "",
   price: 0, oldPrice: null as number | null, discount: 0, stock: 0,
   currency: "RUB", image: "", images: "[]", inStock: true, isPreorder: false,
-  isHit: false, isAuthor: false, isLimited: false, isActive: true, sortOrder: 0,
+  isHit: false, isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true, sortOrder: 0,
 };
 
 export default function AdminProductsPage() {
@@ -283,7 +283,7 @@ export default function AdminProductsPage() {
       price: product.price, oldPrice: product.oldPrice, discount: product.discount,
       stock: product.stock, currency: product.currency, image: product.image,
       images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
-      isHit: product.isHit, isAuthor: product.isAuthor, isLimited: product.isLimited || false, isActive: product.isActive,
+      isHit: product.isHit, isAuthor: product.isAuthor, isLimited: product.isLimited || false, limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "", isActive: product.isActive,
       sortOrder: product.sortOrder,
     });
   };
@@ -306,6 +306,7 @@ export default function AdminProductsPage() {
         discount: Number(form.discount),
         stock: Number(form.stock),
         sortOrder: Number(form.sortOrder),
+        limitedEditionText: form.limitedEditionText,
       }),
     });
     if (res.ok) {
@@ -526,10 +527,23 @@ export default function AdminProductsPage() {
                 {(["isActive", "inStock", "isPreorder", "isHit", "isAuthor", "isLimited"] as const).map((key) => (
                   <label key={key} className="cms-checkbox-label">
                     <input type="checkbox" checked={form[key] as boolean} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />
-                    {key === "isActive" ? "Активен" : key === "inStock" ? "В наличии" : key === "isPreorder" ? "Предзаказ" : key === "isHit" ? "Хит" : key === "isAuthor" ? "Авторская" : "Лимитированный"}
+                    {key === "isActive" ? "Активен" : key === "inStock" ? "В наличии" : key === "isPreorder" ? "Предзаказ" : key === "isHit" ? "Хит" : key === "isAuthor" ? "Авторская" : "Лимитированный тираж"}
                   </label>
                 ))}
               </div>
+              {form.isLimited && (
+                <div style={{ marginTop: "12px" }}>
+                  <label className="cms-label" style={{ display: "block", marginBottom: "6px" }}>Описание лимитированного тиража</label>
+                  <textarea
+                    className="cms-textarea"
+                    rows={3}
+                    style={{ width: "100%" }}
+                    value={form.limitedEditionText || "Тираж ограничен — всего 30 экземпляров. Каждая колода будет сопровождаться номерным сертификатом, подтверждающим её уникальность и принадлежность к первому выпуску. Tenderly Vibe — это не массовая история."}
+                    onChange={(e) => setForm({ ...form, limitedEditionText: e.target.value })}
+                    onFocus={(e) => { if (!form.limitedEditionText) setForm({ ...form, limitedEditionText: e.target.value }); }}
+                  />
+                </div>
+              )}
             </div>
             <div className="cms-modal-actions">
               <button className="cms-btn cms-btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Сохранение..." : "Сохранить"}</button>

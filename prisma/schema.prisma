@@ -52,8 +52,9 @@ model Product {
   isPreorder    Boolean        @default(false)
   isHit         Boolean        @default(false)
   isAuthor      Boolean        @default(false) // авторская колода
-  isLimited     Boolean        @default(false) // лимитированный тираж
-  isActive      Boolean        @default(true) // Show in catalog
+  isLimited          Boolean        @default(false) // лимитированный тираж
+  limitedEditionText String         @default("") // editable limited edition description
+  isActive           Boolean        @default(true) // Show in catalog
   avitoUrl      String         @default("") // link to avito listing if parsed
   sortOrder     Int            @default(0)
   createdAt     DateTime       @default(now())
