@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
     const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
 
-    // ── Vercel (Blob storage) ──────────────────────────────────────────────
+    // ── Vercel Blob (if token is set) ─────────────────────────────────────
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       const { put } = await import('@vercel/blob');
       const blob = await put(`media/${filename}`, file, { access: 'public' });
@@ -41,15 +41,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Local / VPS (filesystem) ───────────────────────────────────────────
-    // Only write to filesystem in non-serverless environments
-    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
-    if (isServerless) {
-      return NextResponse.json(
-        { error: 'File upload requires BLOB_READ_WRITE_TOKEN on serverless platforms. Set up Vercel Blob storage.' },
-        { status: 500 }
-      );
-    }
-
     const fs = await import('fs');
     const path = await import('path');
     const uploadDir = path.join(process.cwd(), 'public', 'media');
