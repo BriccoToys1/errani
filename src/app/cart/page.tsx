@@ -196,6 +196,11 @@ export default function CartPage() {
           <span className="checkout-step-number">2</span>
           <span>{t(lang, 'cart.checkout.heading')}</span>
         </div>
+        <div className="checkout-step-connector" />
+        <div className="checkout-step">
+          <span className="checkout-step-number">3</span>
+          <span>{lang === 'ru' ? 'Оплата' : 'Payment'}</span>
+        </div>
       </div>
 
       <h1 className="cart-heading">
@@ -216,36 +221,30 @@ export default function CartPage() {
                 <div className="cart-item-price">{formatPrice(item.price * item.quantity, item.currency)}</div>
               </div>
               <div className="cart-item-actions">
-                <button className="cart-remove-btn" onClick={() => handleRemove(item.productId)}>
-                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
                 <div className="cart-qty">
                   <button onClick={() => handleQty(item.productId, item.quantity - 1)}>−</button>
                   <span>{item.quantity}</span>
                   <button onClick={() => handleQty(item.productId, item.quantity + 1)}>+</button>
                 </div>
+                <button className="cart-remove-btn" onClick={() => handleRemove(item.productId)}>
+                  <i className="fi fi-rr-trash" style={{ fontSize: 16 }} />
+                </button>
               </div>
             </div>
           ))}
 
           {/* Summary */}
-          <div className="cart-summary">
-            <div className="cart-total-row">
-              <span className="cart-total-label">{t(lang, 'cart.total')}</span>
-              <span className="cart-total-price">{formatPrice(total)}</span>
-            </div>
+          <div className="cart-summary-inline">
+            <span className="cart-total-label-inline">{t(lang, 'cart.total')}</span>
+            <span className="cart-total-price-inline">{formatPrice(total)}</span>
+            <button
+              type="button"
+              className="cart-checkout-btn"
+              onClick={() => setStep('checkout')}
+            >
+              {t(lang, 'cart.checkout')}
+            </button>
           </div>
-
-          <button
-            type="button"
-            className="product-btn"
-            style={{ width: '100%', marginTop: '2rem', justifyContent: 'center' }}
-            onClick={() => setStep('checkout')}
-          >
-            {t(lang, 'cart.checkout')}
-          </button>
         </>
       ) : (
         <form onSubmit={handleSubmit}>

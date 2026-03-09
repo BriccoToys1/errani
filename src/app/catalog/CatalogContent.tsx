@@ -24,7 +24,7 @@ interface Product {
   isActive: boolean;
 }
 
-type FilterType = 'all' | 'hits' | 'author' | 'discount' | 'preorder';
+type FilterType = 'all' | 'author' | 'preorder';
 
 export function CatalogContent() {
   const { lang } = useLanguage();
@@ -40,14 +40,20 @@ export function CatalogContent() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filter === 'hits') params.set('hits', 'true');
       if (filter === 'author') params.set('author', 'true');
-      if (filter === 'discount') params.set('discount', 'true');
       if (filter === 'preorder') params.set('preorder', 'true');
       
       const res = await fetch(`/api/products?${params.toString()}`);
       const data = await res.json();
-      setProducts(data.filter((p: Product) => p.isActive));
+      // Sort: авторские колоды first
+      const sorted = data
+        .filter((p: Product) => p.isActive)
+        .sort((a: Product, b: Product) => {
+          if (a.isAuthor && !b.isAuthor) return -1;
+          if (!a.isAuthor && b.isAuthor) return 1;
+          return 0;
+        });
+      setProducts(sorted);
     } catch (error) {
       console.error('Failed to fetch products:', error);
     } finally {
@@ -57,9 +63,7 @@ export function CatalogContent() {
 
   const filters: { key: FilterType; label: string }[] = [
     { key: 'all', label: lang === 'ru' ? 'Все' : 'All' },
-    { key: 'hits', label: lang === 'ru' ? 'Хиты' : 'Hits' },
     { key: 'author', label: lang === 'ru' ? 'Авторские' : 'Author' },
-    { key: 'discount', label: lang === 'ru' ? 'Скидки' : 'Sale' },
     { key: 'preorder', label: lang === 'ru' ? 'Предзаказ' : 'Preorder' },
   ];
 
@@ -114,8 +118,7 @@ export function CatalogContent() {
                     />
                   )}
                   <div className="catalog-card-badges">
-                    {product.isHit && <span className="badge badge-hit">{lang === 'ru' ? 'Хит' : 'Hit'}</span>}
-                    {product.isAuthor && <span className="badge badge-author">{lang === 'ru' ? 'Авторская' : 'Author'}</span>}
+                    {product.isAuthor && <span className="badge badge-author"><i className="fi fi-rr-thumbtack" style={{ fontSize: 10, marginRight: 4 }} />{lang === 'ru' ? 'Авторская' : 'Author'}</span>}
                     {product.discount > 0 && <span className="badge badge-discount">-{product.discount}%</span>}
                     {product.isPreorder && <span className="badge badge-preorder">{lang === 'ru' ? 'Предзаказ' : 'Preorder'}</span>}
                   </div>
@@ -124,11 +127,6 @@ export function CatalogContent() {
                   <h2 className="catalog-card-title">
                     {lang === 'ru' && product.nameRu ? product.nameRu : product.name}
                   </h2>
-                  {product.description && (
-                    <p className="catalog-card-desc">
-                      {lang === 'ru' && product.descriptionRu ? product.descriptionRu : product.description}
-                    </p>
-                  )}
                   <div className="catalog-card-price-row">
                     <span className="catalog-card-price">{formatPrice(product.price)}</span>
                     {product.oldPrice && (

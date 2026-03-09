@@ -336,7 +336,7 @@ img {
   background: transparent;
   border: 2px solid transparent;
   border-radius: 12px;
-  color: rgba(60, 60, 60, 0.7);
+  color: #323232;
   font-family: var(--font-body);
   cursor: pointer;
   transition: border-color 0.25s, background 0.25s, color 0.25s;
@@ -889,7 +889,7 @@ select.form-field {
   font-family: var(--font-body);
   font-size: 0.8rem;
   font-weight: 600;
-  letter-spacing: 0.25em;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: white;
   background: var(--orange);
@@ -1409,33 +1409,30 @@ select.form-field {
 }
 
 .badge {
-  padding: 0.25rem 0.6rem;
-  font-size: 0.7rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-radius: 4px;
+  border-radius: 99px;
   line-height: 1;
-}
-
-.badge-hit {
-  background: #e74c3c;
-  color: white;
+  display: inline-flex;
+  align-items: center;
 }
 
 .badge-author {
-  background: #9b59b6;
-  color: white;
-}
-
-.badge-discount {
-  background: #27ae60;
-  color: white;
+  background: #1a1a1a;
+  color: #fff;
 }
 
 .badge-preorder {
-  background: var(--orange);
-  color: white;
+  background: #2a2a2a;
+  color: #fff;
+}
+
+.badge-discount {
+  background: #333;
+  color: #fff;
 }
 
 /* Catalog Price Row */
@@ -1589,6 +1586,48 @@ select.form-field {
   margin-top: 2.5rem;
   padding-top: 2rem;
   border-top: 1px solid var(--border);
+}
+
+.cart-summary-inline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+}
+
+.cart-total-label-inline {
+  font-size: 1.4rem;
+  color: var(--text-secondary);
+}
+
+.cart-total-price-inline {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.cart-checkout-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.9rem 2.5rem;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: white;
+  background: var(--orange);
+  border: none;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: background 0.3s, transform 0.2s;
+}
+
+.cart-checkout-btn:hover {
+  background: var(--orange-dark);
 }
 
 .cart-total-row {
