@@ -31,6 +31,8 @@ export default function AdminLoginPage() {
       }
 
       localStorage.setItem("admin_token", data.token);
+      // Also set cookie for middleware protection
+      document.cookie = `admin_token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax`;
       router.push("/admin");
     } catch {
       setError("Network error");

@@ -1,10 +1,39 @@
-import { TenderlyVibeContent } from './TenderlyVibeContent';
+import { notFound } from 'next/navigation';
+import prisma from '@/lib/db';
+import { ProductContent } from '../[slug]/ProductContent';
 
-export const metadata = {
-  title: 'Tenderly Vibe Tarot — Авторская колода о мягкости',
-  description: 'Колода о мягкости, которую мы так часто прячем. 80 карт, матовое покрытие, розовый срез. Лимитированный тираж — 30 экземпляров с номерным сертификатом.',
-};
+export async function generateMetadata() {
+  const product = await prisma.product.findUnique({ where: { slug: 'tenderly-vibe' } });
+  if (!product) return { title: 'Tenderly Vibe Tarot' };
+  return {
+    title: `${product.nameRu || product.name} — errani`,
+    description: product.descriptionRu || product.description,
+  };
+}
 
-export default function TenderlyVibePage() {
-  return <TenderlyVibeContent />;
+export default async function TenderlyVibePage() {
+  const product = await prisma.product.findUnique({ where: { slug: 'tenderly-vibe' } });
+  if (!product || !product.isActive) notFound();
+
+  return (
+    <ProductContent
+      product={{
+        id: product.id,
+        slug: product.slug,
+        name: product.name,
+        nameRu: product.nameRu,
+        description: product.description,
+        descriptionRu: product.descriptionRu,
+        price: product.price,
+        oldPrice: product.oldPrice,
+        discount: product.discount,
+        image: product.image,
+        images: product.images,
+        isPreorder: product.isPreorder,
+        isLimited: product.isLimited,
+        limitedEditionText: product.limitedEditionText,
+        isAuthor: product.isAuthor,
+      }}
+    />
+  );
 }

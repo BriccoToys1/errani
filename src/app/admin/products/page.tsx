@@ -241,6 +241,10 @@ const emptyProduct = {
   isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true, sortOrder: 0,
 };
 
+function slugify(text: string): string {
+  return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 export default function AdminProductsPage() {
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -289,6 +293,43 @@ export default function AdminProductsPage() {
 
   const openNew = () => { setIsNew(true); setSelected(null); setForm({ ...emptyProduct }); };
   const closeDialog = () => { setSelected(null); setIsNew(false); };
+
+  const duplicateProduct = (product: Product) => {
+    setIsNew(true);
+    setSelected(null);
+    setForm({
+      name: product.name + " (копия)",
+      nameRu: (product.nameRu || "") + " (копия)",
+      slug: product.slug + "-copy",
+      description: product.description,
+      descriptionRu: product.descriptionRu || "",
+      price: product.price,
+      oldPrice: product.oldPrice,
+      discount: product.discount,
+      stock: product.stock,
+      currency: product.currency,
+      image: product.image,
+      images: product.images,
+      inStock: product.inStock,
+      isPreorder: product.isPreorder,
+      isAuthor: product.isAuthor,
+      isLimited: product.isLimited || false,
+      limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
+      isActive: false,
+      sortOrder: product.sortOrder,
+    });
+  };
+
+  const toggleActive = async (product: Product) => {
+    const token = getToken();
+    if (!token) return;
+    await fetch(`/api/products/${product.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ isActive: !product.isActive }),
+    });
+    fetchProducts();
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -386,7 +427,6 @@ export default function AdminProductsPage() {
             </select>
             <select className="cms-select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
               <option value="all">Все типы</option>
-              <option value="hit">Хит</option>
               <option value="author">Авторская</option>
             </select>
             {checkedIds.size > 0 && (
@@ -409,7 +449,7 @@ export default function AdminProductsPage() {
                   <th>Остаток</th>
                   <th>Активен</th>
                   <th>Авторская</th>
-                  <th style={{ width: 80 }}>Действия</th>
+                  <th style={{ width: 110 }}>Действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -424,13 +464,25 @@ export default function AdminProductsPage() {
                     <td>{formatPrice(p.price)}</td>
                     <td>{p.discount > 0 ? <span className="cms-badge cms-badge-green">-{p.discount}%</span> : "\u2014"}</td>
                     <td>{p.stock}</td>
-                    <td>{p.isActive ? <span className="cms-badge cms-badge-green">Да</span> : <span className="cms-badge cms-badge-red">Нет</span>}</td>
+                    <td>
+                      <button
+                        className={`cms-badge ${p.isActive ? "cms-badge-green" : "cms-badge-red"}`}
+                        style={{ cursor: "pointer", border: "none" }}
+                        onClick={() => toggleActive(p)}
+                        title="Переключить активность"
+                      >
+                        {p.isActive ? "Да" : "Нет"}
+                      </button>
+                    </td>
                     <td>{p.isAuthor ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#9b59b6"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> : "\u2014"}</td>
                     <td>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Edit">
+                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Редактировать">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                       </button>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([p.id])} title="Delete" style={{ color: "var(--cms-danger)" }}>
+                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => duplicateProduct(p)} title="Дублировать">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                      </button>
+                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([p.id])} title="Удалить" style={{ color: "var(--cms-danger)" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                       </button>
                     </td>
@@ -457,7 +509,15 @@ export default function AdminProductsPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <label className="cms-label">
                   Название (EN)
-                  <input className="cms-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  <input className="cms-input" value={form.name} onChange={(e) => {
+                    const name = e.target.value;
+                    const updates: Partial<typeof form> = { name };
+                    // Auto-generate slug from English name for new products
+                    if (isNew && !form.slug || form.slug === slugify(form.name)) {
+                      updates.slug = slugify(name);
+                    }
+                    setForm({ ...form, ...updates });
+                  }} />
                 </label>
                 <label className="cms-label">
                   Название (RU)

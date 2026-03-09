@@ -397,6 +397,7 @@ export default function AdminSettingsPage() {
   const [activeTab, setActiveTab] = useState("general");
   const [dbStats, setDbStats] = useState({ users: 0, orders: 0, products: 0, pageViews: 0 });
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [featuredProductLink, setFeaturedProductLink] = useState("/tenderly-vibe");
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
@@ -425,6 +426,12 @@ export default function AdminSettingsPage() {
       .then((r) => r.json())
       .then((d) => setDbStats({ users: 0, orders: d.orderCount || 0, products: d.productCount || 0, pageViews: 0 }))
       .catch(() => {});
+
+    // Fetch featured product link
+    fetch("/api/admin/settings?key=featuredProductLink", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => { if (d.value) setFeaturedProductLink(d.value); })
+      .catch(() => {});
   }, [getToken, router]);
 
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => {
@@ -446,11 +453,18 @@ export default function AdminSettingsPage() {
     setSaving(true);
     const token = getToken();
     try {
-      await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ key: "general_settings", value: JSON.stringify(settings) }),
-      });
+      await Promise.all([
+        fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ key: "general_settings", value: JSON.stringify(settings) }),
+        }),
+        fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ key: "featuredProductLink", value: featuredProductLink }),
+        }),
+      ]);
       localStorage.setItem("cms_settings", JSON.stringify(settings));
       notify("Настройки сохранены");
     } catch {
@@ -494,6 +508,18 @@ export default function AdminSettingsPage() {
   };
 
   const notify = (msg: string) => { setNotification(msg); setTimeout(() => setNotification(""), 3000); };
+
+  // Ctrl+S keyboard shortcut to save
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  });
 
   const TABS = [
     { id: "general", label: "Основные" },
@@ -577,6 +603,21 @@ export default function AdminSettingsPage() {
                     </select>
                   </label>
                 </div>
+              </SettingSection>
+
+              <SettingSection title="Навигация">
+                <label className="cms-label">
+                  Ссылка на избранный товар (звёздочка в навбаре)
+                  <input
+                    className="cms-input"
+                    value={featuredProductLink}
+                    onChange={(e) => setFeaturedProductLink(e.target.value)}
+                    placeholder="/tenderly-vibe"
+                  />
+                  <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "4px" }}>
+                    Slug товара, на который ведёт иконка ★ в навигации. Например: /tenderly-vibe
+                  </div>
+                </label>
               </SettingSection>
             </div>
           )}

@@ -12,12 +12,23 @@ export function BottomNav() {
   const pathname = usePathname();
   const { lang } = useLanguage();
   const [cartCount, setCartCount] = useState(0);
+  const [featuredLink, setFeaturedLink] = useState('/tenderly-vibe');
 
   useEffect(() => {
     const update = () => setCartCount(getCartCount(getCart()));
     update();
     window.addEventListener('cart-updated', update);
     return () => window.removeEventListener('cart-updated', update);
+  }, []);
+
+  // Fetch featured product link from settings
+  useEffect(() => {
+    fetch('/api/admin/settings?key=featuredProductLink')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.value) setFeaturedLink(data.value);
+      })
+      .catch(() => {});
   }, []);
 
   if (pathname.startsWith('/admin')) return null;
@@ -30,7 +41,7 @@ export function BottomNav() {
       icon: <i className="fi fi-rr-apps" style={{ fontSize: 22 }} />,
     },
     {
-      href: '/tenderly-vibe',
+      href: featuredLink,
       id: 'product',
       label: t(lang, 'nav.product'),
       icon: <i className="fi fi-rr-star" style={{ fontSize: 22 }} />,

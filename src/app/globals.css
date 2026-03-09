@@ -834,6 +834,12 @@ select.form-field {
   .product-image-col {
     min-height: 50vh;
   }
+  /* Ensure header always visible above photo on product pages */
+  .site-header {
+    background: rgba(8, 8, 8, 0.9);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
 }
 
 @media (min-width: 768px) {
@@ -920,8 +926,10 @@ select.form-field {
   background: none;
   color: var(--orange);
   padding: 0;
-  font-size: 0.7rem;
-  letter-spacing: 0.2em;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: none;
 }
 
 @media (max-width: 640px) {
@@ -997,6 +1005,18 @@ select.form-field {
 
 .product-btn.added {
   background: #2d8a4e;
+}
+
+.product-btn.in-cart {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.product-btn.in-cart:hover {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: white;
 }
 
 /* Product Actions */
@@ -1299,7 +1319,44 @@ select.form-field {
   font-family: var(--font-display);
   font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 800;
-  margin-bottom: 3rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Catalog toolbar: filters + sorting in one row */
+.catalog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.catalog-sort-select {
+  margin-left: auto;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-secondary);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a8a8a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+.catalog-sort-select:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.catalog-sort-select:focus {
+  outline: none;
+  border-color: var(--orange);
 }
 
 .catalog-card {
@@ -1440,12 +1497,11 @@ select.form-field {
   transform: translateY(-1px);
 }
 
-/* Catalog Filters */
+/* Catalog Filters - now in toolbar */
 .catalog-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 2rem;
 }
 
 .catalog-filter-btn {

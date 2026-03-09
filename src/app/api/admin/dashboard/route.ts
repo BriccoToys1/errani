@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const [orderCount, productCount, totalRevenue, recentOrders, inquiryCount, newInquiryCount] = await Promise.all([
+    const [orderCount, productCount, totalRevenue, recentOrders, inquiryCount, newInquiryCount, newOrdersCount] = await Promise.all([
       prisma.order.count(),
       prisma.product.count(),
       prisma.order.aggregate({ _sum: { totalAmount: true } }),
@@ -18,6 +18,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.inquiry.count(),
       prisma.inquiry.count({ where: { status: 'new' } }),
+      prisma.order.count({ where: { status: 'assembling' } }),
     ]);
 
     return NextResponse.json({
@@ -27,6 +28,8 @@ export async function GET(req: NextRequest) {
       recentOrders,
       inquiryCount,
       newInquiryCount,
+      newOrdersCount,
+      newInquiriesCount: newInquiryCount,
     });
   } catch (error) {
     console.error('Dashboard error:', error);

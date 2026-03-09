@@ -2,13 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 
+// Public keys that can be read without auth
+const PUBLIC_KEYS = new Set(['featuredProductLink']);
+
 // GET: Retrieve settings
 export async function GET(req: NextRequest) {
-  const denied = adminGuard(req);
-  if (denied) return denied;
-
   const url = new URL(req.url);
   const key = url.searchParams.get('key');
+
+  // Allow public access to specific keys
+  if (key && PUBLIC_KEYS.has(key)) {
+    try {
+      const setting = await prisma.siteSettings.findUnique({ where: { key } });
+      return NextResponse.json(setting || { key, value: null });
+    } catch {
+      return NextResponse.json({ key, value: null });
+    }
+  }
+
+  const denied = adminGuard(req);
+  if (denied) return denied;
 
   try {
     if (key) {

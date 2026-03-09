@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -43,6 +43,7 @@ export function AdminSidebar() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0 });
+  const [search, setSearch] = useState('');
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -65,7 +66,7 @@ export function AdminSidebar() {
 
   useEffect(() => {
     fetchCounts();
-    const interval = setInterval(fetchCounts, 30000); // refresh every 30s
+    const interval = setInterval(fetchCounts, 30000);
     return () => clearInterval(interval);
   }, [fetchCounts]);
 
@@ -88,6 +89,7 @@ export function AdminSidebar() {
 
   const handleLogout = () => {
     localStorage.removeItem('admin_token');
+    document.cookie = 'admin_token=; path=/; max-age=0';
     router.push('/admin/login');
   };
 
@@ -95,6 +97,17 @@ export function AdminSidebar() {
     if (!countKey) return 0;
     return counts[countKey as keyof Counts] || 0;
   };
+
+  // Filter nav items based on search
+  const filteredItems = useMemo(() => {
+    if (!search.trim()) return NAV_ITEMS;
+    const q = search.toLowerCase();
+    return NAV_ITEMS.filter(item => {
+      if ('section' in item && !('href' in item)) return false;
+      const nav = item as { label: string };
+      return nav.label?.toLowerCase().includes(q);
+    });
+  }, [search]);
 
   return (
     <aside className={`cms-sidebar ${collapsed ? 'collapsed' : ''}`}>
@@ -125,8 +138,38 @@ export function AdminSidebar() {
         </button>
       </div>
 
+      {/* Search */}
+      {!collapsed && (
+        <div style={{ padding: '0 12px 8px' }}>
+          <div style={{ position: 'relative' }}>
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}
+            >
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
+            <input
+              type="text"
+              placeholder="Поиск..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '7px 10px 7px 32px',
+                border: '1px solid var(--cms-border)',
+                borderRadius: '8px',
+                background: 'var(--cms-bg-secondary)',
+                color: 'var(--cms-text)',
+                fontSize: '12px',
+                outline: 'none',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       <nav className="cms-sidebar-nav">
-        {NAV_ITEMS.map((item, i) => {
+        {filteredItems.map((item, i) => {
           if ('section' in item && !('href' in item)) {
             return !collapsed ? <div key={i} className="cms-sidebar-section">{item.section}</div> : null;
           }

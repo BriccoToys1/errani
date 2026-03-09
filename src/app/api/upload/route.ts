@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 
 const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/jpg'];
 const maxSize = 10 * 1024 * 1024; // 10 MB
@@ -43,6 +41,17 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Local / VPS (filesystem) ───────────────────────────────────────────
+    // Only write to filesystem in non-serverless environments
+    const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    if (isServerless) {
+      return NextResponse.json(
+        { error: 'File upload requires BLOB_READ_WRITE_TOKEN on serverless platforms. Set up Vercel Blob storage.' },
+        { status: 500 }
+      );
+    }
+
+    const fs = await import('fs');
+    const path = await import('path');
     const uploadDir = path.join(process.cwd(), 'public', 'media');
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 

@@ -14,13 +14,10 @@ interface SeoPage {
 const DEFAULT_PAGES: SeoPage[] = [
   { path: "/", title: "errani — Колоды Таро", description: "Авторские колоды Таро от Екатерины Эррани. Оформляйте предзаказ.", indexed: true },
   { path: "/catalog", title: "Каталог — errani", description: "Коллекция колод Таро.", indexed: true },
-  { path: "/author-decks", title: "Авторские колоды — errani", description: "Эксклюзивные авторские колоды Таро от Екатерины Эррани.", indexed: true },
-  { path: "/tenderlyvibe", title: "Tenderlyvibe — errani", description: "Коллаборация Tenderlyvibe.", indexed: true },
+  { path: "/tenderly-vibe", title: "Tenderly Vibe — errani", description: "Колода Tenderly Vibe — уникальная авторская колода.", indexed: true },
   { path: "/cart", title: "Корзина — errani", description: "Ваша корзина покупок.", indexed: false },
-  { path: "/account", title: "Аккаунт — errani", description: "Страница аккаунта.", indexed: false },
-  { path: "/favorites", title: "Избранное — errani", description: "Ваши избранные товары.", indexed: false },
   { path: "/privacy", title: "Политика конфиденциальности — errani", description: "Политика конфиденциальности.", indexed: true },
-  { path: "/offer", title: "Публичная оферта — errani", description: "Условия использования.", indexed: true },
+  { path: "/oferta", title: "Публичная оферта — errani", description: "Условия использования.", indexed: true },
 ];
 
 function RobotsEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {

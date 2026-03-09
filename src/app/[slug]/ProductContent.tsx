@@ -28,13 +28,13 @@ interface Product {
 export function ProductContent({ product }: { product: Product }) {
   const { lang } = useLanguage();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [added, setAdded] = useState(false);
+  const [inCart, setInCart] = useState(false);
 
   // Check if product is already in cart on mount
   useEffect(() => {
     const cart = getCart();
     if (cart.some(item => item.productId === product.id)) {
-      setAdded(true);
+      setInCart(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id]);
@@ -75,7 +75,11 @@ export function ProductContent({ product }: { product: Product }) {
   const displayDesc = lang === 'ru' && product.descriptionRu ? product.descriptionRu : product.description;
   const price = product.price;
 
-  const handleAdd = () => {
+  const handleAddOrGoToCart = () => {
+    if (inCart) {
+      window.location.href = '/cart';
+      return;
+    }
     addToCart({
       productId: product.id,
       name: displayName,
@@ -84,12 +88,12 @@ export function ProductContent({ product }: { product: Product }) {
       image: heroImage,
       isPreorder: product.isPreorder,
     });
-    setAdded(true);
+    setInCart(true);
   };
 
   return (
     <main>
-      {/* Hero */}
+      {/* Hero: Image + Info */}
       <section className="product-hero">
         <div className="product-image-col">
           {heroImage && (
@@ -120,7 +124,9 @@ export function ProductContent({ product }: { product: Product }) {
               </span>
             )}
           </div>
+
           <h1 className="product-title anim-fade-up anim-fade-up-d1">{displayName}</h1>
+
           <div className="product-price anim-fade-up anim-fade-up-d3">
             {`${price.toLocaleString('ru-RU')} ₽`}
             {product.oldPrice && (
@@ -128,33 +134,32 @@ export function ProductContent({ product }: { product: Product }) {
             )}
           </div>
 
+          {/* Single add-to-cart / go-to-cart button */}
           <div className="product-actions anim-fade-up anim-fade-up-d4">
-            {added ? (
-              <Link href="/cart" className="product-btn">
-                {t(lang, 'product.goToCart')}
-              </Link>
-            ) : (
-              <button
-                type="button"
-                className="product-btn"
-                onClick={handleAdd}
-              >
-                {t(lang, 'product.addToCart')}
-              </button>
-            )}
+            <button
+              type="button"
+              className={`product-btn ${inCart ? 'in-cart' : ''}`}
+              onClick={handleAddOrGoToCart}
+            >
+              {inCart ? t(lang, 'product.goToCart') : t(lang, 'product.addToCart')}
+            </button>
           </div>
         </div>
       </section>
 
-      {/* Description */}
+      {/* About / Description */}
       {displayDesc && (
         <section className="description-section">
-          <h2 className="description-heading">{lang === 'ru' ? 'О товаре' : 'About'}</h2>
+          <h2 className="description-heading">
+            {lang === 'ru' ? 'О колоде' : 'About the deck'}
+          </h2>
           <div className="description-content">
             {displayDesc.split('\n').filter(Boolean).map((p, i) => (
               <p key={i}>{p}</p>
             ))}
           </div>
+
+          {/* Limited edition banner */}
           {product.isLimited && (
             <div className="limited-edition-banner">
               <h3>{t(lang, 'product.limited.title')}</h3>

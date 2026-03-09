@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
-import { addToCart } from '@/lib/cart';
+import { addToCart, getCart } from '@/lib/cart';
 import { useState, useEffect } from 'react';
 
 interface Product {
@@ -23,16 +23,25 @@ interface Product {
   isAuthor: boolean;
   isPreorder: boolean;
   isActive: boolean;
+  createdAt: string;
 }
 
 type FilterType = 'all' | 'author' | 'preorder';
+type SortType = 'newest' | 'oldest' | 'cheap' | 'expensive';
 
 export function CatalogContent() {
   const { lang } = useLanguage();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>('all');
-  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+  const [sort, setSort] = useState<SortType>('newest');
+  const [cartIds, setCartIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Init cart state
+    const cart = getCart();
+    setCartIds(new Set(cart.map(i => i.productId)));
+  }, []);
 
   useEffect(() => {
     fetchProducts();
@@ -48,15 +57,7 @@ export function CatalogContent() {
       
       const res = await fetch(`/api/products?${params.toString()}`);
       const data = await res.json();
-      // Sort: авторские колоды first
-      const sorted = data
-        .filter((p: Product) => p.isActive)
-        .sort((a: Product, b: Product) => {
-          if (a.isAuthor && !b.isAuthor) return -1;
-          if (!a.isAuthor && b.isAuthor) return 1;
-          return 0;
-        });
-      setProducts(sorted);
+      setProducts(Array.isArray(data) ? data.filter((p: Product) => p.isActive) : []);
     } catch (error) {
       console.error('Failed to fetch products:', error);
     } finally {
@@ -67,6 +68,12 @@ export function CatalogContent() {
   const handleAddToCart = (e: React.MouseEvent, product: Product) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (cartIds.has(product.id)) {
+      window.location.href = '/cart';
+      return;
+    }
+
     const imgs: string[] = (() => { try { return JSON.parse(product.images) || []; } catch { return []; } })();
     addToCart({
       productId: product.id,
@@ -76,8 +83,7 @@ export function CatalogContent() {
       image: product.image || imgs[0] || '',
       isPreorder: product.isPreorder,
     });
-    setAddedIds(prev => { const n = new Set(prev); n.add(product.id); return n; });
-    setTimeout(() => setAddedIds(prev => { const n = new Set(prev); n.delete(product.id); return n; }), 2000);
+    setCartIds(prev => { const n = new Set(prev); n.add(product.id); return n; });
   };
 
   const filters: { key: FilterType; label: string }[] = [
@@ -85,6 +91,23 @@ export function CatalogContent() {
     { key: 'author', label: lang === 'ru' ? 'Авторские' : 'Author' },
     { key: 'preorder', label: lang === 'ru' ? 'Предзаказ' : 'Preorder' },
   ];
+
+  const sortOptions: { key: SortType; label: string }[] = [
+    { key: 'newest', label: lang === 'ru' ? 'Новинки' : 'Newest' },
+    { key: 'oldest', label: lang === 'ru' ? 'Старые' : 'Oldest' },
+    { key: 'cheap', label: lang === 'ru' ? 'Дешевле' : 'Cheapest' },
+    { key: 'expensive', label: lang === 'ru' ? 'Дороже' : 'Most expensive' },
+  ];
+
+  const sortedProducts = [...products].sort((a, b) => {
+    switch (sort) {
+      case 'newest': return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'oldest': return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'cheap': return a.price - b.price;
+      case 'expensive': return b.price - a.price;
+      default: return 0;
+    }
+  });
 
   const formatPrice = (price: number) =>
     `${price.toLocaleString('ru-RU')} ₽`;
@@ -94,33 +117,45 @@ export function CatalogContent() {
       <section className="catalog-section">
         <h1 className="catalog-heading anim-fade-up">{t(lang, 'catalog.title')}</h1>
 
-        <div className="catalog-filters anim-fade-up">
-          {filters.map((f) => (
-            <button
-              key={f.key}
-              className={`catalog-filter-btn ${filter === f.key ? 'active' : ''}`}
-              onClick={() => setFilter(f.key)}
-            >
-              {f.label}
-            </button>
-          ))}
+        {/* Filters + Sort in one row */}
+        <div className="catalog-toolbar anim-fade-up">
+          <div className="catalog-filters">
+            {filters.map((f) => (
+              <button
+                key={f.key}
+                className={`catalog-filter-btn ${filter === f.key ? 'active' : ''}`}
+                onClick={() => setFilter(f.key)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <select
+            className="catalog-sort-select"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortType)}
+          >
+            {sortOptions.map(s => (
+              <option key={s.key} value={s.key}>{s.label}</option>
+            ))}
+          </select>
         </div>
 
         {loading ? (
           <div className="catalog-loading">
             <div className="spinner" />
           </div>
-        ) : products.length === 0 ? (
+        ) : sortedProducts.length === 0 ? (
           <div className="catalog-empty">
             {lang === 'ru' ? 'Товары не найдены' : 'No products found'}
           </div>
         ) : (
           <div className="catalog-grid">
-            {products.map((product, index) => {
+            {sortedProducts.map((product, index) => {
               const imgs: string[] = (() => { try { return JSON.parse(product.images) || []; } catch { return []; } })();
               const heroImg = product.image || imgs[0] || '';
               const displayName = lang === 'ru' && product.nameRu ? product.nameRu : product.name;
-              const isAdded = addedIds.has(product.id);
+              const isInCart = cartIds.has(product.id);
               return (
                 <Link 
                   href={`/${product.slug}`} 
@@ -156,7 +191,7 @@ export function CatalogContent() {
                       className="catalog-card-cart-btn"
                       onClick={(e) => handleAddToCart(e, product)}
                     >
-                      {isAdded ? (lang === 'ru' ? '✓ Добавлено' : '✓ Added') : t(lang, 'catalog.view')}
+                      {isInCart ? (lang === 'ru' ? 'Перейти в корзину' : 'Go to cart') : t(lang, 'catalog.view')}
                     </button>
                   </div>
                 </Link>

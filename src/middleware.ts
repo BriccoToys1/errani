@@ -1,9 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { jwtVerify } from 'jose';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'errani-admin-secret-key-change-me';
+
+async function verifyToken(token: string): Promise<boolean> {
+  try {
+    const secret = new TextEncoder().encode(JWT_SECRET);
+    await jwtVerify(token, secret);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Never block admin, API, static files
+  // ── Admin route protection ───────────────────────────────────────────
+  if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
+    // Skip API routes — they have their own auth guard
+    if (!pathname.startsWith('/api')) {
+      const token = req.cookies.get('admin_token')?.value;
+      if (!token) {
+        // Redirect to login
+        const loginUrl = new URL('/admin/login', req.url);
+        return NextResponse.redirect(loginUrl);
+      }
+      const valid = await verifyToken(token);
+      if (!valid) {
+        const loginUrl = new URL('/admin/login', req.url);
+        const response = NextResponse.redirect(loginUrl);
+        response.cookies.delete('admin_token');
+        return response;
+      }
+    }
+  }
+
+  // Never block API, static files
   if (
     pathname.startsWith('/admin') ||
     pathname.startsWith('/api') ||
