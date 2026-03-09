@@ -1,7 +1,5 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 interface OrderEmailData {
   orderNumber: string;
   customerName: string;
@@ -27,6 +25,8 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
     console.warn('RESEND_API_KEY not set, skipping email');
     return;
   }
+
+  const resend = new Resend(apiKey);
 
   const itemsHtml = data.items
     .map(
