@@ -11,6 +11,7 @@ interface OrderItemInput {
 export async function GET() {
   try {
     const orders = await prisma.order.findMany({
+      where: { status: { not: 'pending' } },
       include: {
         items: {
           include: {
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
         shippingMethod: shippingMethod || '',
         totalAmount,
         currency: 'RUB',
-        status: 'assembling',
+        status: 'pending',
         items: {
           create: orderItems,
         },

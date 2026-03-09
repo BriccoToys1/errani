@@ -35,6 +35,7 @@ interface Order {
 }
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
+  paid: { label: "Оплачен", cls: "cms-badge-green" },
   assembling: { label: "Сборка", cls: "cms-badge-yellow" },
   shipped: { label: "Отправлен", cls: "cms-badge-blue" },
   in_transit: { label: "В пути", cls: "cms-badge-blue" },
@@ -42,7 +43,7 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   cancelled: { label: "Отменён", cls: "cms-badge-red" },
 };
 
-const ALL_STATUSES = ["assembling", "shipped", "in_transit", "delivered", "cancelled"];
+const ALL_STATUSES = ["paid", "assembling", "shipped", "in_transit", "delivered", "cancelled"];
 
 export default function AdminOrdersPage() {
   const router = useRouter();
