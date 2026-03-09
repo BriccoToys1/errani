@@ -21,7 +21,10 @@ export async function middleware(req: NextRequest) {
   // Check site enabled setting from DB via internal API
   try {
     const settingsUrl = new URL('/api/admin/public-status', req.url);
-    const res = await fetch(settingsUrl.toString(), { cache: 'no-store' });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+    const res = await fetch(settingsUrl.toString(), { cache: 'no-store', signal: controller.signal });
+    clearTimeout(timeout);
     if (res.ok) {
       const data = await res.json();
       if (data.maintenanceMode) {
