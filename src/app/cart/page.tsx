@@ -31,6 +31,8 @@ export default function CartPage() {
     shippingMethod: 'ozon',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [consentOferta, setConsentOferta] = useState(false);
+  const [consentData, setConsentData] = useState(false);
 
   useEffect(() => {
     setCart(getCart());
@@ -109,6 +111,10 @@ export default function CartPage() {
     if (!formData.house.trim()) {
       e.house = 'Введите дом';
     }
+
+    // Consent validation
+    if (!consentOferta) e.consentOferta = 'Необходимо принять условия оферты';
+    if (!consentData) e.consentData = 'Необходимо дать согласие на обработку данных';
     
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -334,6 +340,37 @@ export default function CartPage() {
           </div>
 
           {/* Order total */}
+          {/* Consent checkboxes */}
+          <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', fontSize: '0.82rem', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+              <input
+                type="checkbox"
+                checked={consentOferta}
+                onChange={(e) => setConsentOferta(e.target.checked)}
+                style={{ marginTop: '2px', flexShrink: 0, accentColor: 'var(--orange)' }}
+              />
+              <span>
+                Я принимаю условия{' '}
+                <a href="/oferta" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--orange)', textDecoration: 'underline' }}>Публичной оферты</a>
+              </span>
+            </label>
+            {errors.consentOferta && <p style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '-0.5rem' }}>{errors.consentOferta}</p>}
+
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', fontSize: '0.82rem', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+              <input
+                type="checkbox"
+                checked={consentData}
+                onChange={(e) => setConsentData(e.target.checked)}
+                style={{ marginTop: '2px', flexShrink: 0, accentColor: 'var(--orange)' }}
+              />
+              <span>
+                Я согласен на обработку{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--orange)', textDecoration: 'underline' }}>персональных данных</a>
+              </span>
+            </label>
+            {errors.consentData && <p style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '-0.5rem' }}>{errors.consentData}</p>}
+          </div>
+
           <div className="cart-summary-inline" style={{ marginTop: '2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
             <button type="button" onClick={() => setStep('cart')} className="cart-back-btn">
               ← Назад

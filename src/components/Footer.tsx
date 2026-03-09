@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ContactModal } from './ContactModal';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -19,10 +20,17 @@ export function Footer() {
     <>
       <footer className="site-footer">
         <div className="footer-inner">
-          {/* Brand */}
-          <div>
+        <div>
             <div className="footer-brand">errani</div>
             <p className="footer-copy">&copy; {year} errani. {t(lang, 'footer.rights')}</p>
+            <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+              <Link href="/oferta" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textDecoration: 'underline', letterSpacing: 0 }}>
+                {lang === 'ru' ? 'Публичная оферта' : 'Public Offer'}
+              </Link>
+              <Link href="/privacy" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textDecoration: 'underline', letterSpacing: 0 }}>
+                {lang === 'ru' ? 'Политика конфиденциальности' : 'Privacy Policy'}
+              </Link>
+            </div>
           </div>
 
           {/* Socials + Contact Button */}
