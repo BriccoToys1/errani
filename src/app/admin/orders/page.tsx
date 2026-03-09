@@ -54,8 +54,6 @@ export default function AdminOrdersPage() {
   const [editNotes, setEditNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState("");
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
 
@@ -96,33 +94,9 @@ export default function AdminOrdersPage() {
     setSaving(false);
   };
 
-  const handleDelete = async (ids: string[]) => {
-    const token = getToken();
-    for (const id of ids) {
-      await fetch(`/api/orders/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-    }
-    notify(`${ids.length} заказ(ов) удалено`);
-    setDeleteConfirm(null);
-    setCheckedIds(new Set());
-    fetchOrders();
-  };
-
   const notify = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(""), 3000);
-  };
-
-  const toggleCheck = (id: string) => {
-    setCheckedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    if (checkedIds.size === filtered.length) setCheckedIds(new Set());
-    else setCheckedIds(new Set(filtered.map((o) => o.id)));
   };
 
   const formatPrice = (n: number) =>
@@ -167,11 +141,7 @@ export default function AdminOrdersPage() {
               <option value="all">Все статусы</option>
               {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>)}
             </select>
-            {checkedIds.size > 0 && (
-              <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={() => setDeleteConfirm(Array.from(checkedIds))}>
-                Удалить ({checkedIds.size})
-              </button>
-            )}
+            {/* Removed bulk delete */}
           </div>
 
           {/* Table */}
@@ -179,9 +149,6 @@ export default function AdminOrdersPage() {
             <table className="cms-table">
               <thead>
                 <tr>
-                  <th style={{ width: 36 }}>
-                    <input type="checkbox" checked={checkedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} />
-                  </th>
                   <th>Order #</th>
                   <th>Клиент</th>
                   <th>Товары</th>
@@ -194,8 +161,7 @@ export default function AdminOrdersPage() {
               </thead>
               <tbody>
                 {filtered.map((order) => (
-                  <tr key={order.id} className={checkedIds.has(order.id) ? "cms-row-selected" : ""}>
-                    <td><input type="checkbox" checked={checkedIds.has(order.id)} onChange={() => toggleCheck(order.id)} /></td>
+                  <tr key={order.id}>
                     <td className="cms-td-mono">{order.orderNumber}</td>
                     <td className="cms-td-bold">
                       {order.customerName}
@@ -218,14 +184,11 @@ export default function AdminOrdersPage() {
                       <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openOrder(order)} title="Edit">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                       </button>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([order.id])} title="Delete" style={{ color: "var(--cms-danger)" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                      </button>
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={9} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Заказы не найдены</td></tr>
+                  <tr><td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Заказы не найдены</td></tr>
                 )}
               </tbody>
             </table>
@@ -287,28 +250,6 @@ export default function AdminOrdersPage() {
             <div className="cms-modal-actions">
               <button className="cms-btn cms-btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Сохранение..." : "Сохранить"}</button>
               <button className="cms-btn" onClick={() => setSelected(null)}>Отмена</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirm Modal */}
-      {deleteConfirm && (
-        <div className="cms-modal-overlay" onClick={() => setDeleteConfirm(null)}>
-          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="cms-modal-header">
-              <h3>Подтверждение удаления</h3>
-              <button className="cms-modal-close" onClick={() => setDeleteConfirm(null)}>&times;</button>
-            </div>
-            <div className="cms-modal-body">
-              <p style={{ fontSize: "14px" }}>
-                Вы уверены, что хотите удалить <strong>{deleteConfirm.length}</strong> заказ(ов)?<br />
-                Это действие нельзя отменить.
-              </p>
-            </div>
-            <div className="cms-modal-actions">
-              <button className="cms-btn cms-btn-danger" onClick={() => handleDelete(deleteConfirm)}>Удалить</button>
-              <button className="cms-btn" onClick={() => setDeleteConfirm(null)}>Отмена</button>
             </div>
           </div>
         </div>
