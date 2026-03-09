@@ -139,6 +139,8 @@ async function createYukassaPayment(order: { id: string; orderNumber: string; to
   const shopId = process.env.YUKASSA_SHOP_ID;
   const secretKey = process.env.YUKASSA_SECRET_KEY;
 
+  console.log('YuKassa env check - shopId:', shopId ? `${shopId.slice(0,4)}...` : 'MISSING', 'secretKey:', secretKey ? 'present' : 'MISSING');
+
   if (!shopId || !secretKey) {
     console.log('YuKassa credentials not configured');
     return null;
@@ -172,11 +174,13 @@ async function createYukassaPayment(order: { id: string; orderNumber: string; to
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('YuKassa error:', error);
+      console.error('YuKassa error:', response.status, error);
       return null;
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log('YuKassa success, paymentUrl:', result?.confirmation?.confirmation_url);
+    return result;
   } catch (error) {
     console.error('YuKassa request error:', error);
     return null;
