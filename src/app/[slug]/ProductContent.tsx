@@ -160,9 +160,12 @@ export function ProductContent({ product }: { product: Product }) {
           <h1 className="product-title anim-fade-up anim-fade-up-d1">{displayName}</h1>
 
           <div className="product-price anim-fade-up anim-fade-up-d3">
-            {`${price.toLocaleString('ru-RU')} ₽`}
+            <span className="product-current-price">{`${price.toLocaleString('ru-RU')} ₽`}</span>
             {product.oldPrice && (
               <span className="product-old-price">{`${product.oldPrice.toLocaleString('ru-RU')} ₽`}</span>
+            )}
+            {product.discount > 0 && (
+              <span className="product-discount-badge">-{product.discount}%</span>
             )}
           </div>
 

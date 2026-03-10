@@ -21,6 +21,8 @@ export function cn(...classes: (string | undefined | null | false)[]): string {
 }
 
 export const ORDER_STATUSES: Record<string, { label: string; color: string }> = {
+  pending: { label: 'Ожидает оплаты', color: '#888' },
+  paid: { label: 'Оплачен', color: '#3B82F6' },
   assembling: { label: 'Собирается', color: '#F59E4B' },
   shipped: { label: 'Отправлен', color: '#12c998' },
   in_transit: { label: 'Доставляется', color: '#439f76' },

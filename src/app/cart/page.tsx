@@ -28,7 +28,7 @@ export default function CartPage() {
     street: '',
     house: '',
     apartment: '',
-    shippingMethod: 'ozon',
+    shippingMethod: 'pochta_ru',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [consentOferta, setConsentOferta] = useState(false);

@@ -70,24 +70,40 @@ export function PhoneInput({ value, onChange, countryCode = 'RU', error, label }
   const handleSelectCode = (code: typeof PHONE_CODES[0]) => {
     setSelectedCode(code);
     setIsOpen(false);
-    // Keep only numbers from existing value
     const numbers = value.replace(/\D/g, '').replace(/^7|^8/, '');
-    onChange(`${code.dial}${numbers}`);
+    onChange(`${code.dial}${formatWithMask(numbers, code.mask)}`);
+  };
+
+  const formatWithMask = (digits: string, mask: string): string => {
+    if (!mask) return digits;
+    let result = '';
+    let digitIndex = 0;
+    for (let i = 0; i < mask.length && digitIndex < digits.length; i++) {
+      if (mask[i] === '_') {
+        result += digits[digitIndex++];
+      } else {
+        result += mask[i];
+      }
+    }
+    return result;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.target.value;
-    // Allow only numbers, spaces, dashes, and parentheses
-    const cleaned = input.replace(/[^\d\s\-()]/g, '');
-    onChange(`${selectedCode.dial}${cleaned}`);
+    const raw = e.target.value;
+    const digits = raw.replace(/\D/g, '');
+    const formatted = formatWithMask(digits, selectedCode.mask);
+    onChange(`${selectedCode.dial}${formatted}`);
   };
 
-  // Extract number part without dial code
   const getDisplayValue = () => {
-    if (value.startsWith(selectedCode.dial)) {
-      return value.slice(selectedCode.dial.length);
+    let raw = value;
+    if (raw.startsWith(selectedCode.dial)) {
+      raw = raw.slice(selectedCode.dial.length);
+    } else {
+      raw = raw.replace(/^\+\d+/, '');
     }
-    return value.replace(/^\+\d+/, '');
+    const digits = raw.replace(/\D/g, '');
+    return formatWithMask(digits, selectedCode.mask) || raw;
   };
 
   return (

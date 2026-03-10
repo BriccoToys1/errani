@@ -439,6 +439,16 @@ img {
   align-items: center;
 }
 
+@media (max-width: 767px) {
+  .footer-inner {
+    text-align: center;
+  }
+  .footer-socials {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
 .footer-socials a {
   display: flex;
   align-items: center;
@@ -834,6 +844,9 @@ select.form-field {
   .product-image-col {
     min-height: 50vh;
   }
+  .product-image-col .product-carousel img {
+    object-fit: contain !important;
+  }
   /* Ensure header always visible above photo on product pages */
   .site-header {
     background: rgba(8, 8, 8, 0.9);
@@ -968,11 +981,24 @@ select.form-field {
   flex-wrap: wrap;
 }
 
+.product-current-price {
+  color: var(--orange);
+}
+
 .product-old-price {
   font-size: 1.2rem;
   color: var(--text-muted);
   text-decoration: line-through;
   font-weight: 400;
+}
+
+.product-discount-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  background: var(--orange);
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
 }
 
 .product-btn {
@@ -994,6 +1020,14 @@ select.form-field {
   white-space: nowrap;
   transition: background 0.3s, transform 0.2s;
   align-self: flex-start;
+}
+
+@media (max-width: 767px) {
+  .product-btn {
+    width: 100%;
+    padding: 0.85rem 2rem;
+    align-self: stretch;
+  }
 }
 
 .product-btn:hover {
@@ -1531,12 +1565,12 @@ select.form-field {
   border-radius: 8px 8px 0 0;
   width: 100%;
   height: 0;
-  padding-top: 75%; /* 4:3 ratio */
+  padding-top: 133.33%; /* 3:4 portrait ratio */
 }
 
 .catalog-grid .catalog-card-image.aspect-4-3 {
   height: 0;
-  padding-top: 75%; /* 4:3 ratio */
+  padding-top: 133.33%; /* 3:4 portrait ratio */
 }
 
 .catalog-grid .catalog-card-info {
@@ -2042,6 +2076,13 @@ select.form-field {
 
 /* Mobile: hide sort text, show only icon */
 @media (max-width: 639px) {
+  .catalog-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .catalog-sort-wrapper {
+    margin-left: 0;
+  }
   .catalog-sort-select {
     width: 0;
     padding: 0.5rem 1.75rem 0.5rem 0;

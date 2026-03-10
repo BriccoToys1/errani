@@ -9,12 +9,6 @@ export default function HomePage() {
 
   return (
     <main className="home-hero">
-      {/* Animated 3D gear decoration (from /public/3d_models/technical_works) */}
-      <div className="home-3d-icon" aria-hidden="true">
-        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path fillRule="evenodd" clipRule="evenodd" fill="currentColor" d="M43.5 5.5a6.5 6.5 0 0 1 13 0v4.6a34.5 34.5 0 0 1 9.8 4.1l3.3-3.3a6.5 6.5 0 0 1 9.2 9.2l-3.3 3.3a34.5 34.5 0 0 1 4.1 9.8h4.6a6.5 6.5 0 0 1 0 13h-4.6a34.5 34.5 0 0 1-4.1 9.8l3.3 3.3a6.5 6.5 0 0 1-9.2 9.2l-3.3-3.3a34.5 34.5 0 0 1-9.8 4.1v4.6a6.5 6.5 0 0 1-13 0v-4.6a34.5 34.5 0 0 1-9.8-4.1l-3.3 3.3a6.5 6.5 0 0 1-9.2-9.2l3.3-3.3a34.5 34.5 0 0 1-4.1-9.8H5.5a6.5 6.5 0 0 1 0-13h4.6a34.5 34.5 0 0 1 4.1-9.8l-3.3-3.3a6.5 6.5 0 0 1 9.2-9.2l3.3 3.3a34.5 34.5 0 0 1 9.8-4.1V5.5zM50 65a15 15 0 1 0 0-30 15 15 0 0 0 0 30z" />
-        </svg>
-      </div>
       {/* Main Text */}
       <h1 className="home-display anim-fade-up anim-fade-up-d2">
         {t(lang, 'home.title')}
