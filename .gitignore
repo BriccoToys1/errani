@@ -10,3 +10,4 @@ tsconfig.tsbuildinfo
 Montserrat/
 .vercel
 .env*.local
+.env.prod
