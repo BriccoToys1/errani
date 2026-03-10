@@ -28,6 +28,7 @@ interface Product {
 export function ProductContent({ product }: { product: Product }) {
   const { lang } = useLanguage();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [carouselIndex, setCarouselIndex] = useState(0);
   const [inCart, setInCart] = useState(false);
 
   // Check if product is already in cart on mount
@@ -48,11 +49,11 @@ export function ProductContent({ product }: { product: Product }) {
   const openLightbox = (index: number) => setLightboxIndex(index);
   const closeLightbox = () => setLightboxIndex(null);
 
-  const nextImage = useCallback(() => {
+  const nextLightbox = useCallback(() => {
     if (lightboxIndex !== null) setLightboxIndex((lightboxIndex + 1) % allImages.length);
   }, [lightboxIndex, allImages.length]);
 
-  const prevImage = useCallback(() => {
+  const prevLightbox = useCallback(() => {
     if (lightboxIndex !== null) setLightboxIndex((lightboxIndex - 1 + allImages.length) % allImages.length);
   }, [lightboxIndex, allImages.length]);
 
@@ -60,8 +61,8 @@ export function ProductContent({ product }: { product: Product }) {
     if (lightboxIndex === null) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeLightbox();
-      if (e.key === 'ArrowRight') nextImage();
-      if (e.key === 'ArrowLeft') prevImage();
+      if (e.key === 'ArrowRight') nextLightbox();
+      if (e.key === 'ArrowLeft') prevLightbox();
     };
     document.addEventListener('keydown', handleKeyDown);
     document.body.style.overflow = 'hidden';
@@ -69,7 +70,7 @@ export function ProductContent({ product }: { product: Product }) {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [lightboxIndex, nextImage, prevImage]);
+  }, [lightboxIndex, nextLightbox, prevLightbox]);
 
   const displayName = lang === 'ru' && product.nameRu ? product.nameRu : product.name;
   const displayDesc = lang === 'ru' && product.descriptionRu ? product.descriptionRu : product.description;
@@ -91,21 +92,52 @@ export function ProductContent({ product }: { product: Product }) {
     setInCart(true);
   };
 
+  const carouselPrev = () => setCarouselIndex((carouselIndex - 1 + allImages.length) % allImages.length);
+  const carouselNext = () => setCarouselIndex((carouselIndex + 1) % allImages.length);
+
   return (
     <main>
-      {/* Hero: Image + Info */}
+      {/* Hero: Carousel + Info */}
       <section className="product-hero">
         <div className="product-image-col">
-          {heroImage && (
-            <Image
-              src={heroImage}
-              alt={displayName}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 50vw"
-              priority
-              quality={90}
-            />
+          {allImages.length > 0 && (
+            <div className="product-carousel">
+              <Image
+                src={allImages[carouselIndex]}
+                alt={displayName}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
+                priority
+                quality={90}
+                onClick={() => openLightbox(carouselIndex)}
+                style={{ cursor: 'zoom-in' }}
+              />
+              {allImages.length > 1 && (
+                <>
+                  <button className="carousel-nav prev" onClick={carouselPrev} aria-label="Предыдущее">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                  </button>
+                  <button className="carousel-nav next" onClick={carouselNext} aria-label="Следующее">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </button>
+                  <div className="carousel-dots">
+                    {allImages.map((_, i) => (
+                      <button
+                        key={i}
+                        className={`carousel-dot ${i === carouselIndex ? 'active' : ''}`}
+                        onClick={() => setCarouselIndex(i)}
+                        aria-label={`Фото ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
 
@@ -120,7 +152,7 @@ export function ProductContent({ product }: { product: Product }) {
             )}
             {product.isPreorder && (
               <span className="product-badge product-badge-preorder">
-                {lang === 'ru' ? 'Предзаказ' : 'Pre-order'}
+                {lang === 'ru' ? 'ПРЕДЗАКАЗ' : 'PRE-ORDER'}
               </span>
             )}
           </div>
@@ -196,7 +228,7 @@ export function ProductContent({ product }: { product: Product }) {
         <div className="lightbox-overlay" onClick={closeLightbox}>
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
             <button className="lightbox-close" onClick={closeLightbox}>&times;</button>
-            <button className="lightbox-nav prev" onClick={prevImage}>
+            <button className="lightbox-nav prev" onClick={prevLightbox}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="15 18 9 12 15 6" />
               </svg>
@@ -206,7 +238,7 @@ export function ProductContent({ product }: { product: Product }) {
               alt={`${displayName} — ${lightboxIndex + 1}`}
               className="lightbox-image"
             />
-            <button className="lightbox-nav next" onClick={nextImage}>
+            <button className="lightbox-nav next" onClick={nextLightbox}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="9 18 15 12 9 6" />
               </svg>

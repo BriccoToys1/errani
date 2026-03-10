@@ -100,6 +100,8 @@ export function CatalogContent() {
   ];
 
   const sortedProducts = [...products].sort((a, b) => {
+    // Author products always pinned first
+    if (a.isAuthor !== b.isAuthor) return a.isAuthor ? -1 : 1;
     switch (sort) {
       case 'newest': return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       case 'oldest': return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
@@ -130,15 +132,22 @@ export function CatalogContent() {
               </button>
             ))}
           </div>
-          <select
-            className="catalog-sort-select"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortType)}
-          >
-            {sortOptions.map(s => (
-              <option key={s.key} value={s.key}>{s.label}</option>
-            ))}
-          </select>
+          <div className="catalog-sort-wrapper">
+            <span className="catalog-sort-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M7 12h10M11 18h2" />
+              </svg>
+            </span>
+            <select
+              className="catalog-sort-select"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortType)}
+            >
+              {sortOptions.map(s => (
+                <option key={s.key} value={s.key}>{s.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {loading ? (

@@ -927,9 +927,9 @@ select.form-field {
   color: var(--orange);
   padding: 0;
   font-size: 0.65rem;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.15em;
-  text-transform: none;
+  text-transform: uppercase;
 }
 
 @media (max-width: 640px) {
@@ -940,12 +940,13 @@ select.form-field {
 
 .product-title {
   font-family: var(--font-display);
-  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-size: clamp(2rem, 4vw, 4rem);
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.02em;
   margin-bottom: 1rem;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .product-subtitle {
@@ -1009,8 +1010,8 @@ select.form-field {
 
 .product-btn.in-cart {
   background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text);
+  border: 1.5px solid var(--orange);
+  color: var(--orange);
 }
 
 .product-btn.in-cart:hover {
@@ -1331,34 +1332,6 @@ select.form-field {
   margin-bottom: 2rem;
 }
 
-.catalog-sort-select {
-  margin-left: auto;
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 99px;
-  background: transparent;
-  font-family: var(--font-body);
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  color: var(--text-secondary);
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a8a8a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.75rem center;
-  padding-right: 2rem;
-}
-
-.catalog-sort-select:hover {
-  border-color: var(--text);
-  color: var(--text);
-}
-
-.catalog-sort-select:focus {
-  outline: none;
-  border-color: var(--orange);
-}
-
 .catalog-card {
   display: flex;
   gap: 1.25rem;
@@ -1553,17 +1526,17 @@ select.form-field {
 }
 
 .catalog-grid .catalog-card-image {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 4 / 3;
   position: relative;
   overflow: hidden;
   border-radius: 8px 8px 0 0;
+  width: 100%;
+  height: 0;
+  padding-top: 75%; /* 4:3 ratio */
 }
 
 .catalog-grid .catalog-card-image.aspect-4-3 {
-  aspect-ratio: 4 / 3;
-  height: auto;
+  height: 0;
+  padding-top: 75%; /* 4:3 ratio */
 }
 
 .catalog-grid .catalog-card-info {
@@ -1890,6 +1863,8 @@ select.form-field {
   justify-content: center;
   width: 24px;
   height: 24px;
+  min-width: 24px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--border);
   font-size: 0.75rem;
@@ -1944,6 +1919,166 @@ select.form-field {
 
 .checkout-grid .full-width {
   grid-column: 1 / -1;
+}
+
+/* ============================================================
+   PRODUCT IMAGE CAROUSEL
+   ============================================================ */
+.product-carousel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.carousel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(8, 8, 8, 0.6);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.carousel-nav:hover {
+  background: rgba(235, 139, 55, 0.85);
+  border-color: var(--orange);
+}
+
+.carousel-nav.prev {
+  left: 0.75rem;
+}
+
+.carousel-nav.next {
+  right: 0.75rem;
+}
+
+.carousel-dots {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  z-index: 10;
+}
+
+.carousel-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s;
+}
+
+.carousel-dot.active {
+  background: white;
+  width: 18px;
+  border-radius: 3px;
+}
+
+/* ============================================================
+   CATALOG SORT MOBILE
+   ============================================================ */
+.catalog-sort-wrapper {
+  margin-left: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+  cursor: pointer;
+}
+
+.catalog-sort-wrapper:hover,
+.catalog-sort-wrapper:focus-within {
+  border-color: var(--text);
+}
+
+.catalog-sort-icon {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.5rem 0.5rem 0.85rem;
+  color: var(--text-secondary);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.catalog-sort-select {
+  margin-left: 0;
+  padding: 0.5rem 2rem 0.5rem 0.25rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-secondary);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a8a8a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+}
+
+.catalog-sort-select:focus {
+  outline: none;
+}
+
+/* Mobile: hide sort text, show only icon */
+@media (max-width: 639px) {
+  .catalog-sort-select {
+    width: 0;
+    padding: 0.5rem 1.75rem 0.5rem 0;
+    overflow: hidden;
+  }
+}
+
+/* ============================================================
+   HOME 3D ICON
+   ============================================================ */
+.home-3d-icon {
+  position: absolute;
+  bottom: 2rem;
+  right: 2rem;
+  width: 72px;
+  height: 72px;
+  opacity: 0.18;
+  animation: gear-spin 12s linear infinite;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .home-3d-icon {
+    width: 52px;
+    height: 52px;
+    bottom: 1rem;
+    right: 1rem;
+  }
+}
+
+@keyframes gear-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.home-hero {
+  position: relative;
 }
 
 /* ============================================================

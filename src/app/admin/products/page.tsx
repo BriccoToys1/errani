@@ -323,10 +323,31 @@ export default function AdminProductsPage() {
   const toggleActive = async (product: Product) => {
     const token = getToken();
     if (!token) return;
+    // Send full product data to avoid overwriting nameRu/descriptionRu with null
     await fetch(`/api/products/${product.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ isActive: !product.isActive }),
+      body: JSON.stringify({
+        name: product.name,
+        nameRu: product.nameRu || "",
+        slug: product.slug,
+        description: product.description,
+        descriptionRu: product.descriptionRu || "",
+        price: product.price,
+        oldPrice: product.oldPrice,
+        discount: product.discount,
+        stock: product.stock,
+        currency: product.currency,
+        image: product.image,
+        images: product.images,
+        inStock: product.inStock,
+        isPreorder: product.isPreorder,
+        isAuthor: product.isAuthor,
+        isLimited: product.isLimited,
+        limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
+        isActive: !product.isActive,
+        sortOrder: product.sortOrder,
+      }),
     });
     fetchProducts();
   };

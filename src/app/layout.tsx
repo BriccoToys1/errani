@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Header, Footer, BottomNav, CookieConsent, AnalyticsTracker } from '@/components';
 import { Providers } from '@/components/Providers';
 import './globals.css';
@@ -107,7 +106,6 @@ export default function RootLayout({
           <BottomNav />
           <CookieConsent />
           <AnalyticsTracker />
-          <SpeedInsights />
         </Providers>
       </body>
     </html>
