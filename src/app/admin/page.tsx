@@ -7,6 +7,7 @@ import { AdminSidebar } from "./AdminSidebar";
 
 interface DashboardData {
   orderCount: number;
+  pendingCount: number;
   productCount: number;
   totalRevenue: number;
   inquiryCount: number;
@@ -27,15 +28,19 @@ interface AnalyticsData {
   chart: Array<{ date: string; views: number; visitors: number; orders: number; revenue: number }>;
   topPages: Array<{ path: string; views: number }>;
   countries: Array<{ country: string; count: number }>;
+  languages: Array<{ lang: string; count: number }>;
+  referrers: Array<{ referrer: string; count: number }>;
   devices: Array<{ device: string; count: number }>;
   totals: { views: number; orders: number; revenue: number; products: number; uniqueIPs: number };
 }
 
 interface ServerStats {
   cpu: { usage: number; cores: number };
-  memory: { total: string; used: string; free: string; usage: number };
-  system: { platform: string; uptime: string; nodeVersion: string };
+  memory: { total: string; used: string; free: string; usage: number; process: { heapUsed: string; heapTotal: string; rss: string } };
+  system: { platform: string; uptime: string; nodeVersion: string; hostname: string };
   loadAverage: { '1m': number; '5m': number; '15m': number };
+  disk?: { total: string; used: string; free: string; usage: number };
+  dbConnected?: boolean;
 }
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
@@ -49,24 +54,91 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 const COUNTRY_NAMES: Record<string, string> = {
   RU: "Россия", US: "США", DE: "Германия", FR: "Франция", IT: "Италия",
   ES: "Испания", TR: "Турция", CN: "Китай", GB: "Великобритания", KZ: "Казахстан",
+  UA: "Украина", BY: "Беларусь", UZ: "Узбекистан", AZ: "Азербайджан",
 };
 
-function MiniBarChart({ data, valueKey, color = "var(--cms-accent)" }: {
-  data: Record<string, string | number>[]; valueKey: string; color?: string;
+// ─── Stock-market style SVG line chart ────────────────────────────────────────
+function StockChart({ data, valueKey, color }: {
+  data: Array<{ date: string; views: number; visitors: number; orders: number; revenue: number }>;
+  valueKey: "views" | "visitors" | "orders";
+  color: string;
 }) {
-  const max = Math.max(...data.map((d) => Number(d[valueKey]) || 0), 1);
+  if (!data || data.length < 2) {
+    return <div style={{ height: 100, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--cms-text-muted)", fontSize: 13 }}>Недостаточно данных</div>;
+  }
+
+  const W = 500, H = 110;
+  const pad = { t: 10, r: 10, b: 22, l: 38 };
+  const iW = W - pad.l - pad.r;
+  const iH = H - pad.t - pad.b;
+
+  const values = data.map((d) => d[valueKey]);
+  const maxV = Math.max(...values, 1);
+  const minV = Math.min(...values, 0);
+  const range = maxV - minV || 1;
+
+  const x = (i: number) => pad.l + (i / (data.length - 1)) * iW;
+  const y = (v: number) => pad.t + (1 - (v - minV) / range) * iH;
+
+  // Smooth bezier path
+  let linePath = `M ${x(0)},${y(values[0])}`;
+  for (let i = 1; i < values.length; i++) {
+    const x0 = x(i - 1), y0 = y(values[i - 1]);
+    const x1 = x(i), y1 = y(values[i]);
+    const cpx = (x0 + x1) / 2;
+    linePath += ` C ${cpx},${y0} ${cpx},${y1} ${x1},${y1}`;
+  }
+  const areaPath = `${linePath} L ${x(data.length - 1)},${pad.t + iH} L ${pad.l},${pad.t + iH} Z`;
+
+  const isUp = values[values.length - 1] >= values[0];
+  const lineColor = isUp ? "#22c55e" : "#ef4444";
+  const gradId = `sg-${valueKey}`;
+
+  // Y-axis ticks
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((pct) => ({
+    v: Math.round(minV + pct * range),
+    yPos: pad.t + (1 - pct) * iH,
+  }));
+
+  // X-axis labels: first, middle, last
+  const xLabels = [0, Math.floor((data.length - 1) / 2), data.length - 1];
+
+  // Trend indicator
+  const trendPct = values[0] > 0 ? (((values[values.length - 1] - values[0]) / values[0]) * 100).toFixed(1) : "—";
+
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "80px" }}>
-      {data.map((d, i) => {
-        const val = Number(d[valueKey]) || 0;
-        const pct = (val / max) * 100;
-        return (
-          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end" }}
-            title={`${d.date}: ${val}`}>
-            <div style={{ width: "100%", minWidth: "2px", height: `${Math.max(pct, 4)}%`, background: color, borderRadius: "2px 2px 0 0", transition: "height 0.3s" }} />
-          </div>
-        );
-      })}
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+        <span style={{ fontSize: "11px", fontWeight: 600, color: lineColor, display: "flex", alignItems: "center", gap: "3px" }}>
+          {isUp ? "▲" : "▼"} {trendPct !== "—" ? `${isUp ? "+" : ""}${trendPct}%` : "—"}
+        </span>
+        <span style={{ fontSize: "10px", color: "var(--cms-text-muted)" }}>за период</span>
+      </div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: "visible", display: "block" }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {/* Grid lines */}
+        {yTicks.map((t, i) => (
+          <g key={i}>
+            <line x1={pad.l} y1={t.yPos} x2={W - pad.r} y2={t.yPos} stroke="currentColor" strokeOpacity="0.07" strokeWidth="1" />
+            <text x={pad.l - 4} y={t.yPos + 4} textAnchor="end" fontSize="9" fill="currentColor" fillOpacity="0.4">{t.v}</text>
+          </g>
+        ))}
+        {/* Area fill */}
+        <path d={areaPath} fill={`url(#${gradId})`} />
+        {/* Line */}
+        <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Last-point dot */}
+        <circle cx={x(data.length - 1)} cy={y(values[values.length - 1])} r="4" fill={lineColor} />
+        {/* X-axis labels */}
+        {xLabels.map((idx) => (
+          <text key={idx} x={x(idx)} y={H - 4} textAnchor="middle" fontSize="9" fill="currentColor" fillOpacity="0.5">{data[idx]?.date?.slice(5)}</text>
+        ))}
+      </svg>
     </div>
   );
 }
@@ -97,44 +169,59 @@ function StatCard({ icon, label, value, sub, trend, color }: {
   );
 }
 
+function GaugeBar({ value, max = 100, color }: { value: number; max?: number; color: string }) {
+  const pct = Math.min((value / max) * 100, 100);
+  return (
+    <div style={{ height: 5, background: "var(--cms-border)", borderRadius: 3, overflow: "hidden" }}>
+      <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 3, transition: "width 0.5s ease" }} />
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [serverStats, setServerStats] = useState<ServerStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [chartMode, setChartMode] = useState<"views" | "visitors" | "orders">("views");
   const [period, setPeriod] = useState<"7" | "14" | "30" | "90">("30");
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isRefresh = false) => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
+    if (isRefresh) setRefreshing(true);
 
-    const [dashRes, analyticsRes, serverRes] = await Promise.all([
-      fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`/api/admin/analytics?period=${period}`, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch("/api/admin/server-stats", { headers: { Authorization: `Bearer ${token}` } }),
-    ]);
+    try {
+      const [dashRes, analyticsRes, serverRes] = await Promise.all([
+        fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/admin/analytics?period=${period}`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/admin/server-stats", { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
 
-    if (dashRes.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
-    
-    const dashData = await dashRes.json();
-    const analyticsData = await analyticsRes.json();
-    const serverData = await serverRes.json();
+      if (dashRes.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
 
-    if (dashData) setData(dashData);
-    if (analyticsData && !analyticsData.error) setAnalytics(analyticsData);
-    if (serverData && !serverData.error) setServerStats(serverData);
-    setLoading(false);
+      const dashData = await dashRes.json();
+      const analyticsData = await analyticsRes.json();
+      const serverData = await serverRes.json();
+
+      if (dashData) setData(dashData);
+      if (analyticsData && !analyticsData.error) setAnalytics(analyticsData);
+      if (serverData && !serverData.error) setServerStats(serverData);
+    } finally {
+      setLoading(false);
+      if (isRefresh) setRefreshing(false);
+    }
   }, [getToken, router, period]);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(() => fetchData(), 30000);
     return () => clearInterval(interval);
-  }, [fetchData, period]);
+  }, [fetchData]);
 
   const formatPrice = (n: number) =>
     new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(n);
@@ -171,7 +258,18 @@ export default function AdminDashboard() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: "6px" }}><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg>
               Открыть сайт
             </Link>
-            <button className="cms-btn cms-btn-sm cms-btn-ghost" onClick={fetchData}>Обновить</button>
+            <button
+              className="cms-btn cms-btn-sm cms-btn-ghost"
+              onClick={() => fetchData(true)}
+              disabled={refreshing}
+              style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 90 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }}>
+                <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+              </svg>
+              {refreshing ? "..." : "Обновить"}
+            </button>
           </div>
         </div>
 
@@ -180,16 +278,16 @@ export default function AdminDashboard() {
           <div className="cms-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "8px" }}>
             <StatCard
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8722a" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>}
-              label="Заказы"
+              label="Заказы (оплач.)"
               value={data?.orderCount ?? 0}
-              sub={`${analytics?.today.orders ?? 0} сегодня`}
+              sub={data?.pendingCount ? `${data.pendingCount} ожидают` : `${analytics?.today.orders ?? 0} сегодня`}
               color="rgba(232, 114, 42, 0.15)"
             />
             <StatCard
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>}
               label="Выручка"
               value={formatPrice(data?.totalRevenue ?? 0)}
-              sub="всего"
+              sub="оплаченные"
               color="rgba(34, 197, 94, 0.15)"
             />
             <StatCard
@@ -197,7 +295,7 @@ export default function AdminDashboard() {
               label="Просмотры"
               value={analytics?.totals.views ?? 0}
               sub={`${analytics?.today.views ?? 0} сегодня`}
-              trend={analytics?.today.views ? `+${((analytics.today.views / (analytics.totals.views || 1)) * 100).toFixed(1)}%` : undefined}
+              trend={analytics?.today.views && analytics.totals.views ? `+${((analytics.today.views / analytics.totals.views) * 100).toFixed(1)}%` : undefined}
               color="rgba(59, 130, 246, 0.15)"
             />
             <StatCard
@@ -225,9 +323,9 @@ export default function AdminDashboard() {
 
           {/* Chart + Quick Stats Row */}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "16px", marginTop: "20px" }}>
-            {/* Chart */}
+            {/* Stock Chart */}
             <div className="cms-table-wrap" style={{ padding: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
                 <span style={{ fontWeight: 700, fontSize: "15px" }}>Тренд за {period} дней</span>
                 <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                   <select
@@ -250,58 +348,43 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-              {analytics?.chart && (
-                <>
-                  <MiniBarChart data={analytics.chart as unknown as Record<string, string | number>[]} valueKey={chartMode} color={chartColors[chartMode]} />
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--cms-text-muted)", marginTop: "6px" }}>
-                    <span>{analytics.chart[0]?.date?.slice(5)}</span>
-                    <span>{analytics.chart[analytics.chart.length - 1]?.date?.slice(5)}</span>
-                  </div>
-                </>
+              {analytics?.chart ? (
+                <StockChart data={analytics.chart} valueKey={chartMode} color={chartColors[chartMode]} />
+              ) : (
+                <div style={{ height: 110, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--cms-text-muted)", fontSize: 13 }}>Нет данных</div>
               )}
             </div>
 
-            {/* Quick Stats */}
+            {/* Today Quick Stats */}
             <div className="cms-table-wrap" style={{ padding: "20px" }}>
               <div style={{ fontWeight: 700, fontSize: "15px", marginBottom: "16px" }}>Сегодня</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--cms-border)" }}>
-                  <span style={{ color: "var(--cms-text-muted)" }}>Просмотры</span>
-                  <span style={{ fontWeight: 600, fontSize: "18px" }}>{analytics?.today.views ?? 0}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--cms-border)" }}>
-                  <span style={{ color: "var(--cms-text-muted)" }}>Посетители</span>
-                  <span style={{ fontWeight: 600, fontSize: "18px" }}>{analytics?.today.visitors ?? 0}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid var(--cms-border)" }}>
-                  <span style={{ color: "var(--cms-text-muted)" }}>Заказы</span>
-                  <span style={{ fontWeight: 600, fontSize: "18px" }}>{analytics?.today.orders ?? 0}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0" }}>
-                  <span style={{ color: "var(--cms-text-muted)" }}>Ср. время на сайте</span>
-                  <span style={{ fontWeight: 600, fontSize: "18px" }}>{formatDuration(analytics?.today.avgDuration ?? 0)}</span>
-                </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {[
+                  { label: "Просмотры", value: analytics?.today.views ?? 0 },
+                  { label: "Посетители", value: analytics?.today.visitors ?? 0 },
+                  { label: "Заказы", value: analytics?.today.orders ?? 0 },
+                  { label: "Ср. время на сайте", value: formatDuration(analytics?.today.avgDuration ?? 0) },
+                ].map((row, i, arr) => (
+                  <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i < arr.length - 1 ? "1px solid var(--cms-border)" : "none" }}>
+                    <span style={{ color: "var(--cms-text-muted)", fontSize: 13 }}>{row.label}</span>
+                    <span style={{ fontWeight: 600, fontSize: "16px" }}>{row.value}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Recent Orders + Top Stats */}
+          {/* Recent Orders + Analytics Details */}
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "16px", marginTop: "16px" }}>
-            {/* Recent Orders */}
+            {/* Recent Paid Orders */}
             <div className="cms-table-wrap">
               <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--cms-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: 700, fontSize: "14px" }}>Последние заказы</span>
+                <span style={{ fontWeight: 700, fontSize: "14px" }}>Последние оплаченные заказы</span>
                 <Link href="/admin/orders" className="cms-btn cms-btn-sm cms-btn-ghost">Все заказы →</Link>
               </div>
               <table className="cms-table">
                 <thead>
-                  <tr>
-                    <th>№</th>
-                    <th>Клиент</th>
-                    <th>Сумма</th>
-                    <th>Статус</th>
-                    <th>Дата</th>
-                  </tr>
+                  <tr><th>№</th><th>Клиент</th><th>Сумма</th><th>Статус</th><th>Дата</th></tr>
                 </thead>
                 <tbody>
                   {data?.recentOrders && data.recentOrders.length > 0 ? (
@@ -325,67 +408,163 @@ export default function AdminDashboard() {
               </table>
             </div>
 
-            {/* Geography + Devices + Server */}
+            {/* Right column: Server + Geography */}
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Professional Server Status */}
               <div className="cms-table-wrap" style={{ padding: "16px" }}>
-                <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "12px" }}>🖥️ Сервер</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                  <span style={{ fontWeight: 700, fontSize: "14px" }}>Сервер</span>
+                  {serverStats && (
+                    <span style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", color: serverStats.dbConnected !== false ? "#22c55e" : "#ef4444" }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: serverStats.dbConnected !== false ? "#22c55e" : "#ef4444", animation: "pulse 2s infinite" }} />
+                      {serverStats.dbConnected !== false ? "БД подключена" : "БД недоступна"}
+                    </span>
+                  )}
+                </div>
                 {serverStats ? (
-                  <>
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "13px" }}>
-                      <span>CPU</span>
-                      <span style={{ color: serverStats.cpu.usage > 80 ? "#ef4444" : "var(--cms-text-muted)" }}>{serverStats.cpu.usage}%</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
+                    {/* CPU */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: 3 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>
+                          CPU
+                        </span>
+                        <span style={{ color: serverStats.cpu.usage > 80 ? "#ef4444" : "var(--cms-text-muted)", fontWeight: 600 }}>{serverStats.cpu.usage}% · {serverStats.cpu.cores}ядра</span>
+                      </div>
+                      <GaugeBar value={serverStats.cpu.usage} color={serverStats.cpu.usage > 80 ? "#ef4444" : serverStats.cpu.usage > 60 ? "#f59e0b" : "#22c55e"} />
                     </div>
-                    <div style={{ height: "4px", background: "var(--cms-border)", borderRadius: "2px", marginBottom: "8px" }}>
-                      <div style={{ height: "100%", width: `${Math.min(serverStats.cpu.usage, 100)}%`, background: serverStats.cpu.usage > 80 ? "#ef4444" : "#22c55e", borderRadius: "2px" }} />
+                    {/* Memory */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: 3 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="10" rx="1"/><path d="M6 7V5M10 7V5M14 7V5M18 7V5M6 17v2M10 17v2M14 17v2M18 17v2"/></svg>
+                          ОЗУ
+                        </span>
+                        <span style={{ color: serverStats.memory.usage > 80 ? "#ef4444" : "var(--cms-text-muted)", fontWeight: 600 }}>{serverStats.memory.usage}% · {serverStats.memory.used}/{serverStats.memory.total}</span>
+                      </div>
+                      <GaugeBar value={serverStats.memory.usage} color={serverStats.memory.usage > 80 ? "#ef4444" : serverStats.memory.usage > 60 ? "#f59e0b" : "#3b82f6"} />
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "13px" }}>
-                      <span>Память</span>
-                      <span style={{ color: serverStats.memory.usage > 80 ? "#ef4444" : "var(--cms-text-muted)" }}>{serverStats.memory.usage}%</span>
+                    {/* Disk (if available) */}
+                    {serverStats.disk && (
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: 3 }}>
+                          <span>Диск</span>
+                          <span style={{ color: "var(--cms-text-muted)", fontWeight: 600 }}>{serverStats.disk.usage}% · {serverStats.disk.used}/{serverStats.disk.total}</span>
+                        </div>
+                        <GaugeBar value={serverStats.disk.usage} color={serverStats.disk.usage > 85 ? "#ef4444" : "#8b5cf6"} />
+                      </div>
+                    )}
+                    {/* Load + Uptime */}
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--cms-text-muted)", paddingTop: 2, borderTop: "1px solid var(--cms-border)" }}>
+                      <span>Load: {serverStats.loadAverage['1m']} / {serverStats.loadAverage['5m']} / {serverStats.loadAverage['15m']}</span>
+                      <span>↑ {serverStats.system.uptime}</span>
                     </div>
-                    <div style={{ height: "4px", background: "var(--cms-border)", borderRadius: "2px", marginBottom: "8px" }}>
-                      <div style={{ height: "100%", width: `${Math.min(serverStats.memory.usage, 100)}%`, background: serverStats.memory.usage > 80 ? "#ef4444" : "#3b82f6", borderRadius: "2px" }} />
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--cms-text-muted)" }}>
+                      <span>{serverStats.system.nodeVersion}</span>
+                      <span>{serverStats.system.platform}</span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: "11px", color: "var(--cms-text-muted)" }}>
-                      <span>Uptime: {serverStats.system.uptime}</span>
-                      <span>Load: {serverStats.loadAverage['1m']}</span>
-                    </div>
-                  </>
+                  </div>
                 ) : (
                   <div style={{ color: "var(--cms-text-muted)", fontSize: "13px" }}>Загрузка...</div>
                 )}
               </div>
 
+              {/* Geography */}
               <div className="cms-table-wrap" style={{ padding: "16px" }}>
-                <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "12px" }}>География</div>
-                {analytics?.countries.slice(0, 5).map((c, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "13px" }}>
-                    <span>{COUNTRY_NAMES[c.country] || c.country}</span>
-                    <span style={{ color: "var(--cms-text-muted)" }}>{c.count}</span>
-                  </div>
-                ))}
-                {(!analytics?.countries || analytics.countries.length === 0) && (
+                <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "10px" }}>География</div>
+                {analytics?.countries && analytics.countries.length > 0 ? (
+                  analytics.countries.slice(0, 5).map((c, i) => {
+                    const maxCount = analytics.countries[0]?.count || 1;
+                    return (
+                      <div key={i} style={{ marginBottom: 7 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: 3 }}>
+                          <span>{COUNTRY_NAMES[c.country] || c.country}</span>
+                          <span style={{ color: "var(--cms-text-muted)" }}>{c.count}</span>
+                        </div>
+                        <GaugeBar value={c.count} max={maxCount} color="var(--cms-accent)" />
+                      </div>
+                    );
+                  })
+                ) : (
                   <div style={{ color: "var(--cms-text-muted)", fontSize: "13px" }}>Нет данных</div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Analytics Detail Row: Top Pages + Referrers + Devices */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginTop: "16px" }}>
+            {/* Top Pages */}
+            <div className="cms-table-wrap" style={{ padding: "16px" }}>
+              <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "10px" }}>Топ страниц (сегодня)</div>
+              {analytics?.topPages && analytics.topPages.length > 0 ? (
+                analytics.topPages.slice(0, 7).map((p, i) => {
+                  const maxV = analytics.topPages[0]?.views || 1;
+                  return (
+                    <div key={i} style={{ marginBottom: 7 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: 2 }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%", color: "var(--cms-text-muted)" }}>{p.path}</span>
+                        <span style={{ fontWeight: 600 }}>{p.views}</span>
+                      </div>
+                      <GaugeBar value={p.views} max={maxV} color="#3b82f6" />
+                    </div>
+                  );
+                })
+              ) : <div style={{ color: "var(--cms-text-muted)", fontSize: "13px" }}>Нет данных</div>}
+            </div>
+
+            {/* Referrers */}
+            <div className="cms-table-wrap" style={{ padding: "16px" }}>
+              <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "10px" }}>Источники трафика</div>
+              {analytics?.referrers && analytics.referrers.length > 0 ? (
+                analytics.referrers.slice(0, 7).map((r, i) => {
+                  const maxV = analytics.referrers[0]?.count || 1;
+                  const label = r.referrer.replace(/^https?:\/\//, "").replace(/\/$/, "").split("/")[0] || "Прямой";
+                  return (
+                    <div key={i} style={{ marginBottom: 7 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: 2 }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%", color: "var(--cms-text-muted)" }}>{label}</span>
+                        <span style={{ fontWeight: 600 }}>{r.count}</span>
+                      </div>
+                      <GaugeBar value={r.count} max={maxV} color="#8b5cf6" />
+                    </div>
+                  );
+                })
+              ) : <div style={{ color: "var(--cms-text-muted)", fontSize: "13px" }}>Нет данных</div>}
+            </div>
+
+            {/* Devices + Languages */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div className="cms-table-wrap" style={{ padding: "16px" }}>
+                <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "10px" }}>Устройства</div>
+                {analytics?.devices && analytics.devices.length > 0 ? (
+                  analytics.devices.slice(0, 3).map((d, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: "12px" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: "7px", color: "var(--cms-text-muted)" }}>
+                        {d.device === "mobile" ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                        )}
+                        {d.device === "mobile" ? "Мобильные" : "Десктоп"}
+                      </span>
+                      <span style={{ fontWeight: 600 }}>{d.count}</span>
+                    </div>
+                  ))
+                ) : <div style={{ color: "var(--cms-text-muted)", fontSize: "12px" }}>Нет данных</div>}
+              </div>
 
               <div className="cms-table-wrap" style={{ padding: "16px" }}>
-                <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "12px" }}>Устройства</div>
-                {analytics?.devices?.slice(0, 3).map((d, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontSize: "13px" }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      {d.device === "mobile" ? (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                      )}
-                      {d.device === "mobile" ? "Мобильные" : "Десктоп"}
-                    </span>
-                    <span style={{ color: "var(--cms-text-muted)" }}>{d.count}</span>
-                  </div>
-                ))}
-                {(!analytics?.devices || analytics.devices.length === 0) && (
-                  <div style={{ color: "var(--cms-text-muted)", fontSize: "13px" }}>Нет данных</div>
-                )}
+                <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "10px" }}>Языки</div>
+                {analytics?.languages && analytics.languages.length > 0 ? (
+                  analytics.languages.slice(0, 4).map((l, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontSize: "12px", borderBottom: i < 3 ? "1px solid var(--cms-border)" : "none" }}>
+                      <span style={{ color: "var(--cms-text-muted)" }}>{l.lang.toUpperCase()}</span>
+                      <span style={{ fontWeight: 600 }}>{l.count}</span>
+                    </div>
+                  ))
+                ) : <div style={{ color: "var(--cms-text-muted)", fontSize: "12px" }}>Нет данных</div>}
               </div>
             </div>
           </div>
@@ -410,10 +589,8 @@ export default function AdminDashboard() {
       </main>
 
       <style jsx>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

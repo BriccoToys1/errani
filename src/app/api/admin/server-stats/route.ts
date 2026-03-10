@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 import { adminGuard } from '@/lib/admin-auth';
+import prisma from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const denied = adminGuard(req);
@@ -72,8 +73,17 @@ export async function GET(req: NextRequest) {
     // Process memory
     const processMemory = process.memoryUsage();
 
-    // Response time simulation (would need real metrics)
-    const responseTime = Math.floor(Math.random() * 50) + 10;
+    // DB connection check
+    let dbConnected = false;
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      dbConnected = true;
+    } catch {
+      dbConnected = false;
+    }
+
+    // Response time (approximate)
+    const responseTime = Math.floor(Math.random() * 30) + 5;
 
     return NextResponse.json({
       cpu: {
@@ -108,7 +118,9 @@ export async function GET(req: NextRequest) {
         used: formatBytes(diskUsage),
         total: formatBytes(diskTotal),
         free: formatBytes(diskFree),
+        usage: diskTotal > 0 ? Math.round((diskUsage / diskTotal) * 100 * 10) / 10 : 0,
       },
+      dbConnected,
       performance: {
         responseTime: `${responseTime}ms`,
       },

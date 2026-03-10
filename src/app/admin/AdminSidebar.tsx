@@ -1,12 +1,19 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
 interface Counts {
   newOrders: number;
   newInquiries: number;
+}
+
+interface SearchResult {
+  type: string;
+  label: string;
+  sub: string;
+  href: string;
 }
 
 const NAV_ITEMS = [
@@ -44,6 +51,11 @@ export function AdminSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0 });
   const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -98,15 +110,31 @@ export function AdminSidebar() {
     return counts[countKey as keyof Counts] || 0;
   };
 
-  // Filter nav items based on search
-  const filteredItems = useMemo(() => {
-    if (!search.trim()) return NAV_ITEMS;
-    const q = search.toLowerCase();
-    return NAV_ITEMS.filter(item => {
-      if ('section' in item && !('href' in item)) return false;
-      const nav = item as { label: string };
-      return nav.label?.toLowerCase().includes(q);
-    });
+  // Debounced search across all content
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!search.trim() || search.length < 2) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const token = localStorage.getItem('admin_token');
+        if (!token) return;
+        const res = await fetch(`/api/admin/search?q=${encodeURIComponent(search.trim())}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.results || []);
+          setShowResults(true);
+        }
+      } catch { /* ignore */ } finally {
+        setSearchLoading(false);
+      }
+    }, 350);
   }, [search]);
 
   return (
@@ -140,36 +168,92 @@ export function AdminSidebar() {
 
       {/* Search */}
       {!collapsed && (
-        <div style={{ padding: '0 12px 8px' }}>
+        <div style={{ padding: '0 12px 8px' }} ref={searchRef}>
           <div style={{ position: 'relative' }}>
             <svg
               width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }}
+              style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: searchLoading ? 0 : 0.4, transition: 'opacity 0.2s' }}
             >
               <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
             </svg>
+            {searchLoading && (
+              <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 12, height: 12, border: '2px solid var(--cms-border)', borderTopColor: 'var(--cms-accent)', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'block' }} />
+            )}
             <input
               type="text"
-              placeholder="Поиск..."
+              placeholder="Поиск по всему..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onFocus={() => searchResults.length > 0 && setShowResults(true)}
+              onBlur={() => setTimeout(() => setShowResults(false), 200)}
               style={{
                 width: '100%',
                 padding: '7px 10px 7px 32px',
                 border: '1px solid var(--cms-border)',
-                borderRadius: '8px',
+                borderRadius: showResults && searchResults.length > 0 ? '8px 8px 0 0' : '8px',
                 background: 'var(--cms-bg-secondary)',
                 color: 'var(--cms-text)',
                 fontSize: '12px',
                 outline: 'none',
               }}
             />
+            {/* Search Results Dropdown */}
+            {showResults && searchResults.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                background: 'var(--cms-bg)',
+                border: '1px solid var(--cms-border)',
+                borderTop: 'none',
+                borderRadius: '0 0 8px 8px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                zIndex: 100,
+                maxHeight: 220,
+                overflowY: 'auto',
+              }}>
+                {searchResults.map((r, i) => (
+                  <Link
+                    key={i}
+                    href={r.href}
+                    onClick={() => { setSearch(''); setShowResults(false); }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      borderBottom: i < searchResults.length - 1 ? '1px solid var(--cms-border)' : 'none',
+                      textDecoration: 'none',
+                      color: 'var(--cms-text)',
+                      gap: 8,
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--cms-bg-secondary)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{r.label}</span>
+                    <span style={{ fontSize: '10px', color: 'var(--cms-text-muted)', flexShrink: 0 }}>{r.sub}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+            {showResults && search.length >= 2 && searchResults.length === 0 && !searchLoading && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0,
+                background: 'var(--cms-bg)', border: '1px solid var(--cms-border)', borderTop: 'none',
+                borderRadius: '0 0 8px 8px', padding: '10px 12px', fontSize: '12px',
+                color: 'var(--cms-text-muted)', zIndex: 100,
+              }}>
+                Ничего не найдено
+              </div>
+            )}
           </div>
         </div>
       )}
 
       <nav className="cms-sidebar-nav">
-        {filteredItems.map((item, i) => {
+        {NAV_ITEMS.map((item, i) => {
           if ('section' in item && !('href' in item)) {
             return !collapsed ? <div key={i} className="cms-sidebar-section">{item.section}</div> : null;
           }

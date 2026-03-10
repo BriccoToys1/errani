@@ -15,6 +15,17 @@ async function verifyToken(token: string): Promise<boolean> {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const host = req.headers.get('host') || '';
+
+  // ── Admin subdomain redirect: admin.errani.ru → /admin/ ─────────────
+  if (host.startsWith('admin.')) {
+    if (pathname === '/' || pathname === '') {
+      return NextResponse.redirect(new URL('/admin/', req.url));
+    }
+    if (!pathname.startsWith('/admin') && !pathname.startsWith('/_next') && !pathname.startsWith('/api')) {
+      return NextResponse.redirect(new URL(`/admin${pathname}`, req.url));
+    }
+  }
 
   // ── Admin route protection ───────────────────────────────────────────
   if (pathname.startsWith('/admin') && pathname !== '/admin/login') {

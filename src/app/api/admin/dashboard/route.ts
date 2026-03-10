@@ -7,11 +7,14 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const [orderCount, productCount, totalRevenue, recentOrders, inquiryCount, newInquiryCount, newOrdersCount] = await Promise.all([
-      prisma.order.count(),
+    const paidFilter = { status: { not: 'pending' } };
+    const [orderCount, productCount, totalRevenue, pendingCount, recentOrders, inquiryCount, newInquiryCount, newOrdersCount] = await Promise.all([
+      prisma.order.count({ where: paidFilter }),
       prisma.product.count(),
-      prisma.order.aggregate({ _sum: { totalAmount: true } }),
+      prisma.order.aggregate({ where: paidFilter, _sum: { totalAmount: true } }),
+      prisma.order.count({ where: { status: 'pending' } }),
       prisma.order.findMany({
+        where: paidFilter,
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: { items: { include: { product: true } } },
@@ -25,6 +28,7 @@ export async function GET(req: NextRequest) {
       orderCount,
       productCount,
       totalRevenue: totalRevenue._sum.totalAmount || 0,
+      pendingCount,
       recentOrders,
       inquiryCount,
       newInquiryCount,
