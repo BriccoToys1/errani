@@ -43,6 +43,7 @@ export default async function ProductPage({ params }: Props) {
         isLimited: product.isLimited,
         limitedEditionText: product.limitedEditionText,
         isAuthor: product.isAuthor,
+        characteristics: product.characteristics,
       }}
     />
   );
