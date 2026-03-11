@@ -412,14 +412,13 @@ img {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 2rem;
+  gap: 1.75rem;
 }
 
 .footer-brand {
   font-family: 'Montserrat', sans-serif;
   font-size: 1.4rem;
   font-weight: 900;
-  margin-bottom: 0.75rem;
 }
 
 .footer-copy {
@@ -819,7 +818,6 @@ select.form-field {
   position: relative;
   min-height: 60vh;
   overflow: hidden;
-  background: var(--bg-surface);
 }
 
 /* Mobile: add padding-top to prevent image overlapping header */
@@ -1227,6 +1225,7 @@ select.form-field {
   overflow: hidden;
   background: var(--bg-surface);
   cursor: pointer;
+  border-radius: 8px;
 }
 
 .gallery-item img {
@@ -1351,56 +1350,44 @@ select.form-field {
 }
 
 .catalog-card {
-  display: flex;
-  gap: 0.85rem;
-  padding: 1rem 0;
-  border-bottom: 1px solid var(--border);
+  display: block;
   text-decoration: none;
   color: inherit;
-  transition: opacity 0.2s;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s, border-color 0.3s;
 }
 
 .catalog-card:hover {
-  opacity: 0.85;
-}
-
-@media (min-width: 768px) {
-  .catalog-card {
-    gap: 1.15rem;
-  }
+  transform: translateY(-4px);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+  border-color: rgba(255,255,255,0.12);
 }
 
 .catalog-card-image {
   position: relative;
-  width: 53px;
-  height: 67px;
-  flex-shrink: 0;
   overflow: hidden;
-  background: var(--bg-surface);
-  border-radius: 6px;
-}
-
-@media (min-width: 768px) {
-  .catalog-card-image {
-    width: 67px;
-    height: 87px;
-  }
+  width: 100%;
+  padding-top: 112%;
+  background: transparent;
+  border-radius: 0;
 }
 
 .catalog-card-image img {
-  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .catalog-card:hover .catalog-card-image img {
-  transform: scale(1.04);
+  transform: scale(1.06);
 }
 
 .catalog-card-info {
-  flex: 1;
+  padding: 0.7rem 0.85rem 0.8rem;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: 0.15rem 0;
+  gap: 0.25rem;
 }
 
 .catalog-card-label {
@@ -1409,20 +1396,19 @@ select.form-field {
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--orange);
-  margin-bottom: 0.15rem;
 }
 
 .catalog-card-title {
-  font-weight: 600;
-  font-size: 0.82rem;
-  margin-bottom: 0.15rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--text-primary);
 }
 
 .catalog-card-desc {
   font-size: 0.75rem;
   color: var(--text-secondary);
   line-height: 1.4;
-  margin-bottom: 0;
   display: none;
 }
 
@@ -1432,11 +1418,24 @@ select.form-field {
   }
 }
 
+.catalog-card-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
 .catalog-card-price {
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-top: auto;
-  padding-top: 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.catalog-card-old-price {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-decoration: line-through;
 }
 
 .catalog-card-link {
@@ -1469,22 +1468,22 @@ select.form-field {
 .catalog-card-cart-btn {
   display: inline-block;
   margin-top: 0.5rem;
-  padding: 0.4rem 1rem;
+  padding: 0.45rem 1rem;
   background: var(--orange);
   color: #fff;
   border: none;
   border-radius: 99px;
   font-family: var(--font-body);
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.3s, transform 0.2s;
+  transition: background 0.25s, transform 0.2s;
+  align-self: flex-start;
 }
 .catalog-card-cart-btn:hover {
-  background: #e07a2a;
+  background: #d15e10;
   transform: translateY(-1px);
 }
 
@@ -1523,14 +1522,13 @@ select.form-field {
 /* Catalog Grid */
 .catalog-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.25rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
 }
 
-@media (min-width: 480px) {
+@media (min-width: 640px) {
   .catalog-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.5rem;
+    gap: 1.25rem;
   }
 }
 
@@ -1541,51 +1539,9 @@ select.form-field {
   }
 }
 
-.catalog-grid .catalog-card {
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  border-bottom: none;
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--bg-surface);
-}
-
-.catalog-grid .catalog-card-image {
-  position: relative;
-  overflow: hidden;
-  border-radius: 10px 10px 0 0;
-  width: 100%;
-  height: 0;
-  padding-top: 78%; /* compact ratio */
-}
-
-.catalog-grid .catalog-card-image.aspect-4-3 {
-  height: 0;
-  padding-top: 78%;
-}
-
-.catalog-grid .catalog-card-info {
-  padding: 0.5rem 0.7rem 0.65rem;
-}
-
-.catalog-grid .catalog-card-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  margin-bottom: 0.1rem;
-}
-
-.catalog-grid .catalog-card-price {
-  font-size: 0.95rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  padding-top: 0.1rem;
-}
-
-.catalog-grid .catalog-card-cart-btn {
-  padding: 0.35rem 0.85rem;
-  font-size: 0.65rem;
-  margin-top: 0.4rem;
+/* aspect-4-3 overrides for grid cards */
+.catalog-card-image.aspect-4-3 {
+  padding-top: 112%;
 }
 
 /* Catalog Badges */
@@ -1612,13 +1568,17 @@ select.form-field {
 }
 
 .badge-author {
-  background: #1a1a1a;
+  background: rgba(0,0,0,0.65);
   color: #fff;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .badge-preorder {
-  background: #2a2a2a;
+  background: rgba(0,0,0,0.55);
   color: #fff;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .badge-discount {

@@ -378,6 +378,7 @@ export default function CartPage() {
                   </div>
                 )}
               </div>
+              {isRussia && <>
               <Field
                 label={lang === 'ru' ? 'Область / Регион (по желанию)' : 'Oblast / Region (optional)'}
                 value={formData.oblast}
@@ -395,10 +396,12 @@ export default function CartPage() {
                 <Field label={lang === 'ru' ? 'Квартира (если есть)' : 'Apartment (if any)'} value={formData.apartment}
                   onChange={(v) => setFormData({ ...formData, apartment: v })} />
               </div>
+              </>
+              }
             </div>
           </div>
 
-          <div className="checkout-form">
+          {isRussia && <div className="checkout-form">
             <h2 className="checkout-heading">{lang === 'ru' ? 'Способ доставки' : 'Shipping method'}</h2>
             <div>
               <select
@@ -436,31 +439,32 @@ export default function CartPage() {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
-          {/* Foreign card warning */}
+          {/* Non-Russia: show only foreign form prompt, hide everything else */}
           {!isRussia && (
-            <div style={{ marginTop: '1rem', padding: '1rem 1.25rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px' }}>
-              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '0.85rem' }}>
+            <div style={{ marginTop: '1rem', padding: '1.25rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
                   <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
                   <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                 </svg>
                 <div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0 3px' }}><strong>Оплата принимается только российскими картами.</strong></p>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0 }}>Если у вас иностранная карта — оставьте заявку, мы поможем с оплатой.</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0 4px' }}><strong>Оплата принимается только российскими картами.</strong></p>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>Если у вас иностранная карта и/или доставка зарубеж — оставьте заявку.</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowForeignCard(true)}
-                style={{ width: '100%', background: 'transparent', border: '1px solid rgba(239,68,68,0.45)', color: '#ef4444', borderRadius: '7px', padding: '0.5rem 1rem', fontSize: '0.83rem', cursor: 'pointer', transition: 'background 0.2s' }}
+                style={{ width: '100%', background: 'var(--orange)', border: 'none', color: '#fff', borderRadius: '7px', padding: '0.65rem 1rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}
               >
-                У меня иностранная карта
+                Оставить заявку
               </button>
             </div>
           )}
-          {/* Consent checkboxes */}
+          {/* Consent checkboxes — only for Russia */}
+          {isRussia && (
           <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', fontSize: '0.82rem', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
               <input
@@ -490,8 +494,9 @@ export default function CartPage() {
             </label>
             {errors.consentData && <p style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '-0.5rem' }}>{errors.consentData}</p>}
           </div>
+          )}
 
-          <div className="cart-summary-inline" style={{ marginTop: '2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          {isRussia && <div className="cart-summary-inline" style={{ marginTop: '2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
             <button type="button" onClick={() => setStep('cart')} className="cart-back-btn">
               ← Назад
             </button>
@@ -501,19 +506,8 @@ export default function CartPage() {
             <button type="submit" className="cart-checkout-btn" disabled={submitting}>
               {submitting ? 'Обработка...' : 'Перейти к оплате'}
             </button>
-          </div>
-          {!isRussia && (
-            <p style={{ fontSize: '0.8rem', textAlign: 'center', marginTop: '1rem' }}>
-              <a
-                href="https://t.me/errani_tarot"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--orange)', textDecoration: 'underline' }}
-              >
-                {lang === 'ru' ? 'Связаться с продавцом' : 'Contact seller'}
-              </a>
-            </p>
-          )}
+          </div>}
+
         </form>
       )}
       {showForeignCard && (
@@ -548,7 +542,7 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
           style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', color: 'var(--text-secondary)' }}
           aria-label="Закрыть"
         >×</button>
-        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.5rem' }}>Иностранная карта</h3>
+        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.5rem' }}>Зарубеж</h3>
         <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
           Оставьте контакт — мы свяжемся и поможем оформить оплату удобным способом.
         </p>
@@ -621,7 +615,7 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
               type="submit"
               className="cart-checkout-btn"
               disabled={submitting}
-              style={{ width: '100%', marginTop: '1rem' }}
+              style={{ width: '100%', marginTop: '2rem' }}
             >
               {submitting ? 'Отправка...' : 'Отправить заявку'}
             </button>
