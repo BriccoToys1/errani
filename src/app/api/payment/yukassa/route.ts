@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { sendOrderConfirmation } from '@/lib/email';
+import { sendOrderConfirmation, sendReceiptEmail } from '@/lib/email';
+import { buildReceiptHtml } from '@/lib/receipt-builder';
+import { htmlToPdf } from '@/lib/pdf';
 
 // YuKassa webhook handler
 export async function POST(req: NextRequest) {
@@ -39,6 +41,31 @@ export async function POST(req: NextRequest) {
             price: i.price,
           })),
         });
+
+        // Generate receipt PDF and send as email attachment
+        try {
+          const receiptHtml = buildReceiptHtml(
+            {
+              ...order,
+              items: order.items.map(i => ({
+                quantity: i.quantity,
+                price: i.price,
+                productId: i.productId,
+                product: i.product ? { name: i.product.name } : null,
+              })),
+            },
+            true // forPdf: no buttons/scripts
+          );
+          const pdfBuffer = await htmlToPdf(receiptHtml);
+          await sendReceiptEmail({
+            orderNumber: order.orderNumber,
+            customerEmail: order.customerEmail,
+            receiptPdf: pdfBuffer,
+          });
+        } catch (pdfErr) {
+          console.error('Failed to generate/send receipt PDF:', pdfErr);
+          // Non-critical — order confirmation was already sent
+        }
         break;
       }
 

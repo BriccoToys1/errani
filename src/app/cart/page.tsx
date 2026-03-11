@@ -430,6 +430,10 @@ export default function CartPage() {
                   </span>
                   <span>{formatPrice(shippingCost)}</span>
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Способ оплаты</span>
+                  <span>ЮKassa</span>
+                </div>
               </div>
             )}
           </div>
@@ -498,9 +502,6 @@ export default function CartPage() {
               {submitting ? 'Обработка...' : 'Перейти к оплате'}
             </button>
           </div>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '0.5rem' }}>
-            {isRussia ? 'Оплата через ЮKassa' : (lang === 'ru' ? 'Оплата картой' : 'Pay by card')}
-          </p>
           {!isRussia && (
             <p style={{ fontSize: '0.8rem', textAlign: 'center', marginTop: '1rem' }}>
               <a
@@ -553,7 +554,16 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
         </p>
         {done ? (
           <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>✓</div>
+            <div style={{
+              width: '64px', height: '64px', borderRadius: '50%',
+              background: 'var(--orange)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 1.25rem',
+            }}>
+              <svg width="28" height="28" fill="none" stroke="#fff" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
             <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Заявка отправлена!</p>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Мы свяжемся с вами в ближайшее время.</p>
           </div>
@@ -570,15 +580,6 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Телефон</label>
-              <input
-                type="tel"
-                className="form-field"
-                value={foreignForm.phone}
-                onChange={(e) => setForeignForm({ ...foreignForm, phone: e.target.value })}
-              />
-            </div>
-            <div>
               <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Email *</label>
               <input
                 type="email"
@@ -588,6 +589,12 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
                 required
               />
             </div>
+            <PhoneInput
+              label="Телефон"
+              value={foreignForm.phone}
+              onChange={(v) => setForeignForm({ ...foreignForm, phone: v })}
+              countryCode=""
+            />
             <div>
               <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Предпочтительный способ связи</label>
               <select

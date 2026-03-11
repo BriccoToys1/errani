@@ -1,39 +1,97 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 
-// POST: Resend inbound email webhook
-// Configure in Resend dashboard: forward mail@errani.ru to this webhook
+// Resend sends inbound emails as POST to this webhook.
+// Configure in Resend dashboard → Webhooks → Add endpoint:
+//   URL: https://errani.ru/api/admin/email/webhook
+//   Events: email.received (or all)
+// Also needs MX record: errani.ru MX 10 inbound-smtp.resend.com
+// And Resend Inbound domain: errani.ru
+
+// GET: health check / webhook verification
+export async function GET() {
+  return NextResponse.json({ status: 'ok', webhook: 'email' });
+}
+
+// POST: receive inbound email from Resend
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const contentType = req.headers.get('content-type') || '';
+    let payload: Record<string, unknown>;
 
-    // Resend webhook payload for inbound emails
-    const { type, data } = body;
+    if (contentType.includes('application/json')) {
+      payload = await req.json();
+    } else {
+      // Try to parse as JSON anyway
+      const text = await req.text();
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        console.error('Email webhook: invalid payload format', text.substring(0, 500));
+        return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+      }
+    }
 
-    if (type === 'email.received') {
-      const { from, to, subject, html, text, message_id } = data;
+    console.log('Email webhook received:', JSON.stringify(payload).substring(0, 1000));
 
-      const fromAddr = typeof from === 'string' ? from : (from?.address || from?.email || JSON.stringify(from));
-      const toAddr = Array.isArray(to) ? to.map((t: { address?: string; email?: string }) => t.address || t.email || '').join(', ') : (typeof to === 'string' ? to : '');
+    // Resend webhook wraps data in { type, data } or sends directly
+    const type = (payload.type as string) || '';
+    const data = (payload.data as Record<string, unknown>) || payload;
+
+    // Handle Resend inbound email events
+    if (type === 'email.received' || data.from || data.email_id) {
+      const emailData = type ? data : payload;
+
+      // Extract from - can be string, object, or array
+      const rawFrom = emailData.from;
+      let fromAddr = '';
+      if (typeof rawFrom === 'string') {
+        fromAddr = rawFrom;
+      } else if (Array.isArray(rawFrom)) {
+        fromAddr = rawFrom.map((f: Record<string, string>) => f.address || f.email || f.name || String(f)).join(', ');
+      } else if (rawFrom && typeof rawFrom === 'object') {
+        const f = rawFrom as Record<string, string>;
+        fromAddr = f.address || f.email || f.name || JSON.stringify(f);
+      }
+
+      // Extract to - can be string, array of strings, or array of objects
+      const rawTo = emailData.to;
+      let toAddr = '';
+      if (typeof rawTo === 'string') {
+        toAddr = rawTo;
+      } else if (Array.isArray(rawTo)) {
+        toAddr = rawTo.map((t: string | Record<string, string>) => {
+          if (typeof t === 'string') return t;
+          return t.address || t.email || String(t);
+        }).join(', ');
+      }
+
+      const subject = (emailData.subject as string) || '(без темы)';
+      const html = (emailData.html as string) || '';
+      const text = (emailData.text as string) || '';
+      const messageId = (emailData.message_id as string) || (emailData.email_id as string) || '';
 
       await prisma.adminEmail.create({
         data: {
           direction: 'inbound',
-          fromAddr,
-          toAddr,
-          subject: subject || '(без темы)',
-          body: html || `<pre>${text || ''}</pre>`,
-          textBody: text || '',
+          fromAddr: fromAddr || 'unknown',
+          toAddr: toAddr || 'mail@errani.ru',
+          subject,
+          body: html || `<pre style="white-space:pre-wrap;font-family:inherit;">${text}</pre>`,
+          textBody: text,
           status: 'received',
           isRead: false,
-          resendId: message_id || '',
+          resendId: messageId,
         },
       });
 
+      console.log(`Inbound email saved: from=${fromAddr}, subject=${subject}`);
       return NextResponse.json({ received: true });
     }
 
-    return NextResponse.json({ ignored: true });
+    // Handle other webhook event types (delivery status etc.)
+    console.log('Email webhook: unhandled type:', type);
+    return NextResponse.json({ ignored: true, type });
   } catch (error) {
     console.error('Email webhook error:', error);
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });

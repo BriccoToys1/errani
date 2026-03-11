@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
+import { PhoneInput } from '@/components/PhoneInput';
 
 interface ContactModalProps {
   onClose: () => void;
@@ -10,7 +11,7 @@ interface ContactModalProps {
 
 export function ContactModal({ onClose }: ContactModalProps) {
   const { lang } = useLanguage();
-  const [form, setForm] = useState({ name: '', email: '', message: '' });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -65,7 +66,16 @@ export function ContactModal({ onClose }: ContactModalProps) {
 
         {sent ? (
           <div className="text-center" style={{ padding: '2rem 0' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem', color: '#22c55e' }}>✓</div>
+            <div style={{
+              width: '64px', height: '64px', borderRadius: '50%',
+              background: 'var(--orange)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 1.5rem',
+            }}>
+              <svg width="28" height="28" fill="none" stroke="#fff" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
             <h3 className="modal-title" style={{ textAlign: 'center' }}>{t(lang, 'contact.success.title')}</h3>
             <p className="modal-subtitle" style={{ textAlign: 'center' }}>
               {t(lang, 'contact.success.text')}
@@ -100,6 +110,12 @@ export function ContactModal({ onClose }: ContactModalProps) {
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 required
+              />
+              <PhoneInput
+                label={lang === 'ru' ? 'Телефон' : 'Phone'}
+                value={form.phone}
+                onChange={(v) => setForm({ ...form, phone: v })}
+                countryCode="RU"
               />
               <textarea
                 className="form-field"
