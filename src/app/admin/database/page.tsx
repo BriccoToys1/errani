@@ -173,7 +173,7 @@ export default function AdminDatabasePage() {
                       { name: "Order", desc: "Заказы покупателей", count: stats?.orders ?? "—" },
                       { name: "User", desc: "Зарегистрированные пользователи", count: stats?.users ?? "—" },
                       { name: "Admin", desc: "Администраторы", count: stats?.admins ?? "—" },
-                      { name: "Inquiry", desc: "Обращения через форму контактов", count: stats?.inquiries ?? "—" },
+                      { name: "Inquiry", desc: "Заявки через форму контактов", count: stats?.inquiries ?? "—" },
                       { name: "Analytics", desc: "Просмотры страниц (аналитика)", count: stats?.analytics ?? "—" },
                     ].map((row) => (
                       <tr key={row.name}>

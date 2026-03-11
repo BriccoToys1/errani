@@ -143,7 +143,7 @@ function MemoryManagement({ getToken, notify }: { getToken: () => string | null;
             <div className="cms-stat-value">{stats.pageViews.toLocaleString()}</div>
           </div>
           <div className="cms-stat-card">
-            <div className="cms-stat-label">Обращения</div>
+            <div className="cms-stat-label">Заявки</div>
             <div className="cms-stat-value">{stats.inquiries}</div>
           </div>
           <div className="cms-stat-card">
@@ -177,7 +177,7 @@ function MemoryManagement({ getToken, notify }: { getToken: () => string | null;
           onClick={() => setConfirmClean('closed_inquiries')}
           disabled={cleaning !== null}
         >
-          Удалить закрытые обращения
+          Удалить закрытые заявки
         </button>
         <button 
           className="cms-btn cms-btn-sm cms-btn-danger" 
@@ -204,7 +204,7 @@ function MemoryManagement({ getToken, notify }: { getToken: () => string | null;
               <p>Вы уверены, что хотите выполнить очистку?</p>
               <p style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>
                 {confirmClean === 'old_pageviews' && 'Будут удалены записи просмотров страниц старше 30 дней.'}
-                {confirmClean === 'closed_inquiries' && 'Будут удалены все закрытые обращения.'}
+                {confirmClean === 'closed_inquiries' && 'Будут удалены все закрытые заявки.'}
                 {confirmClean === 'all_pageviews' && 'Будут удалены ВСЕ записи аналитики. Это действие нельзя отменить!'}
                 {confirmClean === 'recalculate_stats' && 'Дневная статистика будет пересчитана из реальных данных. Завышенные счётчики будут исправлены.'}
               </p>
@@ -222,6 +222,116 @@ function MemoryManagement({ getToken, notify }: { getToken: () => string | null;
           </div>
         </div>
       )}
+    </SettingSection>
+  );
+}
+
+const EXPORT_PERIODS = [
+  { label: "1 день", value: 1 },
+  { label: "3 дня", value: 3 },
+  { label: "7 дней", value: 7 },
+  { label: "14 дней", value: 14 },
+  { label: "30 дней", value: 30 },
+  { label: "90 дней", value: 90 },
+  { label: "120 дней", value: 120 },
+  { label: "366 дней", value: 366 },
+];
+
+const EXPORT_TYPES = [
+  { id: "orders", label: "Заказы", description: "Полная информация по заказам: клиент, товары, суммы, адреса, статусы" },
+  { id: "products", label: "Товары", description: "Каталог товаров: названия, цены, наличие, slug" },
+  { id: "inquiries", label: "Заявки", description: "Все заявки: имя, контакты, сообщение, статус, источник" },
+];
+
+function ExportSection({ getToken, notify }: { getToken: () => string | null; notify: (msg: string) => void }) {
+  const [period, setPeriod] = useState(30);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [useCustom, setUseCustom] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const handleDownload = async (type: string) => {
+    setDownloading(type);
+    const token = getToken();
+    if (!token) return;
+
+    let url = `/api/admin/export?type=${type}&format=xls&period=${period}`;
+    if (useCustom && customFrom && customTo) {
+      url = `/api/admin/export?type=${type}&format=xls&from=${customFrom}&to=${customTo}`;
+    }
+
+    try {
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `${type}_report.xls`;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+        notify(`Отчёт "${EXPORT_TYPES.find(t => t.id === type)?.label}" скачан`);
+      } else {
+        notify("Ошибка экспорта");
+      }
+    } catch {
+      notify("Ошибка скачивания");
+    }
+    setDownloading(null);
+  };
+
+  return (
+    <SettingSection title="Экспорт отчётности (XLS)">
+      <div style={{ marginBottom: "16px" }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>Период</div>
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "10px" }}>
+          {EXPORT_PERIODS.map(p => (
+            <button
+              key={p.value}
+              className={`cms-btn cms-btn-xs ${!useCustom && period === p.value ? "cms-btn-primary" : ""}`}
+              onClick={() => { setPeriod(p.value); setUseCustom(false); }}
+            >
+              {p.label}
+            </button>
+          ))}
+          <button
+            className={`cms-btn cms-btn-xs ${useCustom ? "cms-btn-primary" : ""}`}
+            onClick={() => setUseCustom(true)}
+          >
+            Свой период
+          </button>
+        </div>
+        {useCustom && (
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <input type="date" className="cms-input" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={{ width: "auto" }} />
+            <span style={{ color: "var(--cms-text-muted)" }}>—</span>
+            <input type="date" className="cms-input" value={customTo} onChange={e => setCustomTo(e.target.value)} style={{ width: "auto" }} />
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gap: "10px" }}>
+        {EXPORT_TYPES.map(t => (
+          <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: "var(--cms-bg)", borderRadius: "8px" }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: "13px" }}>{t.label}</div>
+              <div style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{t.description}</div>
+            </div>
+            <button
+              className="cms-btn cms-btn-sm cms-btn-primary"
+              onClick={() => handleDownload(t.id)}
+              disabled={downloading !== null}
+              style={{ whiteSpace: "nowrap" }}
+            >
+              {downloading === t.id ? "Скачивание..." : "Скачать XLS"}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--cms-text-muted)" }}>
+        Отчёты формируются в формате XLS с максимальной детализацией. Все данные за выбранный период.
+      </div>
     </SettingSection>
   );
 }
@@ -780,6 +890,8 @@ export default function AdminSettingsPage() {
               </SettingSection>
 
               <MemoryManagement getToken={getToken} notify={notify} />
+
+              <ExportSection getToken={getToken} notify={notify} />
 
               <SettingSection title="Резервное копирование">
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
