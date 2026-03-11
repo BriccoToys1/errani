@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 interface Counts {
   newOrders: number;
   newInquiries: number;
+  newEmails: number;
 }
 
 interface SearchResult {
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: '/admin/orders', icon: 'orders', label: 'Заказы', countKey: 'newOrders' },
   { href: '/admin/products', icon: 'products', label: 'Товары' },
   { href: '/admin/inquiries', icon: 'inquiries', label: 'Обращения', countKey: 'newInquiries' },
+  { href: '/admin/email', icon: 'email', label: 'Почта', countKey: 'newEmails' },
   { href: '/admin/content', icon: 'content', label: 'Контент' },
   { href: '/admin/pages', icon: 'pages', label: 'Страницы' },
   { section: 'Система' },
@@ -30,6 +32,7 @@ const NAV_ITEMS = [
   { href: '/admin/seo', icon: 'seo', label: 'SEO' },
   { href: '/admin/database', icon: 'database', label: 'База данных' },
   { href: '/admin/settings', icon: 'settings', label: 'Настройки' },
+  { href: '/admin/account', icon: 'account', label: 'Аккаунт' },
 ];
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -38,12 +41,14 @@ const ICONS: Record<string, React.ReactNode> = {
   orders: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>,
   products: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>,
   inquiries: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>,
+  email: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>,
   content: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
   pages: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
   files: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>,
   seo: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
   settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
   database: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>,
+  account: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
 };
 
 export function AdminSidebar() {
@@ -70,6 +75,7 @@ export function AdminSidebar() {
         setCounts({
           newOrders: data.newOrdersCount || 0,
           newInquiries: data.newInquiriesCount || 0,
+          newEmails: data.newEmailsCount || 0,
         });
       }
     } catch {
@@ -276,18 +282,30 @@ export function AdminSidebar() {
       </nav>
 
       <div className="cms-sidebar-footer">
-        <div className="cms-sidebar-user" onClick={handleLogout} title="Выйти">
+        <Link href="/admin/account" className="cms-sidebar-user" style={{ textDecoration: 'none', color: 'inherit' }} title="Аккаунт">
           <div className="cms-sidebar-avatar">K</div>
           {!collapsed && (
             <div className="cms-sidebar-user-info">
-              <div className="cms-sidebar-user-name">Ekaterina</div>
+              <div className="cms-sidebar-user-name">Аккаунт</div>
               <div className="cms-sidebar-user-role">Администратор</div>
             </div>
           )}
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ opacity: 0.5 }}>
+        </Link>
+        <button
+          onClick={handleLogout}
+          title="Выйти"
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: '8px',
+            color: 'var(--cms-text-muted)', display: 'flex', alignItems: 'center',
+            borderRadius: '6px', transition: 'background 0.15s',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--cms-surface-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ opacity: 0.7 }}>
             <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
           </svg>
-        </div>
+        </button>
       </div>
     </aside>
   );

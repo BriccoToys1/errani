@@ -8,7 +8,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const paidFilter = { status: { in: ['paid', 'assembling', 'shipped', 'in_transit', 'delivered'] } };
-    const [orderCount, productCount, totalRevenue, pendingCount, recentOrders, inquiryCount, newInquiryCount, newOrdersCount] = await Promise.all([
+    
+    // Get orders viewed timestamp
+    const viewedSetting = await prisma.siteSettings.findUnique({ where: { key: 'ordersViewedAt' } });
+    const ordersViewedAt = viewedSetting ? new Date(viewedSetting.value) : new Date(0);
+    
+    const [orderCount, productCount, totalRevenue, pendingCount, recentOrders, inquiryCount, newInquiryCount, newOrdersCount, newEmailsCount] = await Promise.all([
       prisma.order.count({ where: paidFilter }),
       prisma.product.count(),
       prisma.order.aggregate({ where: paidFilter, _sum: { totalAmount: true } }),
@@ -21,7 +26,8 @@ export async function GET(req: NextRequest) {
       }),
       prisma.inquiry.count(),
       prisma.inquiry.count({ where: { status: 'new' } }),
-      prisma.order.count({ where: { status: 'assembling' } }),
+      prisma.order.count({ where: { status: { in: ['paid', 'assembling'] }, createdAt: { gt: ordersViewedAt } } }),
+      prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }),
     ]);
 
     return NextResponse.json({
@@ -34,6 +40,7 @@ export async function GET(req: NextRequest) {
       newInquiryCount,
       newOrdersCount,
       newInquiriesCount: newInquiryCount,
+      newEmailsCount,
     });
   } catch (error) {
     console.error('Dashboard error:', error);

@@ -202,3 +202,20 @@ model CustomPage {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// ─── Admin Email ───
+
+model AdminEmail {
+  id        String   @id @default(uuid())
+  direction String   @default("outbound") // inbound, outbound
+  fromAddr  String
+  toAddr    String
+  subject   String   @default("")
+  body      String   // HTML body
+  textBody  String   @default("") // Plain text body
+  status    String   @default("sent") // sent, delivered, failed, received
+  isRead    Boolean  @default(false)
+  resendId  String   @default("") // Resend message ID
+  inReplyTo String   @default("") // Parent email ID for threading
+  createdAt DateTime @default(now())
+}

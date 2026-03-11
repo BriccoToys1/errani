@@ -55,7 +55,6 @@ export default function AdminOrdersPage() {
   const [editNotes, setEditNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState(false);
 
@@ -64,10 +63,12 @@ export default function AdminOrdersPage() {
   const fetchOrders = useCallback(async () => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
-    const res = await fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
-    const data = await res.json();
-    setOrders(Array.isArray(data) ? data : []);
+    try {
+      const res = await fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
+      const data = await res.json();
+      setOrders(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
     setLoading(false);
   }, [getToken, router]);
 
@@ -133,8 +134,17 @@ export default function AdminOrdersPage() {
   const formatPrice = (n: number) =>
     new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(n);
 
+  const markAllRead = async () => {
+    const token = getToken();
+    try {
+      await fetch("/api/orders/viewed", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      notify("Все заказы отмечены как просмотренные");
+    } catch { /* ignore */ }
+  };
+
+  const newCount = orders.filter((o) => o.status === "paid" || o.status === "assembling").length;
+
   const filtered = orders.filter((o) => {
-    if (filterStatus !== "all" && o.status !== filterStatus) return false;
     if (search) {
       const q = search.toLowerCase();
       return o.orderNumber.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q) || o.customerEmail.toLowerCase().includes(q);
@@ -149,7 +159,10 @@ export default function AdminOrdersPage() {
       <AdminSidebar />
       <main className="cms-main">
         <div className="cms-header">
-          <h1 className="cms-header-title">Заказы</h1>
+          <h1 className="cms-header-title">
+            Заказы
+            {newCount > 0 && <span className="cms-badge cms-badge-blue" style={{ marginLeft: "10px", fontSize: "12px" }}>{newCount}</span>}
+          </h1>
           <div className="cms-header-actions">
             <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>{orders.length} всего</span>
             <button
@@ -159,7 +172,10 @@ export default function AdminOrdersPage() {
             >{deleting ? "Удаление..." : "Удалить неоплаченные"}</button>
             <a href="/api/admin/export?type=orders&format=csv" className="cms-btn cms-btn-sm" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</a>
             <a href="/api/admin/export?type=orders&format=xls" className="cms-btn cms-btn-sm" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> XLS</a>
-            <button className="cms-btn cms-btn-sm" onClick={fetchOrders}>Обновить</button>
+            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchOrders(); }}>Обновить</button>
+            <button className="cms-btn cms-btn-sm" onClick={markAllRead} title="Отметить все как просмотренные">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
           </div>
         </div>
 
@@ -173,11 +189,6 @@ export default function AdminOrdersPage() {
               onChange={(e) => setSearch(e.target.value)}
               style={{ width: "180px" }}
             />
-            <select className="cms-select cms-select-sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-              <option value="all">Все статусы</option>
-              {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>)}
-            </select>
-            {/* Removed bulk delete */}
           </div>
 
           {/* Table */}

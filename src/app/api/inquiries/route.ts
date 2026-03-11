@@ -14,6 +14,20 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// PUT: mark all "new" inquiries as "read"
+export async function PUT() {
+  try {
+    const result = await prisma.inquiry.updateMany({
+      where: { status: 'new' },
+      data: { status: 'read' },
+    });
+    return NextResponse.json({ updated: result.count });
+  } catch (error) {
+    console.error('Error marking inquiries as read:', error);
+    return NextResponse.json({ error: 'Failed to mark as read' }, { status: 500 });
+  }
+}
+
 // POST new inquiry (public)
 export async function POST(req: NextRequest) {
   try {
