@@ -15,7 +15,7 @@ async function verifyToken(token: string): Promise<boolean> {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const host = req.headers.get('host') || '';
+  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || '';
 
   // ── Admin subdomain redirect: admin.errani.ru → /admin/ ─────────────
   if (host.startsWith('admin.')) {
@@ -28,7 +28,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // ── Block /admin on main domain (only admin.errani.ru allowed) ──────
-  if (pathname.startsWith('/admin') && !host.startsWith('admin.') && !host.startsWith('localhost')) {
+  if (pathname.startsWith('/admin') && !host.startsWith('admin.') && !host.includes('localhost') && !host.includes('127.0.0.1')) {
     return new NextResponse(null, { status: 404 });
   }
 
