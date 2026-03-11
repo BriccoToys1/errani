@@ -239,6 +239,7 @@ const emptyProduct = {
   price: 0, oldPrice: null as number | null, discount: 0, stock: 0,
   currency: "RUB", image: "", images: "[]", inStock: true, isPreorder: false,
   isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true, sortOrder: 0,
+  characteristics: "[]",
 };
 
 function slugify(text: string): string {
@@ -288,6 +289,7 @@ export default function AdminProductsPage() {
       images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
       isAuthor: product.isAuthor, isLimited: product.isLimited || false, limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "", isActive: product.isActive,
       sortOrder: product.sortOrder,
+      characteristics: (product as unknown as { characteristics?: string }).characteristics || "[]",
     });
   };
 
@@ -316,6 +318,7 @@ export default function AdminProductsPage() {
       isLimited: product.isLimited || false,
       limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
       isActive: false,
+      characteristics: (product as unknown as { characteristics?: string }).characteristics || "[]",
       sortOrder: product.sortOrder,
     });
   };
@@ -346,6 +349,7 @@ export default function AdminProductsPage() {
         isLimited: product.isLimited,
         limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
         isActive: !product.isActive,
+        characteristics: (product as unknown as { characteristics?: string }).characteristics || "[]",
         sortOrder: product.sortOrder,
       }),
     });
@@ -368,6 +372,7 @@ export default function AdminProductsPage() {
         stock: Number(form.stock),
         sortOrder: Number(form.sortOrder),
         limitedEditionText: form.limitedEditionText,
+        characteristics: form.characteristics,
       }),
     });
     if (res.ok) {
@@ -621,6 +626,28 @@ export default function AdminProductsPage() {
                   />
                 </div>
               )}
+
+              {/* Characteristics editor */}
+              <div style={{ marginTop: "16px" }}>
+                <label className="cms-label" style={{ display: "block", marginBottom: "8px" }}>Характеристики</label>
+                {(() => {
+                  let chars: Array<{ key: string; value: string }> = [];
+                  try { chars = JSON.parse(form.characteristics || '[]'); } catch { chars = []; }
+                  const updateChars = (newChars: typeof chars) => setForm({ ...form, characteristics: JSON.stringify(newChars) });
+                  return (
+                    <>
+                      {chars.map((c, i) => (
+                        <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "6px", alignItems: "center" }}>
+                          <input className="cms-input" placeholder="Название" value={c.key} onChange={(e) => { const nc = [...chars]; nc[i] = { ...nc[i], key: e.target.value }; updateChars(nc); }} style={{ flex: 1 }} />
+                          <input className="cms-input" placeholder="Значение" value={c.value} onChange={(e) => { const nc = [...chars]; nc[i] = { ...nc[i], value: e.target.value }; updateChars(nc); }} style={{ flex: 1 }} />
+                          <button type="button" className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => { updateChars(chars.filter((_, j) => j !== i)); }}>×</button>
+                        </div>
+                      ))}
+                      <button type="button" className="cms-btn cms-btn-xs" onClick={() => updateChars([...chars, { key: "", value: "" }])}>+ Добавить характеристику</button>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
             <div className="cms-modal-actions">
               <button className="cms-btn cms-btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Сохранение..." : "Сохранить"}</button>

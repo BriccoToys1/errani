@@ -41,18 +41,18 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="cms-login-screen">
-      <form onSubmit={handleSubmit}>
-        <div className="cms-login-box">
+    <div className="cms-login-wrap">
+      <form onSubmit={handleSubmit} className="cms-login-card">
           <div className="cms-login-brand">
-            <h1>errani &mdash; CMS</h1>
-            <p>Panel management</p>
+            <div className="cms-login-logo">E</div>
+            <h1 className="cms-login-title">errani</h1>
+            <p className="cms-login-subtitle">Panel management</p>
           </div>
 
           {error && <div className="cms-login-error">{error}</div>}
 
-          <div className="cms-form-group">
-            <label className="cms-label">Email</label>
+          <div className="cms-login-form">
+            <label className="cms-label">Email
             <input
               type="text"
               className="cms-input"
@@ -65,10 +65,9 @@ export default function AdminLoginPage() {
               autoCapitalize="off"
               spellCheck={false}
             />
-          </div>
+          </label>
 
-          <div className="cms-form-group">
-            <label className="cms-label">Password</label>
+            <label className="cms-label">Password
             <input
               type="password"
               className="cms-input"
@@ -77,13 +76,12 @@ export default function AdminLoginPage() {
               required
               autoComplete="new-password"
             />
-          </div>
+          </label>
 
-          <button type="submit" className="cms-btn cms-btn-primary" disabled={loading}
-            style={{ width: "100%", justifyContent: "center", padding: "10px" }}>
+          <button type="submit" className="cms-login-submit" disabled={loading}>
             {loading ? "Signing in..." : "Sign in"}
           </button>
-        </div>
+          </div>
       </form>
     </div>
   );

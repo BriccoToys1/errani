@@ -17,7 +17,10 @@ export default function CartPage() {
   const [submitting, setSubmitting] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
   const [formData, setFormData] = useState({
-    name: '',
+    lastName: '',
+    firstName: '',
+    middleName: '',
+    noMiddleName: false,
     email: '',
     phone: '',
     country: 'RU',
@@ -28,6 +31,7 @@ export default function CartPage() {
     street: '',
     house: '',
     apartment: '',
+    noApartment: false,
     shippingMethod: 'pochta_ru',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -56,14 +60,23 @@ export default function CartPage() {
   const validate = () => {
     const e: Record<string, string> = {};
     
-    // Name validation - at least 2 words, only letters and spaces
-    const nameTrimmed = formData.name.trim();
-    if (!nameTrimmed) {
-      e.name = 'Введите ФИО';
-    } else if (nameTrimmed.split(/\s+/).length < 2) {
-      e.name = 'Введите имя и фамилию';
-    } else if (!/^[\p{L}\s\-']+$/u.test(nameTrimmed)) {
-      e.name = 'ФИО может содержать только буквы';
+    // Last name validation
+    if (!formData.lastName.trim()) {
+      e.lastName = 'Введите фамилию';
+    } else if (!/^[\p{L}\s\-']+$/u.test(formData.lastName.trim())) {
+      e.lastName = 'Фамилия может содержать только буквы';
+    }
+
+    // First name validation
+    if (!formData.firstName.trim()) {
+      e.firstName = 'Введите имя';
+    } else if (!/^[\p{L}\s\-']+$/u.test(formData.firstName.trim())) {
+      e.firstName = 'Имя может содержать только буквы';
+    }
+
+    // Middle name validation (if not checked "no middle name")
+    if (!formData.noMiddleName && !formData.middleName.trim()) {
+      e.middleName = 'Введите отчество';
     }
     
     // Email validation
@@ -131,6 +144,7 @@ export default function CartPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          name: [formData.lastName, formData.firstName, formData.noMiddleName ? '' : formData.middleName].filter(Boolean).join(' '),
           items: cart.map(item => ({ productId: item.productId, quantity: item.quantity })),
         }),
       });
@@ -266,8 +280,23 @@ export default function CartPage() {
           <div className="checkout-form" style={{ borderTop: 'none', marginTop: 0, paddingTop: 0 }}>
             <h2 className="checkout-heading">{lang === 'ru' ? 'Контактные данные' : 'Contact details'}</h2>
             <div className="checkout-grid">
-              <Field label={lang === 'ru' ? 'ФИО' : 'Full name'} value={formData.name} error={errors.name} className="full-width"
-                onChange={(v) => setFormData({ ...formData, name: v })} />
+              <Field label={lang === 'ru' ? 'Фамилия' : 'Last name'} value={formData.lastName} error={errors.lastName}
+                onChange={(v) => setFormData({ ...formData, lastName: v })} />
+              <Field label={lang === 'ru' ? 'Имя' : 'First name'} value={formData.firstName} error={errors.firstName}
+                onChange={(v) => setFormData({ ...formData, firstName: v })} />
+              <div>
+                <Field label={lang === 'ru' ? 'Отчество' : 'Middle name'} value={formData.middleName} error={!formData.noMiddleName ? errors.middleName : undefined}
+                  onChange={(v) => setFormData({ ...formData, middleName: v })} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.noMiddleName}
+                    onChange={(e) => setFormData({ ...formData, noMiddleName: e.target.checked, middleName: '' })}
+                    style={{ accentColor: 'var(--orange)' }}
+                  />
+                  {lang === 'ru' ? 'Нет отчества' : 'No middle name'}
+                </label>
+              </div>
               <Field label="Email" type="email" value={formData.email} error={errors.email}
                 onChange={(v) => setFormData({ ...formData, email: v })} />
               <PhoneInput
@@ -319,8 +348,19 @@ export default function CartPage() {
                 onChange={(v) => setFormData({ ...formData, street: v })} />
               <Field label={lang === 'ru' ? 'Дом' : 'House / Apt'} value={formData.house} error={errors.house}
                 onChange={(v) => setFormData({ ...formData, house: v })} />
-              <Field label={lang === 'ru' ? 'Квартира' : 'Apartment'} value={formData.apartment}
-                onChange={(v) => setFormData({ ...formData, apartment: v })} />
+              <div>
+                <Field label={lang === 'ru' ? 'Квартира' : 'Apartment'} value={formData.apartment}
+                  onChange={(v) => setFormData({ ...formData, apartment: v })} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.noApartment}
+                    onChange={(e) => setFormData({ ...formData, noApartment: e.target.checked, apartment: '' })}
+                    style={{ accentColor: 'var(--orange)' }}
+                  />
+                  {lang === 'ru' ? 'Без квартиры (частный дом)' : 'No apartment (private house)'}
+                </label>
+              </div>
             </div>
           </div>
 
@@ -337,6 +377,9 @@ export default function CartPage() {
                 ))}
               </select>
             </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.75rem', lineHeight: 1.6 }}>
+              {lang === 'ru' ? 'Ориентировочный срок доставки ~ начало Мая' : 'Estimated delivery ~ beginning of May'}
+            </p>
           </div>
 
           {/* Order total */}
@@ -384,6 +427,16 @@ export default function CartPage() {
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '0.5rem' }}>
             {isRussia ? 'Оплата через ЮKassa' : (lang === 'ru' ? 'Оплата картой' : 'Pay by card')}
+          </p>
+          <p style={{ fontSize: '0.8rem', textAlign: 'center', marginTop: '1rem' }}>
+            <a
+              href="https://t.me/errani_tarot"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--orange)', textDecoration: 'underline' }}
+            >
+              {lang === 'ru' ? 'Связаться с продавцом' : 'Contact seller'}
+            </a>
           </p>
         </form>
       )}

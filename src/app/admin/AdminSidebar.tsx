@@ -24,11 +24,12 @@ const NAV_ITEMS = [
   { href: '/admin/products', icon: 'products', label: 'Товары' },
   { href: '/admin/inquiries', icon: 'inquiries', label: 'Обращения', countKey: 'newInquiries' },
   { href: '/admin/content', icon: 'content', label: 'Контент' },
-  { section: 'Настройки' },
+  { href: '/admin/pages', icon: 'pages', label: 'Страницы' },
+  { section: 'Система' },
   { href: '/admin/files', icon: 'files', label: 'Файлы' },
   { href: '/admin/seo', icon: 'seo', label: 'SEO' },
-  { href: '/admin/settings', icon: 'settings', label: 'Настройки' },
   { href: '/admin/database', icon: 'database', label: 'База данных' },
+  { href: '/admin/settings', icon: 'settings', label: 'Настройки' },
 ];
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -38,6 +39,7 @@ const ICONS: Record<string, React.ReactNode> = {
   products: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>,
   inquiries: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>,
   content: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
+  pages: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
   files: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>,
   seo: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
   settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
@@ -190,7 +192,7 @@ export function AdminSidebar() {
                 padding: '7px 10px 7px 32px',
                 border: '1px solid var(--cms-border)',
                 borderRadius: showResults && searchResults.length > 0 ? '8px 8px 0 0' : '8px',
-                background: 'var(--cms-bg-secondary)',
+                background: 'var(--cms-surface)',
                 color: 'var(--cms-text)',
                 fontSize: '12px',
                 outline: 'none',
@@ -228,7 +230,7 @@ export function AdminSidebar() {
                       color: 'var(--cms-text)',
                       gap: 8,
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--cms-bg-secondary)')}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--cms-surface-hover)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{r.label}</span>

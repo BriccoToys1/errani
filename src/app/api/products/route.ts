@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
         isAuthor: body.isAuthor ?? false,
         isLimited: body.isLimited ?? false,
         limitedEditionText: body.limitedEditionText ?? '',
+        characteristics: body.characteristics ?? '[]',
         isActive: body.isActive ?? true,
         sortOrder: body.sortOrder || 0,
       },

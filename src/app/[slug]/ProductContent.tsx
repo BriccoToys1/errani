@@ -23,6 +23,7 @@ interface Product {
   isLimited: boolean;
   limitedEditionText: string;
   isAuthor: boolean;
+  characteristics: string;
 }
 
 export function ProductContent({ product }: { product: Product }) {
@@ -75,6 +76,10 @@ export function ProductContent({ product }: { product: Product }) {
   const displayName = lang === 'ru' && product.nameRu ? product.nameRu : product.name;
   const displayDesc = lang === 'ru' && product.descriptionRu ? product.descriptionRu : product.description;
   const price = product.price;
+
+  const characteristics: Array<{ key: string; value: string }> = (() => {
+    try { return JSON.parse(product.characteristics || '[]'); } catch { return []; }
+  })();
 
   const handleAddOrGoToCart = () => {
     if (inCart) {
@@ -199,6 +204,23 @@ export function ProductContent({ product }: { product: Product }) {
             <div className="limited-edition-banner">
               <h3>{t(lang, 'product.limited.title')}</h3>
               <p>{product.limitedEditionText || t(lang, 'product.limited.text')}</p>
+            </div>
+          )}
+
+          {/* Characteristics */}
+          {characteristics.length > 0 && (
+            <div style={{ marginTop: '2rem' }}>
+              <h3 style={{ fontSize: '0.85rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                {lang === 'ru' ? 'Характеристики' : 'Specifications'}
+              </h3>
+              <div style={{ display: 'grid', gap: '0.5rem' }}>
+                {characteristics.map((c, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.9rem' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{c.key}</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 500, textAlign: 'right' }}>{c.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </section>

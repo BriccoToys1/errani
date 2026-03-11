@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { adminGuard } from '@/lib/admin-auth';
 import prisma from '@/lib/db';
+import { execSync } from 'child_process';
 
 export async function GET(req: NextRequest) {
   const denied = adminGuard(req);
@@ -31,17 +32,18 @@ export async function GET(req: NextRequest) {
     // Load average (Unix only)
     const loadAvg = os.loadavg();
 
-    // Disk usage (approx)
+    // Disk usage (actual via df)
     let diskUsage = 0;
     let diskTotal = 0;
     let diskFree = 0;
     try {
-      const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
-      if (fs.existsSync(dbPath)) {
-        const stats = fs.statSync(dbPath);
-        diskUsage = stats.size;
-      }
-      // Get .next folder size
+      const dfOutput = execSync('df -k / | tail -1').toString().trim();
+      const parts = dfOutput.split(/\s+/);
+      diskTotal = parseInt(parts[1], 10) * 1024;
+      diskUsage = parseInt(parts[2], 10) * 1024;
+      diskFree = parseInt(parts[3], 10) * 1024;
+    } catch {
+      // Fallback: app size only
       const nextPath = path.join(process.cwd(), '.next');
       if (fs.existsSync(nextPath)) {
         const getSize = (dir: string): number => {
@@ -57,17 +59,13 @@ export async function GET(req: NextRequest) {
                 size += stat.size;
               }
             }
-          } catch {
-            // Ignore permission errors
-          }
+          } catch { /* ignore */ }
           return size;
         };
-        diskUsage += getSize(nextPath);
+        diskUsage = getSize(nextPath);
       }
-      diskTotal = 100 * 1024 * 1024 * 1024; // Placeholder 100GB
+      diskTotal = diskUsage * 10;
       diskFree = diskTotal - diskUsage;
-    } catch {
-      // Ignore disk errors
     }
 
     // Process memory

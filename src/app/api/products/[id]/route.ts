@@ -53,6 +53,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         isLimited: body.isLimited,
         limitedEditionText: body.limitedEditionText ?? '',
         isActive: body.isActive ?? true,
+        characteristics: body.characteristics ?? '[]',
         sortOrder: body.sortOrder,
       },
     });

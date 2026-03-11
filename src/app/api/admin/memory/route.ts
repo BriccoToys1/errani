@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import * as fs from 'fs';
-import * as path from 'path';
+import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 
 // Get database stats
@@ -19,23 +17,15 @@ export async function GET(req: NextRequest) {
     // Count unique days in daily stats
     const dailyStats = await prisma.dailyStat.count();
 
-    // Get database file size
+    // Get database size from PostgreSQL
     let dbSize = '0 KB';
     try {
-      const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
-      if (fs.existsSync(dbPath)) {
-        const stats = fs.statSync(dbPath);
-        const bytes = stats.size;
-        if (bytes < 1024) {
-          dbSize = `${bytes} B`;
-        } else if (bytes < 1024 * 1024) {
-          dbSize = `${(bytes / 1024).toFixed(1)} KB`;
-        } else {
-          dbSize = `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-        }
+      const result = await prisma.$queryRaw<Array<{ size: string }>>`SELECT pg_size_pretty(pg_database_size(current_database())) as size`;
+      if (result.length > 0) {
+        dbSize = result[0].size;
       }
     } catch {
-      // Ignore file size errors
+      // Ignore database size errors
     }
 
     return NextResponse.json({ pageViews, inquiries, dailyStats, dbSize });

@@ -54,6 +54,7 @@ model Product {
   isLimited          Boolean        @default(false) // лимитированный тираж
   limitedEditionText String         @default("") // editable limited edition description
   isActive           Boolean        @default(true) // Show in catalog
+  characteristics    String         @default("") // JSON array of {key, value} pairs
   avitoUrl      String         @default("") // link to avito listing if parsed
   sortOrder     Int            @default(0)
   createdAt     DateTime       @default(now())
@@ -187,4 +188,17 @@ model SiteSettings {
   value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model CustomPage {
+  id          String   @id @default(uuid())
+  title       String
+  titleRu     String   @default("")
+  slug        String   @unique
+  content     String
+  contentRu   String   @default("")
+  isPublished Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

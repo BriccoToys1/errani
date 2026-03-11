@@ -680,8 +680,8 @@
   border-top: 1px solid var(--cms-border);
 }
 
-/* ── Toast ── */
-.cms-toast {
+/* ── Toast / Notification ── */
+.cms-toast, .cms-notification {
   position: fixed;
   bottom: 24px;
   right: 24px;
@@ -700,6 +700,47 @@
 @keyframes cms-toast-in {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Modal Footer (alias for actions) ── */
+.cms-modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid var(--cms-border);
+}
+
+/* ── Modal title ── */
+.cms-modal-header h2.cms-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--cms-text-heading);
+}
+
+/* ── Button icon (no bg, inline) ── */
+.cms-btn-icon {
+  background: none;
+  border: none;
+  color: var(--cms-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.cms-btn-icon:hover {
+  color: var(--cms-danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ── Row active state ── */
+.cms-table tbody tr.cms-row-active {
+  background: rgba(232, 114, 42, 0.08);
 }
 
 /* ── Tabs ── */
@@ -908,8 +949,9 @@ input[type="checkbox"] {
   }
   .cms-sidebar-brand-text,
   .cms-sidebar-section,
-  .cms-nav-item span,
-  .cms-sidebar-user-info {
+  .cms-nav-label,
+  .cms-sidebar-user-info,
+  .cms-sidebar-toggle {
     display: none;
   }
   .cms-sidebar-brand {
@@ -920,13 +962,87 @@ input[type="checkbox"] {
     justify-content: center;
     padding: 10px;
   }
+  .cms-nav-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 14px;
+    height: 14px;
+    font-size: 9px;
+  }
+  .cms-nav-item {
+    position: relative;
+  }
   .cms-main {
     margin-left: 60px;
   }
   .cms-header {
-    padding: 14px 16px;
+    padding: 12px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .cms-header-title {
+    font-size: 16px;
+  }
+  .cms-header-actions {
+    flex-wrap: wrap;
+    gap: 6px;
   }
   .cms-content {
-    padding: 16px;
+    padding: 12px;
   }
+  .cms-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .cms-stat-value {
+    font-size: 18px;
+  }
+  .cms-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cms-modal-overlay {
+    padding: 10px;
+    align-items: flex-end;
+  }
+  .cms-modal {
+    max-height: 90vh;
+    overflow-y: auto;
+    border-radius: 12px 12px 0 0;
+  }
+  .cms-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cms-toast, .cms-notification {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+  .cms-sidebar-user {
+    justify-content: center;
+    padding: 10px;
+  }
+  .cms-sidebar-footer {
+    padding: 8px 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .cms-stat-grid {
+    grid-template-columns: 1fr;
+  }
+  .cms-header-actions .cms-btn-sm {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+}
+
+/* ── Collapsed sidebar: hide text elements ── */
+.cms-sidebar.collapsed .cms-sidebar-brand-text,
+.cms-sidebar.collapsed .cms-sidebar-section,
+.cms-sidebar.collapsed .cms-nav-label,
+.cms-sidebar.collapsed .cms-sidebar-user-info {
+  display: none;
 }

@@ -31,10 +31,8 @@ export const ORDER_STATUSES: Record<string, { label: string; color: string }> = 
 };
 
 export const SHIPPING_METHODS_RU = [
-  { key: 'pochta_ru', label: 'Почта России' },
-  { key: 'ozon', label: 'OZON' },
-  { key: 'yandex', label: 'Яндекс Доставка' },
-  { key: 'cdek', label: 'СДЭК' },
+  { key: 'ozon', label: 'OZON — 300 ₽ (от 6 товаров — 650 ₽)', price: 300, price6: 650 },
+  { key: 'yandex', label: 'Яндекс Маркет — 300 ₽ (от 6 товаров — 650 ₽)', price: 300, price6: 650 },
 ];
 
 export const SHIPPING_METHODS_INT = [

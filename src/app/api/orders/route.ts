@@ -7,6 +7,25 @@ interface OrderItemInput {
   quantity: number;
 }
 
+// DELETE unpaid (pending) orders
+export async function DELETE() {
+  try {
+    const pendingOrders = await prisma.order.findMany({
+      where: { status: 'pending' },
+      select: { id: true },
+    });
+    const ids = pendingOrders.map(o => o.id);
+    if (ids.length > 0) {
+      await prisma.orderItem.deleteMany({ where: { orderId: { in: ids } } });
+      await prisma.order.deleteMany({ where: { id: { in: ids } } });
+    }
+    return NextResponse.json({ deleted: ids.length });
+  } catch (error) {
+    console.error('Error deleting pending orders:', error);
+    return NextResponse.json({ error: 'Failed to delete pending orders' }, { status: 500 });
+  }
+}
+
 // GET all orders (admin only)
 export async function GET() {
   try {

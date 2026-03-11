@@ -27,6 +27,11 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // ── Block /admin on main domain (only admin.errani.ru allowed) ──────
+  if (pathname.startsWith('/admin') && !host.startsWith('admin.') && !host.startsWith('localhost')) {
+    return new NextResponse(null, { status: 404 });
+  }
+
   // ── Admin route protection ───────────────────────────────────────────
   if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
     // Skip API routes — they have their own auth guard

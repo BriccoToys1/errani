@@ -378,6 +378,36 @@ function IntegrationsTab({ notify, getToken }: { notify: (msg: string) => void; 
         )}
       </SettingSection>
 
+      <SettingSection title="ЮKassa">
+        <div style={{ marginBottom: "12px", padding: "12px", background: "rgba(34, 197, 94, 0.1)", borderRadius: "8px", display: "flex", alignItems: "center", gap: "12px" }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: "14px" }}>Платёжная система подключена</div>
+            <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>Shop ID: 1265018</div>
+          </div>
+          <a
+            href="https://yookassa.ru/my/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="cms-btn cms-btn-sm cms-btn-primary"
+            style={{ marginLeft: "auto" }}
+          >
+            Открыть кабинет ЮKassa ↗
+          </a>
+        </div>
+        <div style={{ border: "1px solid var(--cms-border)", borderRadius: "8px", overflow: "hidden" }}>
+          <iframe
+            src="https://yookassa.ru/my/"
+            style={{ width: "100%", height: "600px", border: "none" }}
+            title="ЮKassa кабинет"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+          />
+        </div>
+        <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--cms-text-muted)" }}>
+          Если iframe не загружается, используйте кнопку «Открыть кабинет ЮKassa» выше для доступа в новой вкладке.
+        </div>
+      </SettingSection>
+
       <SettingSection title="Другие интеграции">
         <div style={{ padding: "20px", textAlign: "center", color: "var(--cms-text-muted)" }}>
           <div style={{ fontSize: "32px", marginBottom: "10px" }}>🔌</div>
