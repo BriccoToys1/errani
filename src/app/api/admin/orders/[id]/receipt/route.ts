@@ -33,7 +33,8 @@ function fmt(n: number): string {
   return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(n);
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   // Auth via query token
   const token = req.nextUrl.searchParams.get('token');
   if (!token) return new Response('Unauthorized', { status: 401 });
@@ -44,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 
   const order = await prisma.order.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: { items: { include: { product: true } } },
   });
 
