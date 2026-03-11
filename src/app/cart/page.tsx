@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getCart, updateQuantity, removeFromCart, clearCart, getCartTotal, CartItem } from '@/lib/cart';
-import { formatPrice, COUNTRIES, SHIPPING_METHODS_RU, SHIPPING_METHODS_INT } from '@/lib/utils';
+import { formatPrice, COUNTRIES, SHIPPING_METHODS_RU, SHIPPING_METHODS_INT, getShippingCost } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
 import { PhoneInput } from '@/components/PhoneInput';
@@ -38,6 +38,12 @@ export default function CartPage() {
   const [consentOferta, setConsentOferta] = useState(false);
   const [consentData, setConsentData] = useState(false);
 
+  // Foreign card modal
+  const [showForeignCard, setShowForeignCard] = useState(false);
+  const [foreignForm, setForeignForm] = useState({ name: '', phone: '', email: '', contact: 'telegram', consent: false });
+  const [foreignSubmitting, setForeignSubmitting] = useState(false);
+  const [foreignDone, setForeignDone] = useState(false);
+
   useEffect(() => {
     setCart(getCart());
     setLoading(false);
@@ -56,6 +62,9 @@ export default function CartPage() {
   const handleQty = (id: string, qty: number) => setCart(updateQuantity(id, qty));
   const handleRemove = (id: string) => setCart(removeFromCart(id));
   const total = getCartTotal(cart);
+  const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
+  const shippingCost = isRussia ? getShippingCost(itemCount) : 0;
+  const grandTotal = total + shippingCost;
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -146,6 +155,8 @@ export default function CartPage() {
           ...formData,
           name: [formData.lastName, formData.firstName, formData.noMiddleName ? '' : formData.middleName].filter(Boolean).join(' '),
           items: cart.map(item => ({ productId: item.productId, quantity: item.quantity })),
+          shippingCost,
+          totalAmount: grandTotal,
         }),
       });
       const data = await res.json();
@@ -165,6 +176,29 @@ export default function CartPage() {
       alert('Ошибка при оформлении заказа. Попробуйте ещё раз.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleForeignSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForeignSubmitting(true);
+    try {
+      await fetch('/api/inquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: foreignForm.name,
+          email: foreignForm.email,
+          phone: foreignForm.phone || undefined,
+          message: `Иностранная карта — заявка на оплату. Предпочтительный способ связи: ${foreignForm.contact}`,
+          source: 'foreign_card',
+        }),
+      });
+      setForeignDone(true);
+    } catch {
+      alert('Ошибка при отправке. Попробуйте ещё раз.');
+    } finally {
+      setForeignSubmitting(false);
     }
   };
 
@@ -274,6 +308,22 @@ export default function CartPage() {
               {t(lang, 'cart.checkout')}
             </button>
           </div>
+          {isRussia && (
+            <div style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.6rem', lineHeight: 1.9 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem' }}>
+                <span>Товары ({itemCount} шт.)</span>
+                <span>{formatPrice(total)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem' }}>
+                <span>Доставка ({itemCount <= 2 ? '1–2 шт.' : itemCount <= 5 ? '3–5 шт.' : '6+ шт.'})</span>
+                <span>{formatPrice(shippingCost)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '4px', marginTop: '2px' }}>
+                <span>Итого</span>
+                <span>{formatPrice(grandTotal)}</span>
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <form onSubmit={handleSubmit}>
@@ -377,12 +427,52 @@ export default function CartPage() {
                 ))}
               </select>
             </div>
+            {isRussia && (
+              <div style={{ marginTop: '0.85rem', padding: '0.75rem 1rem', background: 'rgba(232,114,42,0.07)', borderRadius: '8px', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Товары ({itemCount} шт.)</span>
+                  <span>{formatPrice(total)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Доставка</span>
+                  <span>{formatPrice(shippingCost)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--text-primary)', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '4px', marginTop: '2px' }}>
+                  <span>Итого к оплате</span>
+                  <span>{formatPrice(grandTotal)}</span>
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  {itemCount <= 2 ? 'Тариф: 1–2 шт. — 350 ₽' : itemCount <= 5 ? 'Тариф: 3–5 шт. — 470 ₽' : 'Тариф: 6+ шт. — 790 ₽'}
+                </div>
+              </div>
+            )}
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.75rem', lineHeight: 1.6 }}>
               {lang === 'ru' ? 'Ориентировочный срок доставки ~ начало Мая' : 'Estimated delivery ~ beginning of May'}
             </p>
           </div>
 
-          {/* Order total */}
+          {/* Foreign card warning */}
+          {!isRussia && (
+            <div style={{ marginTop: '1rem', padding: '1rem 1.25rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '0.85rem' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0 3px' }}><strong>Оплата принимается только российскими картами.</strong></p>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0 }}>Если у вас иностранная карта — оставьте заявку, мы поможем с оплатой.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForeignCard(true)}
+                style={{ width: '100%', background: 'transparent', border: '1px solid rgba(239,68,68,0.45)', color: '#ef4444', borderRadius: '7px', padding: '0.5rem 1rem', fontSize: '0.83rem', cursor: 'pointer', transition: 'background 0.2s' }}
+              >
+                У меня иностранная карта
+              </button>
+            </div>
+          )}
           {/* Consent checkboxes */}
           <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', fontSize: '0.82rem', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
@@ -420,7 +510,7 @@ export default function CartPage() {
             </button>
             <span style={{ flex: 1 }} />
             <span className="cart-total-label-inline">К оплате</span>
-            <span className="cart-total-price-inline">{formatPrice(total)}</span>
+            <span className="cart-total-price-inline">{formatPrice(grandTotal)}</span>
             <button type="submit" className="cart-checkout-btn" disabled={submitting}>
               {submitting ? 'Обработка...' : 'Перейти к оплате'}
             </button>
@@ -440,7 +530,114 @@ export default function CartPage() {
           </p>
         </form>
       )}
+      {showForeignCard && (
+        <ForeignCardModal
+          onClose={() => { setShowForeignCard(false); setForeignDone(false); }}
+          foreignForm={foreignForm}
+          setForeignForm={setForeignForm}
+          submitting={foreignSubmitting}
+          done={foreignDone}
+          onSubmit={handleForeignSubmit}
+        />
+      )}
     </main>
+  );
+}
+function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, done, onSubmit }: {
+  onClose: () => void;
+  foreignForm: { name: string; phone: string; email: string; contact: string; consent: boolean };
+  setForeignForm: (f: { name: string; phone: string; email: string; contact: string; consent: boolean }) => void;
+  submitting: boolean;
+  done: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+}) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div style={{ background: 'var(--bg-card, #1a1a1a)', borderRadius: '14px', padding: '1.75rem 1.5rem', width: '100%', maxWidth: '420px', position: 'relative' }}>
+        <button
+          onClick={onClose}
+          style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', color: 'var(--text-secondary)' }}
+          aria-label="Закрыть"
+        >×</button>
+        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.5rem' }}>Иностранная карта</h3>
+        <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+          Оставьте контакт — мы свяжемся и поможем оформить оплату удобным способом.
+        </p>
+        {done ? (
+          <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>✓</div>
+            <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Заявка отправлена!</p>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Мы свяжемся с вами в ближайшее время.</p>
+          </div>
+        ) : (
+          <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Имя *</label>
+              <input
+                type="text"
+                className="form-field"
+                value={foreignForm.name}
+                onChange={(e) => setForeignForm({ ...foreignForm, name: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Телефон</label>
+              <input
+                type="tel"
+                className="form-field"
+                value={foreignForm.phone}
+                onChange={(e) => setForeignForm({ ...foreignForm, phone: e.target.value })}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Email *</label>
+              <input
+                type="email"
+                className="form-field"
+                value={foreignForm.email}
+                onChange={(e) => setForeignForm({ ...foreignForm, email: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Предпочтительный способ связи</label>
+              <select
+                className="form-field"
+                value={foreignForm.contact}
+                onChange={(e) => setForeignForm({ ...foreignForm, contact: e.target.value })}
+              >
+                <option value="telegram">Telegram</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="email">Email</option>
+                <option value="phone">Телефон</option>
+              </select>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.77rem', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1.5 }}>
+              <input
+                type="checkbox"
+                checked={foreignForm.consent}
+                onChange={(e) => setForeignForm({ ...foreignForm, consent: e.target.checked })}
+                required
+                style={{ marginTop: '2px', flexShrink: 0, accentColor: 'var(--orange)' }}
+              />
+              Согласен на обработку персональных данных
+            </label>
+            <button
+              type="submit"
+              className="cart-checkout-btn"
+              disabled={submitting}
+              style={{ width: '100%', marginTop: '0.25rem' }}
+            >
+              {submitting ? 'Отправка...' : 'Отправить заявку'}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }
 

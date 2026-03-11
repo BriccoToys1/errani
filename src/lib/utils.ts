@@ -31,13 +31,19 @@ export const ORDER_STATUSES: Record<string, { label: string; color: string }> = 
 };
 
 export const SHIPPING_METHODS_RU = [
-  { key: 'ozon', label: 'OZON — 300 ₽ (от 6 товаров — 650 ₽)', price: 300, price6: 650 },
-  { key: 'yandex', label: 'Яндекс Маркет — 300 ₽ (от 6 товаров — 650 ₽)', price: 300, price6: 650 },
+  { key: 'ozon', label: 'OZON' },
+  { key: 'yandex', label: 'Яндекс Маркет' },
 ];
 
 export const SHIPPING_METHODS_INT = [
   { key: 'pochta_int', label: 'Почта России (международная)' },
 ];
+
+export function getShippingCost(itemCount: number): number {
+  if (itemCount <= 2) return 350;
+  if (itemCount <= 5) return 470;
+  return 790;
+}
 
 export const COUNTRIES = [
   { code: 'RU', name: 'Россия' },
