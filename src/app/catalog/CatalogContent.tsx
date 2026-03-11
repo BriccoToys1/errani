@@ -178,7 +178,7 @@ export function CatalogContent() {
                         alt={displayName}
                         fill
                         className="object-cover"
-                        sizes="(max-width: 768px) 100vw, 300px"
+                        sizes="(max-width: 640px) 100vw, 50vw"
                         quality={85}
                       />
                     )}

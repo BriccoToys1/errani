@@ -1329,8 +1329,9 @@ select.form-field {
 
 .catalog-section {
   padding: clamp(7rem, 10vw, 9rem) clamp(1.5rem, 4vw, 3rem) clamp(4rem, 8vw, 6rem);
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
+  width: 100%;
 }
 
 .catalog-heading {
@@ -1522,12 +1523,13 @@ select.form-field {
 /* Catalog Grid */
 .catalog-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  grid-template-columns: 1fr;
   gap: 1.5rem;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 640px) {
   .catalog-grid {
+    grid-template-columns: repeat(2, 1fr);
     gap: 2rem;
   }
 }
@@ -1557,11 +1559,17 @@ select.form-field {
 }
 
 .catalog-grid .catalog-card-info {
-  padding: 0.75rem 0.9rem;
+  padding: 0.9rem 1rem;
+}
+
+.catalog-grid .catalog-card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
 }
 
 .catalog-grid .catalog-card-price {
-  font-size: 2.1rem;
+  font-size: 1.4rem;
   font-weight: 900;
   letter-spacing: -0.02em;
   padding-top: 0.2rem;
@@ -1571,10 +1579,6 @@ select.form-field {
   padding: 0.55rem 1.2rem;
   font-size: 0.75rem;
   margin-top: 0.6rem;
-}
-
-.catalog-grid .catalog-card-info {
-  padding: 0.75rem 0.9rem;
 }
 
 /* Catalog Badges */

@@ -184,7 +184,9 @@ export default function AdminEmailPage() {
             <button className="cms-btn cms-btn-sm" onClick={markAllRead} title="Отметить все как прочитанные">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
-            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchEmails(); }}>Обновить</button>
+            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchEmails(); }} title="Обновить">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            </button>
           </div>
         </div>
 

@@ -123,7 +123,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       margin: 0 auto;
       background: #fff;
       border-radius: 14px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.13);
       position: relative;
     }
 
@@ -273,8 +272,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     .btn-print {
       padding: 11px 0;
-      background: #e3e3e3;
-      color: #555;
+      background: #3a3a3a;
+      color: #fff;
       border: none;
       border-radius: 8px;
       font-family: 'Montserrat', Arial, sans-serif;
@@ -283,7 +282,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       cursor: pointer;
       transition: background 0.18s;
     }
-    .btn-print:hover { background: #d5d5d5; }
+    .btn-print:hover { background: #555; }
     .btn-save {
       padding: 11px 0;
       background: #1a1a1a;
@@ -299,10 +298,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .btn-save:hover { background: #333; }
 
     @media print {
-      body { background: #fff; padding: 0; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { background: #e4e4e4; padding: 16px; }
       .btn-row { display: none; }
-      .receipt-wrap { box-shadow: none; border-radius: 0; max-width: 100%; }
-      .ticket-notch { background: #fff; }
+      .receipt-wrap { max-width: 100%; }
+      .ticket-notch { background: #e4e4e4; }
     }
   </style>
 </head>
