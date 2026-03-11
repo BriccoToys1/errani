@@ -428,6 +428,7 @@ export default function AdminSettingsPage() {
   const [dbStats, setDbStats] = useState({ users: 0, orders: 0, products: 0, pageViews: 0 });
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [featuredProductLink, setFeaturedProductLink] = useState("/tenderly-vibe");
+  const [deliveryEstimate, setDeliveryEstimate] = useState("Ориентировочный срок доставки ~ начало Мая");
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
@@ -462,6 +463,12 @@ export default function AdminSettingsPage() {
       .then((r) => r.json())
       .then((d) => { if (d.value) setFeaturedProductLink(d.value); })
       .catch(() => {});
+
+    // Fetch delivery estimate
+    fetch("/api/admin/settings?key=deliveryEstimate", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => { if (d.value) setDeliveryEstimate(d.value); })
+      .catch(() => {});
   }, [getToken, router]);
 
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => {
@@ -493,6 +500,11 @@ export default function AdminSettingsPage() {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ key: "featuredProductLink", value: featuredProductLink }),
+        }),
+        fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ key: "deliveryEstimate", value: deliveryEstimate }),
         }),
       ]);
       localStorage.setItem("cms_settings", JSON.stringify(settings));
@@ -683,6 +695,21 @@ export default function AdminSettingsPage() {
 
           {activeTab === "shipping" && (
             <div style={{ display: "grid", gap: "16px" }}>
+              <SettingSection title="Информация о доставке">
+                <label className="cms-label">
+                  Ориентировочный срок доставки
+                  <input
+                    className="cms-input"
+                    value={deliveryEstimate}
+                    onChange={(e) => setDeliveryEstimate(e.target.value)}
+                    placeholder="Например: Ориентировочный срок доставки ~ начало Мая"
+                  />
+                  <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "4px" }}>
+                    Отображается в плашке оформления заказа (в блоке Доставка). Оставьте пустым — не показывать.
+                  </div>
+                </label>
+              </SettingSection>
+
               <SettingSection title="Способы доставки">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
                   {SHIPPING.map((s) => (

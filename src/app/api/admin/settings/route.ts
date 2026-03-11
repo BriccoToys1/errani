@@ -3,7 +3,7 @@ import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 
 // Public keys that can be read without auth
-const PUBLIC_KEYS = new Set(['featuredProductLink']);
+const PUBLIC_KEYS = new Set(['featuredProductLink', 'deliveryEstimate']);
 
 // GET: Retrieve settings
 export async function GET(req: NextRequest) {

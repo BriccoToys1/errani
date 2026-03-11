@@ -38,6 +38,8 @@ export default function CartPage() {
   const [consentOferta, setConsentOferta] = useState(false);
   const [consentData, setConsentData] = useState(false);
 
+  const [deliveryEstimate, setDeliveryEstimate] = useState('Ориентировочный срок доставки ~ начало Мая');
+
   // Foreign card modal
   const [showForeignCard, setShowForeignCard] = useState(false);
   const [foreignForm, setForeignForm] = useState({ name: '', phone: '', email: '', contact: 'telegram', consent: false });
@@ -47,6 +49,13 @@ export default function CartPage() {
   useEffect(() => {
     setCart(getCart());
     setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/admin/settings?key=deliveryEstimate')
+      .then(r => r.json())
+      .then(d => { if (d.value) setDeliveryEstimate(d.value); })
+      .catch(() => {});
   }, []);
 
   const isRussia = formData.country === 'RU';
@@ -414,15 +423,13 @@ export default function CartPage() {
                   <span>Доставка</span>
                   <span>{formatPrice(shippingCost)}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--text-primary)', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '4px', marginTop: '2px' }}>
-                  <span>Итого к оплате</span>
-                  <span>{formatPrice(grandTotal)}</span>
-                </div>
+                {deliveryEstimate && (
+                  <div style={{ marginTop: '0.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0.8rem', background: 'rgba(255,255,255,0.04)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', fontSize: '0.77rem', color: 'var(--text-secondary)' }}>
+                    🗓 {deliveryEstimate}
+                  </div>
+                )}
               </div>
             )}
-            <div style={{ marginTop: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0.8rem', background: 'rgba(255,255,255,0.04)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', fontSize: '0.77rem', color: 'var(--text-secondary)' }}>
-              🗓 {lang === 'ru' ? 'Ориентировочный срок доставки ~ начало Мая' : 'Estimated delivery ~ beginning of May'}
-            </div>
           </div>
 
           {/* Foreign card warning */}
