@@ -33,6 +33,7 @@ export default async function TenderlyVibePage() {
         isLimited: product.isLimited,
         limitedEditionText: product.limitedEditionText,
         isAuthor: product.isAuthor,
+        characteristics: product.characteristics,
       }}
     />
   );
