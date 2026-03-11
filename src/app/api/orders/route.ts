@@ -29,6 +29,17 @@ export async function DELETE() {
 // GET all orders (admin only)
 export async function GET() {
   try {
+    // Auto-purge pending orders older than 2 hours
+    const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const stale = await prisma.order.findMany({
+      where: { status: 'pending', createdAt: { lt: cutoff } },
+      select: { id: true },
+    });
+    if (stale.length > 0) {
+      const ids = stale.map(o => o.id);
+      await prisma.orderItem.deleteMany({ where: { orderId: { in: ids } } });
+      await prisma.order.deleteMany({ where: { id: { in: ids } } });
+    }
     const orders = await prisma.order.findMany({
       where: { status: { not: 'pending' } },
       include: {

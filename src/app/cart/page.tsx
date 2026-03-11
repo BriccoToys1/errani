@@ -383,17 +383,8 @@ export default function CartPage() {
               <Field label={lang === 'ru' ? 'Дом' : 'House / Apt'} value={formData.house} error={errors.house}
                 onChange={(v) => setFormData({ ...formData, house: v })} />
               <div>
-                <Field label={lang === 'ru' ? 'Квартира' : 'Apartment'} value={formData.apartment}
+                <Field label={lang === 'ru' ? 'Квартира (если есть)' : 'Apartment (if any)'} value={formData.apartment}
                   onChange={(v) => setFormData({ ...formData, apartment: v })} />
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.4rem' }}>
-                  <input
-                    type="checkbox"
-                    checked={formData.noApartment}
-                    onChange={(e) => setFormData({ ...formData, noApartment: e.target.checked, apartment: '' })}
-                    style={{ accentColor: 'var(--orange)' }}
-                  />
-                  {lang === 'ru' ? 'Без квартиры (частный дом)' : 'No apartment (private house)'}
-                </label>
               </div>
             </div>
           </div>
@@ -596,7 +587,6 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
                 onChange={(e) => setForeignForm({ ...foreignForm, contact: e.target.value })}
               >
                 <option value="telegram">Telegram</option>
-                <option value="whatsapp">WhatsApp</option>
                 <option value="email">Email</option>
                 <option value="phone">Телефон</option>
               </select>
@@ -615,7 +605,7 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
               type="submit"
               className="cart-checkout-btn"
               disabled={submitting}
-              style={{ width: '100%', marginTop: '0.25rem' }}
+              style={{ width: '100%', marginTop: '1rem' }}
             >
               {submitting ? 'Отправка...' : 'Отправить заявку'}
             </button>

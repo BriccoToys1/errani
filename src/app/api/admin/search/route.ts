@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   const search = { contains: q, mode: 'insensitive' as const };
 
-  const [orders, products, inquiries] = await Promise.all([
+  const [orders, products, inquiries, users] = await Promise.all([
     prisma.order.findMany({
       where: {
         status: { not: 'pending' },
@@ -20,9 +20,16 @@ export async function GET(req: NextRequest) {
           { orderNumber: search },
           { customerName: search },
           { customerEmail: search },
+          { customerPhone: search },
+          { city: search },
+          { country: search },
+          { street: search },
+          { notes: search },
+          { paymentMethod: search },
+          { shippingMethod: search },
         ],
       },
-      take: 5,
+      take: 6,
       orderBy: { createdAt: 'desc' },
       select: { id: true, orderNumber: true, customerName: true, totalAmount: true, status: true },
     }),
@@ -32,9 +39,12 @@ export async function GET(req: NextRequest) {
           { name: search },
           { nameRu: search },
           { slug: search },
+          { description: search },
+          { descriptionRu: search },
+          { limitedEditionText: search },
         ],
       },
-      take: 5,
+      take: 6,
       select: { id: true, name: true, nameRu: true, slug: true, price: true },
     }),
     prisma.inquiry.findMany({
@@ -42,12 +52,26 @@ export async function GET(req: NextRequest) {
         OR: [
           { name: search },
           { email: search },
+          { phone: search },
           { message: search },
+          { source: search },
         ],
       },
-      take: 5,
+      take: 6,
       orderBy: { createdAt: 'desc' },
       select: { id: true, name: true, email: true, status: true },
+    }),
+    prisma.user.findMany({
+      where: {
+        OR: [
+          { name: search },
+          { email: search },
+          { phone: search },
+          { city: search },
+        ],
+      },
+      take: 4,
+      select: { id: true, name: true, email: true },
     }),
   ]);
 
@@ -56,6 +80,7 @@ export async function GET(req: NextRequest) {
       ...orders.map((o) => ({ type: 'order', label: `${o.orderNumber} — ${o.customerName}`, sub: `${o.totalAmount} ₽`, href: '/admin/orders' })),
       ...products.map((p) => ({ type: 'product', label: p.nameRu || p.name, sub: `${p.price} ₽`, href: '/admin/products' })),
       ...inquiries.map((i) => ({ type: 'inquiry', label: i.name, sub: i.email, href: '/admin/inquiries' })),
+      ...users.map((u) => ({ type: 'user', label: u.name, sub: u.email, href: '/admin/users' })),
     ],
   });
 }
