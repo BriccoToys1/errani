@@ -206,23 +206,23 @@ export function ProductContent({ product }: { product: Product }) {
               <p>{product.limitedEditionText || t(lang, 'product.limited.text')}</p>
             </div>
           )}
+        </section>
+      )}
 
-          {/* Characteristics */}
-          {characteristics.length > 0 && (
-            <div style={{ marginTop: '2rem' }}>
-              <h3 style={{ fontSize: '0.85rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                {lang === 'ru' ? 'Характеристики' : 'Specifications'}
-              </h3>
-              <div style={{ display: 'grid', gap: '0.5rem' }}>
-                {characteristics.map((c, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.9rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>{c.key}</span>
-                    <span style={{ color: 'var(--text-primary)', fontWeight: 500, textAlign: 'right' }}>{c.value}</span>
-                  </div>
-                ))}
+      {/* Characteristics — shown regardless of whether description exists */}
+      {characteristics.length > 0 && (
+        <section className="description-section">
+          <h2 className="description-heading" style={{ fontSize: '0.85rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            {lang === 'ru' ? 'Характеристики' : 'Specifications'}
+          </h2>
+          <div style={{ display: 'grid', gap: '0' }}>
+            {characteristics.map((c, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.9rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>{c.key}</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 500, textAlign: 'right' }}>{c.value}</span>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
         </section>
       )}
 

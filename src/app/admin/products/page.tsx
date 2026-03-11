@@ -229,8 +229,10 @@ interface Product {
   isPreorder: boolean;
   isAuthor: boolean;
   isLimited: boolean;
+  limitedEditionText: string;
   isActive: boolean;
   sortOrder: number;
+  characteristics: string;
   createdAt: string;
 }
 
@@ -244,6 +246,39 @@ const emptyProduct = {
 
 function slugify(text: string): string {
   return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function CharacteristicsEditor({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  let chars: Array<{ key: string; value: string }> = [];
+  try { chars = JSON.parse(value || '[]'); } catch { chars = []; }
+
+  const update = (newChars: typeof chars) => onChange(JSON.stringify(newChars));
+
+  return (
+    <div style={{ marginTop: "16px" }}>
+      <label className="cms-label" style={{ display: "block", marginBottom: "8px" }}>Характеристики</label>
+      {chars.map((c, i) => (
+        <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "6px", alignItems: "center" }}>
+          <input
+            className="cms-input"
+            placeholder="Название"
+            value={c.key}
+            onChange={(e) => { const nc = chars.map((x, j) => j === i ? { ...x, key: e.target.value } : x); update(nc); }}
+            style={{ flex: 1 }}
+          />
+          <input
+            className="cms-input"
+            placeholder="Значение"
+            value={c.value}
+            onChange={(e) => { const nc = chars.map((x, j) => j === i ? { ...x, value: e.target.value } : x); update(nc); }}
+            style={{ flex: 1 }}
+          />
+          <button type="button" className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => update(chars.filter((_, j) => j !== i))}>×</button>
+        </div>
+      ))}
+      <button type="button" className="cms-btn cms-btn-xs" onClick={() => update([...chars, { key: "", value: "" }])}>+ Добавить характеристику</button>
+    </div>
+  );
 }
 
 export default function AdminProductsPage() {
@@ -289,7 +324,7 @@ export default function AdminProductsPage() {
       images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
       isAuthor: product.isAuthor, isLimited: product.isLimited || false, limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "", isActive: product.isActive,
       sortOrder: product.sortOrder,
-      characteristics: (product as unknown as { characteristics?: string }).characteristics || "[]",
+      characteristics: product.characteristics || "[]",
     });
   };
 
@@ -318,7 +353,7 @@ export default function AdminProductsPage() {
       isLimited: product.isLimited || false,
       limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
       isActive: false,
-      characteristics: (product as unknown as { characteristics?: string }).characteristics || "[]",
+      characteristics: product.characteristics || "[]",
       sortOrder: product.sortOrder,
     });
   };
@@ -349,7 +384,7 @@ export default function AdminProductsPage() {
         isLimited: product.isLimited,
         limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
         isActive: !product.isActive,
-        characteristics: (product as unknown as { characteristics?: string }).characteristics || "[]",
+        characteristics: product.characteristics || "[]",
         sortOrder: product.sortOrder,
       }),
     });
@@ -628,26 +663,10 @@ export default function AdminProductsPage() {
               )}
 
               {/* Characteristics editor */}
-              <div style={{ marginTop: "16px" }}>
-                <label className="cms-label" style={{ display: "block", marginBottom: "8px" }}>Характеристики</label>
-                {(() => {
-                  let chars: Array<{ key: string; value: string }> = [];
-                  try { chars = JSON.parse(form.characteristics || '[]'); } catch { chars = []; }
-                  const updateChars = (newChars: typeof chars) => setForm({ ...form, characteristics: JSON.stringify(newChars) });
-                  return (
-                    <>
-                      {chars.map((c, i) => (
-                        <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "6px", alignItems: "center" }}>
-                          <input className="cms-input" placeholder="Название" value={c.key} onChange={(e) => { const nc = [...chars]; nc[i] = { ...nc[i], key: e.target.value }; updateChars(nc); }} style={{ flex: 1 }} />
-                          <input className="cms-input" placeholder="Значение" value={c.value} onChange={(e) => { const nc = [...chars]; nc[i] = { ...nc[i], value: e.target.value }; updateChars(nc); }} style={{ flex: 1 }} />
-                          <button type="button" className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => { updateChars(chars.filter((_, j) => j !== i)); }}>×</button>
-                        </div>
-                      ))}
-                      <button type="button" className="cms-btn cms-btn-xs" onClick={() => updateChars([...chars, { key: "", value: "" }])}>+ Добавить характеристику</button>
-                    </>
-                  );
-                })()}
-              </div>
+              <CharacteristicsEditor
+                value={form.characteristics}
+                onChange={(val) => setForm(prev => ({ ...prev, characteristics: val }))}
+              />
             </div>
             <div className="cms-modal-actions">
               <button className="cms-btn cms-btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Сохранение..." : "Сохранить"}</button>
