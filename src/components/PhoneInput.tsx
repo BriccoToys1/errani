@@ -49,9 +49,11 @@ export function PhoneInput({ value, onChange, countryCode = 'RU', error, label }
     return PHONE_CODES.find(p => p.code === countryCode) || PHONE_CODES[0];
   });
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const userChangedRef = useRef(false);
 
-  // Update selected code when countryCode prop changes
+  // Sync with countryCode prop only if user hasn't manually picked a code
   useEffect(() => {
+    if (userChangedRef.current) return;
     const found = PHONE_CODES.find(p => p.code === countryCode);
     if (found) setSelectedCode(found);
   }, [countryCode]);
@@ -68,6 +70,7 @@ export function PhoneInput({ value, onChange, countryCode = 'RU', error, label }
   }, []);
 
   const handleSelectCode = (code: typeof PHONE_CODES[0]) => {
+    userChangedRef.current = true;
     setSelectedCode(code);
     setIsOpen(false);
     const numbers = value.replace(/\D/g, '').replace(/^7|^8/, '');

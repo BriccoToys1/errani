@@ -308,22 +308,6 @@ export default function CartPage() {
               {t(lang, 'cart.checkout')}
             </button>
           </div>
-          {isRussia && (
-            <div style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.6rem', lineHeight: 1.9 }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem' }}>
-                <span>Товары ({itemCount} шт.)</span>
-                <span>{formatPrice(total)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem' }}>
-                <span>Доставка ({itemCount <= 2 ? '1–2 шт.' : itemCount <= 5 ? '3–5 шт.' : '6+ шт.'})</span>
-                <span>{formatPrice(shippingCost)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '4px', marginTop: '2px' }}>
-                <span>Итого</span>
-                <span>{formatPrice(grandTotal)}</span>
-              </div>
-            </div>
-          )}
         </>
       ) : (
         <form onSubmit={handleSubmit}>
@@ -429,10 +413,12 @@ export default function CartPage() {
             </div>
             {isRussia && (
               <div style={{ marginTop: '0.85rem', padding: '0.75rem 1rem', background: 'rgba(232,114,42,0.07)', borderRadius: '8px', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Товары ({itemCount} шт.)</span>
-                  <span>{formatPrice(total)}</span>
-                </div>
+                {cart.map(item => (
+                  <div key={item.productId} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{item.name} — {item.quantity} шт.</span>
+                    <span>{formatPrice(item.price * item.quantity)}</span>
+                  </div>
+                ))}
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Доставка</span>
                   <span>{formatPrice(shippingCost)}</span>
@@ -441,14 +427,11 @@ export default function CartPage() {
                   <span>Итого к оплате</span>
                   <span>{formatPrice(grandTotal)}</span>
                 </div>
-                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  {itemCount <= 2 ? 'Тариф: 1–2 шт. — 350 ₽' : itemCount <= 5 ? 'Тариф: 3–5 шт. — 470 ₽' : 'Тариф: 6+ шт. — 790 ₽'}
-                </div>
               </div>
             )}
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.75rem', lineHeight: 1.6 }}>
-              {lang === 'ru' ? 'Ориентировочный срок доставки ~ начало Мая' : 'Estimated delivery ~ beginning of May'}
-            </p>
+            <div style={{ marginTop: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0.8rem', background: 'rgba(255,255,255,0.04)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', fontSize: '0.77rem', color: 'var(--text-secondary)' }}>
+              🗓 {lang === 'ru' ? 'Ориентировочный срок доставки ~ начало Мая' : 'Estimated delivery ~ beginning of May'}
+            </div>
           </div>
 
           {/* Foreign card warning */}
@@ -518,16 +501,18 @@ export default function CartPage() {
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '0.5rem' }}>
             {isRussia ? 'Оплата через ЮKassa' : (lang === 'ru' ? 'Оплата картой' : 'Pay by card')}
           </p>
-          <p style={{ fontSize: '0.8rem', textAlign: 'center', marginTop: '1rem' }}>
-            <a
-              href="https://t.me/errani_tarot"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--orange)', textDecoration: 'underline' }}
-            >
-              {lang === 'ru' ? 'Связаться с продавцом' : 'Contact seller'}
-            </a>
-          </p>
+          {!isRussia && (
+            <p style={{ fontSize: '0.8rem', textAlign: 'center', marginTop: '1rem' }}>
+              <a
+                href="https://t.me/errani_tarot"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--orange)', textDecoration: 'underline' }}
+              >
+                {lang === 'ru' ? 'Связаться с продавцом' : 'Contact seller'}
+              </a>
+            </p>
+          )}
         </form>
       )}
       {showForeignCard && (

@@ -54,7 +54,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, phone, country, customCountry, oblast, city, zipCode, street, house, apartment, shippingMethod, items } = body as {
+    const { name, email, phone, country, customCountry, oblast, city, zipCode, street, house, apartment, shippingMethod, items, shippingCost: shippingCostInput } = body as {
       name: string;
       email: string;
       phone: string;
@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
       apartment: string;
       shippingMethod: string;
       items: OrderItemInput[];
+      shippingCost?: number;
     };
 
     // Validate
@@ -95,6 +96,8 @@ export async function POST(req: NextRequest) {
         price: product.price,
       };
     });
+    // Add shipping cost if provided (Russia only)
+    totalAmount += Number(shippingCostInput) || 0;
 
     // Create order
     const order = await prisma.order.create({

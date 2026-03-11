@@ -19,6 +19,7 @@ interface Order {
   customerEmail: string;
   customerPhone: string;
   country: string;
+  oblast: string;
   city: string;
   zipCode: string;
   street: string;
@@ -264,6 +265,14 @@ export default function AdminOrdersPage() {
             </div>
             <div className="cms-modal-actions">
               <button className="cms-btn cms-btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Сохранение..." : "Сохранить"}</button>
+              <a
+                href={`/api/admin/orders/${selected.id}/receipt?token=${getToken()}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cms-btn"
+              >
+                📄 Чек (PDF)
+              </a>
               <button className="cms-btn" onClick={() => setSelected(null)}>Отмена</button>
             </div>
           </div>

@@ -211,7 +211,7 @@ export function ProductContent({ product }: { product: Product }) {
 
       {/* Characteristics — shown regardless of whether description exists */}
       {characteristics.length > 0 && (
-        <section className="description-section">
+        <section className="description-section" style={{ paddingTop: '3rem' }}>
           <h2 className="description-heading" style={{ fontSize: '0.85rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
             {lang === 'ru' ? 'Характеристики' : 'Specifications'}
           </h2>
