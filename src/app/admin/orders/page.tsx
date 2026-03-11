@@ -115,11 +115,17 @@ export default function AdminOrdersPage() {
     if (!confirm("Удалить все неоплаченные (pending) заказы?")) return;
     setDeleting(true);
     const token = getToken();
-    const res = await fetch("/api/orders", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) {
-      const data = await res.json();
-      notify(`Удалено ${data.deleted} неоплаченных заказов`);
-      fetchOrders();
+    try {
+      const res = await fetch("/api/orders", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        notify(`Удалено ${data.deleted} неоплаченных заказов`);
+        fetchOrders();
+      } else {
+        notify("Ошибка при удалении");
+      }
+    } catch {
+      notify("Ошибка сети");
     }
     setDeleting(false);
   };
@@ -148,13 +154,9 @@ export default function AdminOrdersPage() {
             <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>{orders.length} всего</span>
             <button
               className="cms-btn cms-btn-sm cms-btn-danger"
-              onClick={async () => {
-                if (!confirm("Удалить все неоплаченные (pending) заказы?")) return;
-                const token = getToken();
-                const res = await fetch("/api/orders", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-                if (res.ok) { const d = await res.json(); notify(`Удалено ${d.deleted} неоплаченных заказов`); fetchOrders(); }
-              }}
-            >Удалить неоплаченные</button>
+              onClick={deleteUnpaid}
+              disabled={deleting}
+            >{deleting ? "Удаление..." : "Удалить неоплаченные"}</button>
             <a href="/api/admin/export?type=orders&format=csv" className="cms-btn cms-btn-sm" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</a>
             <a href="/api/admin/export?type=orders&format=xls" className="cms-btn cms-btn-sm" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> XLS</a>
             <button className="cms-btn cms-btn-sm" onClick={fetchOrders}>Обновить</button>
@@ -215,8 +217,8 @@ export default function AdminOrdersPage() {
                     <td>{order.shippingMethod || "\u2014"}</td>
                     <td>{new Date(order.createdAt).toLocaleDateString("ru-RU")}</td>
                     <td style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openOrder(order)}>
-                        Изменить
+                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openOrder(order)} title="Изменить">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                       </button>
                       <a
                         href={`/api/admin/orders/${order.id}/receipt?token=${getToken()}`}

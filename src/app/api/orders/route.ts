@@ -41,7 +41,6 @@ export async function GET() {
       await prisma.order.deleteMany({ where: { id: { in: ids } } });
     }
     const orders = await prisma.order.findMany({
-      where: { status: { not: 'pending' } },
       include: {
         items: {
           include: {

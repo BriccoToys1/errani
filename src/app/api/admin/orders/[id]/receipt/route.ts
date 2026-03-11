@@ -67,6 +67,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const fileTime = timeStr.replace(/:/g, '-');
   const saveFilename = `${order.orderNumber}_${fileDate}_${fileTime}`;
 
+  const now = new Date();
+  const docDateStr = now.toLocaleString('ru-RU', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    timeZone: 'Europe/Moscow', hour12: false,
+  });
+
   const addressParts = [
     order.zipCode,
     order.oblast,
@@ -100,75 +107,44 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>
+    @page { margin: 0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Montserrat', Arial, sans-serif;
       font-size: 12px;
       color: #1a1a1a;
-      background: #f0f0f0;
+      background: #e4e4e4;
       padding: 28px 16px 40px;
     }
-    .btn-row {
-      display: flex;
-      gap: 10px;
-      justify-content: center;
-      margin-bottom: 20px;
-    }
-    .btn-print {
-      padding: 9px 22px;
-      background: #e3e3e3;
-      color: #555;
-      border: none;
-      border-radius: 7px;
-      font-family: 'Montserrat', Arial, sans-serif;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      letter-spacing: 0.02em;
-      transition: background 0.18s;
-    }
-    .btn-print:hover { background: #d5d5d5; }
-    .btn-save {
-      padding: 9px 22px;
-      background: #1a1a1a;
-      color: #fff;
-      border: none;
-      border-radius: 7px;
-      font-family: 'Montserrat', Arial, sans-serif;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      letter-spacing: 0.02em;
-      transition: background 0.18s;
-    }
-    .btn-save:hover { background: #333; }
+
+    /* ── Receipt card ──────────────────────────── */
     .receipt-wrap {
-      max-width: 540px;
+      max-width: 520px;
       margin: 0 auto;
       background: #fff;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 2px 24px rgba(0,0,0,0.10);
+      border-radius: 14px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.13);
+      position: relative;
     }
+
+    /* ── Header ───────────────────────────────── */
     .receipt-header {
-      padding: 22px 26px 18px;
+      padding: 22px 24px 18px;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      border-bottom: 0.5px solid #e8e8e8;
     }
     .brand {
-      font-size: 26px;
+      font-size: 28px;
       font-weight: 900;
       letter-spacing: -0.02em;
       color: #1a1a1a;
       line-height: 1;
-      text-transform: lowercase;
     }
     .brand-sub {
       font-size: 10px;
       color: #bbb;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
       margin-top: 4px;
       font-weight: 500;
     }
@@ -192,79 +168,94 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .status-delivered { background: #d1fae5; color: #065f46; }
     .status-cancelled { background: #fee2e2; color: #991b1b; }
 
-    .receipt-body { padding: 18px 26px 22px; display: flex; flex-direction: column; gap: 10px; }
+    /* ── Ticket tear line ─────────────────────── */
+    .ticket-tear {
+      position: relative;
+      height: 0;
+      border-top: 1.5px dashed #ccc;
+      margin: 0;
+      overflow: visible;
+    }
+    .ticket-notch {
+      position: absolute;
+      top: -12px;
+      width: 24px;
+      height: 24px;
+      background: #e4e4e4;
+      border-radius: 50%;
+      z-index: 2;
+    }
+    .ticket-notch-left  { left: -12px; }
+    .ticket-notch-right { right: -12px; }
+
+    /* ── Body ─────────────────────────────────── */
+    .receipt-body { padding: 18px 24px 18px; display: flex; flex-direction: column; gap: 10px; }
 
     .info-block {
       background: #fafafa;
-      border: 0.5px solid #e0e0e0;
+      border: 1px dashed #d8d8d8;
       border-radius: 8px;
-      padding: 13px 15px;
+      padding: 12px 14px;
     }
     .section-title {
       font-size: 9px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.12em;
-      color: #bbb;
-      margin-bottom: 9px;
+      color: #c0c0c0;
+      margin-bottom: 8px;
     }
     .row {
       display: flex;
       justify-content: space-between;
       gap: 8px;
-      padding: 2.5px 0;
-      font-size: 11.5px;
+      padding: 2px 0;
+      font-size: 11px;
     }
-    .row .lbl { color: #999; white-space: nowrap; font-weight: 500; }
-    .row .val { font-weight: 600; text-align: right; word-break: break-word; max-width: 65%; }
+    .row .lbl { color: #aaa; white-space: nowrap; font-weight: 500; }
+    .row .val { font-weight: 600; text-align: right; word-break: break-word; max-width: 68%; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
     table { width: 100%; border-collapse: collapse; }
     th {
-      padding: 6px 4px;
+      padding: 5px 4px;
       font-size: 9px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      color: #bbb;
-      border-bottom: 0.5px solid #e8e8e8;
+      color: #c0c0c0;
+      border-bottom: 1px dashed #d8d8d8;
       text-align: left;
     }
     th:nth-child(2) { text-align: center; }
     th:nth-child(3), th:nth-child(4) { text-align: right; }
     td {
       padding: 7px 4px;
-      border-bottom: 0.5px solid #f2f2f2;
-      font-size: 11.5px;
+      border-bottom: 1px dashed #eeeeee;
+      font-size: 11px;
       font-weight: 500;
     }
+    tbody tr:last-child td { border-bottom: none; }
+
     .total-section {
-      margin-top: 12px;
+      margin-top: 10px;
       padding-top: 10px;
-      border-top: 0.5px solid #e8e8e8;
+      border-top: 1px dashed #d8d8d8;
       display: flex;
       justify-content: flex-end;
     }
-    .total-inner { min-width: 180px; }
-    .total-row {
+    .total-inner { min-width: 160px; }
+    .grand-total {
       display: flex;
       justify-content: space-between;
       gap: 16px;
-      padding: 2px 0;
-      font-size: 11.5px;
-      font-weight: 500;
-    }
-    .grand-total {
       font-size: 15px;
       font-weight: 900;
-      margin-top: 7px;
-      padding-top: 7px;
-      border-top: 0.5px solid #e0e0e0;
     }
 
+    /* ── Footer ──────────────────────────────── */
     .receipt-footer {
-      padding: 13px 26px;
-      border-top: 0.5px solid #f0f0f0;
+      padding: 14px 24px;
       text-align: center;
       font-size: 10px;
       color: #ccc;
@@ -272,18 +263,50 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       font-weight: 500;
     }
 
+    /* ── Action buttons (after card) ─────────── */
+    .btn-row {
+      max-width: 520px;
+      margin: 16px auto 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .btn-print {
+      padding: 11px 0;
+      background: #e3e3e3;
+      color: #555;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Montserrat', Arial, sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.18s;
+    }
+    .btn-print:hover { background: #d5d5d5; }
+    .btn-save {
+      padding: 11px 0;
+      background: #1a1a1a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Montserrat', Arial, sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.18s;
+    }
+    .btn-save:hover { background: #333; }
+
     @media print {
       body { background: #fff; padding: 0; }
       .btn-row { display: none; }
       .receipt-wrap { box-shadow: none; border-radius: 0; max-width: 100%; }
+      .ticket-notch { background: #fff; }
     }
   </style>
 </head>
 <body>
-  <div class="btn-row">
-    <button class="btn-print" onclick="window.print()">Распечатать</button>
-    <button class="btn-save" onclick="savePdf()">Сохранить</button>
-  </div>
   <script>
     function savePdf() {
       var orig = document.title;
@@ -304,6 +327,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         <div class="order-date">${dateStr} в ${timeStr}</div>
         <span class="status-badge ${statusCls}">${statusLabel}</span>
       </div>
+    </div>
+
+    <div class="ticket-tear">
+      <div class="ticket-notch ticket-notch-left"></div>
+      <div class="ticket-notch ticket-notch-right"></div>
     </div>
 
     <div class="receipt-body">
@@ -344,18 +372,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         </table>
         <div class="total-section">
           <div class="total-inner">
-            <div class="total-row grand-total"><span>Итого к оплате</span><span>${fmt(order.totalAmount)}</span></div>
+            <div class="grand-total"><span>Итого</span><span>${fmt(order.totalAmount)}</span></div>
           </div>
         </div>
       </div>
 
-      ${order.notes ? `<div class="info-block"><div class="section-title">Заметки</div><div style="font-size:11.5px;color:#555;font-weight:500;line-height:1.6;">${order.notes}</div></div>` : ''}
+      ${order.notes ? `<div class="info-block"><div class="section-title">Заметки</div><div style="font-size:11px;color:#555;font-weight:500;line-height:1.6;">${order.notes}</div></div>` : ''}
+    </div>
+
+    <div class="ticket-tear" style="margin-bottom: 0;">
+      <div class="ticket-notch ticket-notch-left"></div>
+      <div class="ticket-notch ticket-notch-right"></div>
     </div>
 
     <div class="receipt-footer">
-      Документ сформирован ${new Date().toLocaleString('ru-RU')}<br>
-      errani · errani.ru · Подтверждение заказа
+      Документ сформирован ${docDateStr} (GMT+3 МСК)<br>
+      errani.ru · Подтверждение заказа
     </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-print" onclick="window.print()">Распечатать</button>
+    <button class="btn-save" onclick="savePdf()">Сохранить</button>
   </div>
 </body>
 </html>`;
@@ -364,3 +402,4 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   });
 }
+
