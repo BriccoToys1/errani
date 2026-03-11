@@ -591,7 +591,6 @@ select.form-field {
   border: 1px solid var(--border);
   background: var(--bg-surface);
   border-radius: 8px;
-  overflow: hidden;
   transition: border-color 0.2s;
 }
 
@@ -611,6 +610,7 @@ select.form-field {
   background: transparent;
   border: none;
   border-right: 1px solid var(--border);
+  border-radius: 8px 0 0 8px;
   cursor: pointer;
   font-family: var(--font-body);
   color: var(--text);

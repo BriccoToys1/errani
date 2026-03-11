@@ -419,15 +419,17 @@ export default function CartPage() {
                     <span>{formatPrice(item.price * item.quantity)}</span>
                   </div>
                 ))}
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Доставка</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span>Доставка</span>
+                    {deliveryEstimate && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.15rem 0.6rem', background: 'rgba(255,255,255,0.04)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', fontSize: '0.72rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        🗓 {deliveryEstimate}
+                      </span>
+                    )}
+                  </span>
                   <span>{formatPrice(shippingCost)}</span>
                 </div>
-                {deliveryEstimate && (
-                  <div style={{ marginTop: '0.5rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem 0.8rem', background: 'rgba(255,255,255,0.04)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', fontSize: '0.77rem', color: 'var(--text-secondary)' }}>
-                    🗓 {deliveryEstimate}
-                  </div>
-                )}
               </div>
             )}
           </div>
