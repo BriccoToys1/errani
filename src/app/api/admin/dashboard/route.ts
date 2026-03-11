@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const paidFilter = { status: { not: 'pending' } };
+    const paidFilter = { status: { in: ['paid', 'assembling', 'shipped', 'in_transit', 'delivered'] } };
     const [orderCount, productCount, totalRevenue, pendingCount, recentOrders, inquiryCount, newInquiryCount, newOrdersCount] = await Promise.all([
       prisma.order.count({ where: paidFilter }),
       prisma.product.count(),

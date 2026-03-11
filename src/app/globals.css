@@ -408,17 +408,11 @@ img {
 .footer-inner {
   max-width: 1200px;
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 3rem;
-}
-
-@media (min-width: 768px) {
-  .footer-inner {
-    grid-template-columns: 1fr auto;
-    gap: 3rem;
-    align-items: center;
-  }
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2rem;
 }
 
 .footer-brand {
@@ -437,16 +431,8 @@ img {
   display: flex;
   gap: 1rem;
   align-items: center;
-}
-
-@media (max-width: 767px) {
-  .footer-inner {
-    text-align: center;
-  }
-  .footer-socials {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .footer-socials a {
@@ -2079,14 +2065,21 @@ select.form-field {
   .catalog-toolbar {
     flex-direction: column;
     align-items: flex-start;
+    gap: 0.75rem;
   }
   .catalog-sort-wrapper {
     margin-left: 0;
+    align-self: flex-start;
   }
   .catalog-sort-select {
-    width: 0;
-    padding: 0.5rem 1.75rem 0.5rem 0;
-    overflow: hidden;
+    position: absolute;
+    opacity: 0;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+  }
+  .catalog-sort-icon {
+    padding: 0.5rem 0.85rem;
   }
 }
 

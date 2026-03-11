@@ -45,7 +45,6 @@ export const COUNTRIES = [
   { code: 'RU', name: 'Россия' },
   { code: 'BY', name: 'Беларусь' },
   { code: 'KZ', name: 'Казахстан' },
-  { code: 'UA', name: 'Украина' },
   { code: 'UZ', name: 'Узбекистан' },
   { code: 'KG', name: 'Кыргызстан' },
   { code: 'TJ', name: 'Таджикистан' },

@@ -280,7 +280,7 @@ export default function AdminDashboard() {
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8722a" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>}
               label="Заказы (оплач.)"
               value={data?.orderCount ?? 0}
-              sub={data?.pendingCount ? `${data.pendingCount} ожидают` : `${analytics?.today.orders ?? 0} сегодня`}
+              sub={data?.pendingCount ? `${data.pendingCount} ждут оплаты` : `${analytics?.today.orders ?? 0} сегодня`}
               color="rgba(232, 114, 42, 0.15)"
             />
             <StatCard
