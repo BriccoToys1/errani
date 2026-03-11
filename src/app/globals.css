@@ -830,9 +830,6 @@ select.form-field {
   .product-image-col {
     min-height: 50vh;
   }
-  .product-image-col .product-carousel img {
-    object-fit: contain !important;
-  }
   /* Ensure header always visible above photo on product pages */
   .site-header {
     background: rgba(8, 8, 8, 0.9);

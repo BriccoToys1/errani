@@ -96,6 +96,16 @@ export default function AdminOrdersPage() {
     setSaving(false);
   };
 
+  const deleteOrder = async (order: Order) => {
+    if (!confirm(`Удалить заказ ${order.orderNumber}?`)) return;
+    const token = getToken();
+    const res = await fetch(`/api/orders/${order.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) {
+      notify(`Заказ ${order.orderNumber} удалён`);
+      fetchOrders();
+    }
+  };
+
   const notify = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(""), 3000);
@@ -195,10 +205,15 @@ export default function AdminOrdersPage() {
                     </td>
                     <td>{order.shippingMethod || "\u2014"}</td>
                     <td>{new Date(order.createdAt).toLocaleDateString("ru-RU")}</td>
-                    <td>
+                    <td style={{ display: "flex", gap: "4px" }}>
                       <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openOrder(order)} title="Edit">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                       </button>
+                      {order.status === "pending" && (
+                        <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => deleteOrder(order)} title="Удалить">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -252,9 +267,15 @@ export default function AdminOrdersPage() {
               <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
                 <label style={{ fontSize: "13px" }}>
                   <strong>Статус:</strong>
-                  <select className="cms-select" value={editStatus} onChange={(e) => setEditStatus(e.target.value)} style={{ display: "block", marginTop: "6px", width: "180px" }}>
-                    {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>)}
-                  </select>
+                  {selected.status === "pending" ? (
+                    <div style={{ marginTop: "6px", padding: "6px 10px", background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: "6px", fontSize: "12px", color: "var(--cms-text-muted)", width: "180px" }}>
+                      Ожидает оплаты — статус не редактируется
+                    </div>
+                  ) : (
+                    <select className="cms-select" value={editStatus} onChange={(e) => setEditStatus(e.target.value)} style={{ display: "block", marginTop: "6px", width: "180px" }}>
+                      {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>)}
+                    </select>
+                  )}
                 </label>
                 <label style={{ flex: 1, fontSize: "13px" }}>
                   <strong>Заметки:</strong>
