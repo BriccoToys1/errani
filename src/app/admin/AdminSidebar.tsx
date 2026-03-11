@@ -55,7 +55,7 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0 });
+  const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0, newEmails: 0 });
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
