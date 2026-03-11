@@ -19,7 +19,6 @@ interface SearchResult {
 const NAV_ITEMS = [
   { section: 'Главное' },
   { href: '/admin', icon: 'dashboard', label: 'Дашборд' },
-  { href: '/admin/analytics', icon: 'chart', label: 'Аналитика' },
   { section: 'Управление' },
   { href: '/admin/orders', icon: 'orders', label: 'Заказы', countKey: 'newOrders' },
   { href: '/admin/products', icon: 'products', label: 'Товары' },

@@ -14,13 +14,6 @@ interface ContentItem {
 const LANGUAGES = [
   { code: "ru", name: "Русский" },
   { code: "en", name: "English" },
-  { code: "it", name: "Italiano" },
-  { code: "es", name: "Español" },
-  { code: "fr", name: "Français" },
-  { code: "de", name: "Deutsch" },
-  { code: "tr", name: "Türkçe" },
-  { code: "ar", name: "العربية" },
-  { code: "zh", name: "中文" },
 ];
 
 const CONTENT_SECTIONS = [
