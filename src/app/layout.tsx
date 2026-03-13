@@ -60,6 +60,11 @@ export const metadata: Metadata = {
     icon: '/logos/my_logo.png',
     apple: '/logos/my_logo.png',
   },
+  verification: {
+    other: {
+      'p:domain_verify': '51403cd5dee1f8bfed79e2518ed7c1c1',
+    },
+  },
 };
 
 export default function RootLayout({
