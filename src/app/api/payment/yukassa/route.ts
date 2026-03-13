@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { sendOrderConfirmation, sendReceiptEmail } from '@/lib/email';
+import { sendOrderConfirmation } from '@/lib/email';
 import { buildReceiptHtml } from '@/lib/receipt-builder';
 import { htmlToPdf } from '@/lib/pdf';
 
@@ -27,22 +27,13 @@ export async function POST(req: NextRequest) {
           include: { items: { include: { product: true } } },
         });
         console.log(`Order ${orderId} marked as paid`);
-        await sendOrderConfirmation({
-          orderNumber: order.orderNumber,
-          customerName: order.customerName,
-          customerEmail: order.customerEmail,
-          customerPhone: order.customerPhone,
-          city: order.city,
-          shippingMethod: order.shippingMethod,
-          totalAmount: order.totalAmount,
-          items: order.items.map(i => ({
-            name: i.product?.name ?? i.productId,
-            quantity: i.quantity,
-            price: i.price,
-          })),
-        });
 
-        // Generate receipt PDF and send as email attachment
+        // Compute shipping cost
+        const itemsSubtotal = order.items.reduce((s, i) => s + i.price * i.quantity, 0);
+        const shippingCost = Math.round(Math.max(0, order.totalAmount - itemsSubtotal));
+
+        // Generate receipt PDF
+        let receiptPdf: Buffer | undefined;
         try {
           const receiptHtml = buildReceiptHtml(
             {
@@ -56,16 +47,28 @@ export async function POST(req: NextRequest) {
             },
             true // forPdf: no buttons/scripts
           );
-          const pdfBuffer = await htmlToPdf(receiptHtml);
-          await sendReceiptEmail({
-            orderNumber: order.orderNumber,
-            customerEmail: order.customerEmail,
-            receiptPdf: pdfBuffer,
-          });
+          receiptPdf = await htmlToPdf(receiptHtml);
         } catch (pdfErr) {
-          console.error('Failed to generate/send receipt PDF:', pdfErr);
-          // Non-critical — order confirmation was already sent
+          console.error('Failed to generate receipt PDF:', pdfErr);
         }
+
+        // Send single email with order details + PDF attachment
+        await sendOrderConfirmation({
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          customerEmail: order.customerEmail,
+          customerPhone: order.customerPhone,
+          city: order.city,
+          shippingMethod: order.shippingMethod,
+          shippingCost,
+          totalAmount: order.totalAmount,
+          items: order.items.map(i => ({
+            name: i.product?.name ?? i.productId,
+            quantity: i.quantity,
+            price: i.price,
+          })),
+          receiptPdf,
+        });
         break;
       }
 
