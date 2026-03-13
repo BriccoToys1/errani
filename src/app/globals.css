@@ -1400,7 +1400,7 @@ select.form-field {
 
 .catalog-card-title {
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   line-height: 1.35;
   color: var(--text-primary);
 }
@@ -1466,7 +1466,8 @@ select.form-field {
 }
 
 .catalog-card-cart-btn {
-  display: inline-block;
+  display: block;
+  width: 100%;
   margin-top: 0.5rem;
   padding: 0.45rem 1rem;
   background: var(--orange);
@@ -1478,9 +1479,8 @@ select.form-field {
   font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
-  white-space: nowrap;
   transition: background 0.25s, transform 0.2s;
-  align-self: flex-start;
+  text-align: center;
 }
 .catalog-card-cart-btn:hover {
   background: #d15e10;
