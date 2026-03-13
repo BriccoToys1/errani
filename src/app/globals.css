@@ -808,7 +808,6 @@ select.form-field {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  overflow: hidden;
 }
 
 /* Ambient glow orbs */
@@ -817,6 +816,7 @@ select.form-field {
   border-radius: 50%;
   pointer-events: none;
   filter: blur(120px);
+  overflow: hidden;
 }
 
 .preorder-orb-1 {
@@ -908,6 +908,7 @@ select.form-field {
   letter-spacing: -0.03em;
   margin-bottom: 1.1rem;
   overflow: visible;
+  padding-bottom: 0.15em;
 }
 
 .preorder-title em {
