@@ -39,6 +39,10 @@ export default function HomePage() {
             <span>Vibe</span>
           </h1>
 
+          <p className="preorder-spec anim-fade-up anim-fade-up-d2">
+            {lang === 'ru' ? '78 карт · Лимитированный тираж' : '78 cards · Limited edition'}
+          </p>
+
           <div className="preorder-badge anim-fade-up anim-fade-up-d3">
             {lang === 'ru' ? 'Предзаказ открыт' : 'Pre-order open'}
           </div>
