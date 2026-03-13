@@ -31,7 +31,6 @@ export default function HomePage() {
         {/* ── Text Column ── */}
         <div className="preorder-text">
           <div className="preorder-eyebrow anim-fade-up">
-            <span className="preorder-dot" />
             {lang === 'ru' ? 'Авторская колода Таро' : 'Original Tarot Deck'}
           </div>
 
@@ -40,12 +39,7 @@ export default function HomePage() {
             <span>Vibe</span>
           </h1>
 
-          <p className="preorder-spec anim-fade-up anim-fade-up-d2">
-            {lang === 'ru' ? '78 карт · Авторский арт · Лимитированный тираж' : '78 cards · Original art · Limited edition'}
-          </p>
-
           <div className="preorder-badge anim-fade-up anim-fade-up-d3">
-            <span className="preorder-badge-dot" />
             {lang === 'ru' ? 'Предзаказ открыт' : 'Pre-order open'}
           </div>
 
@@ -68,8 +62,8 @@ export default function HomePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 8l4 4m0 0l-4 4m4-4H3" />
               </svg>
             </Link>
-            <Link href="/catalog" className="preorder-btn-ghost">
-              {lang === 'ru' ? 'Каталог' : 'Catalog'}
+            <Link href="/tenderly-vibe" className="preorder-btn-ghost">
+              {lang === 'ru' ? 'Подробнее' : 'Learn more'}
             </Link>
           </div>
         </div>
@@ -78,7 +72,7 @@ export default function HomePage() {
         <div className="preorder-visual anim-fade-up anim-fade-up-d2">
           <div className="preorder-img-wrap">
             <Image
-              src="/media/photo-1.jpeg"
+              src="/media/photo-11.jpeg"
               alt="Tenderly Vibe Tarot"
               fill
               className="preorder-img"
