@@ -59,8 +59,16 @@ const emptyManualForm = {
   customerName: "",
   customerEmail: "",
   customerPhone: "",
-  city: "",
   country: "RU",
+  oblast: "",
+  city: "",
+  zipCode: "",
+  street: "",
+  house: "",
+  apartment: "",
+  shippingMethod: "",
+  paymentMethod: "cash",
+  currency: "RUB",
   notes: "",
   status: "unpaid",
   totalAmount: "",
@@ -210,8 +218,16 @@ export default function AdminOrdersPage() {
         customerName: manualForm.customerName,
         customerEmail: manualForm.customerEmail,
         customerPhone: manualForm.customerPhone,
-        city: manualForm.city,
         country: manualForm.country,
+        oblast: manualForm.oblast,
+        city: manualForm.city,
+        zipCode: manualForm.zipCode,
+        street: manualForm.street,
+        house: manualForm.house,
+        apartment: manualForm.apartment,
+        shippingMethod: manualForm.shippingMethod,
+        paymentMethod: manualForm.paymentMethod,
+        currency: manualForm.currency,
         notes: manualForm.notes,
         status: manualForm.status,
         totalAmount: Number(manualForm.totalAmount),
@@ -443,15 +459,17 @@ export default function AdminOrdersPage() {
       {/* New Manual Order Modal */}
       {showNewOrder && (
         <div className="cms-modal-overlay" onClick={() => setShowNewOrder(false)}>
-          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580 }}>
+          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 680 }}>
             <div className="cms-modal-header">
               <h3>Добавить заказ вручную</h3>
               <button className="cms-modal-close" onClick={() => setShowNewOrder(false)}>&times;</button>
             </div>
-            <div className="cms-modal-body" style={{ maxHeight: "65vh", overflowY: "auto" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <div className="cms-modal-body" style={{ maxHeight: "72vh", overflowY: "auto" }}>
+              {/* ── Клиент ── */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Клиент</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
                 <label className="cms-label">
-                  Имя клиента *
+                  Имя и фамилия *
                   <input className="cms-input" value={manualForm.customerName} onChange={(e) => setManualForm({ ...manualForm, customerName: e.target.value })} placeholder="Имя Фамилия" style={{ marginTop: 4 }} />
                 </label>
                 <label className="cms-label">
@@ -462,14 +480,105 @@ export default function AdminOrdersPage() {
                   Телефон
                   <input className="cms-input" value={manualForm.customerPhone} onChange={(e) => setManualForm({ ...manualForm, customerPhone: e.target.value })} placeholder="+7 999 000 00 00" style={{ marginTop: 4 }} />
                 </label>
+              </div>
+
+              {/* ── Адрес доставки ── */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Адрес доставки</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                <label className="cms-label">
+                  Страна
+                  <select className="cms-select" value={manualForm.country} onChange={(e) => setManualForm({ ...manualForm, country: e.target.value })} style={{ marginTop: 4 }}>
+                    <option value="RU">Россия</option>
+                    <option value="BY">Беларусь</option>
+                    <option value="KZ">Казахстан</option>
+                    <option value="UA">Украина</option>
+                    <option value="UZ">Узбекистан</option>
+                    <option value="AZ">Азербайджан</option>
+                    <option value="DE">Германия</option>
+                    <option value="FR">Франция</option>
+                    <option value="US">США</option>
+                    <option value="OTHER">Другая</option>
+                  </select>
+                </label>
+                <label className="cms-label">
+                  Регион / Область
+                  <input className="cms-input" value={manualForm.oblast} onChange={(e) => setManualForm({ ...manualForm, oblast: e.target.value })} placeholder="Московская область" style={{ marginTop: 4 }} />
+                </label>
                 <label className="cms-label">
                   Город
                   <input className="cms-input" value={manualForm.city} onChange={(e) => setManualForm({ ...manualForm, city: e.target.value })} placeholder="Москва" style={{ marginTop: 4 }} />
                 </label>
+                <label className="cms-label">
+                  Индекс
+                  <input className="cms-input" value={manualForm.zipCode} onChange={(e) => setManualForm({ ...manualForm, zipCode: e.target.value })} placeholder="123456" style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label" style={{ gridColumn: "span 2" }}>
+                  Улица
+                  <input className="cms-input" value={manualForm.street} onChange={(e) => setManualForm({ ...manualForm, street: e.target.value })} placeholder="ул. Ленина" style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Дом
+                  <input className="cms-input" value={manualForm.house} onChange={(e) => setManualForm({ ...manualForm, house: e.target.value })} placeholder="42" style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Квартира / офис
+                  <input className="cms-input" value={manualForm.apartment} onChange={(e) => setManualForm({ ...manualForm, apartment: e.target.value })} placeholder="15" style={{ marginTop: 4 }} />
+                </label>
               </div>
 
+              {/* ── Доставка и оплата ── */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Доставка и оплата</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+                <label className="cms-label">
+                  Способ доставки
+                  <select className="cms-select" value={manualForm.shippingMethod} onChange={(e) => setManualForm({ ...manualForm, shippingMethod: e.target.value })} style={{ marginTop: 4 }}>
+                    <option value="">— не указан —</option>
+                    <option value="cdek">СДЭК</option>
+                    <option value="russianpost">Почта России</option>
+                    <option value="pochta_int">Почта России (межд.)</option>
+                    <option value="ozon">OZON</option>
+                    <option value="yandex">Яндекс Маркет</option>
+                    <option value="dhl">DHL</option>
+                    <option value="fedex">FedEx</option>
+                    <option value="pickup">Самовывоз</option>
+                    <option value="courier">Курьер</option>
+                  </select>
+                </label>
+                <label className="cms-label">
+                  Способ оплаты
+                  <select className="cms-select" value={manualForm.paymentMethod} onChange={(e) => setManualForm({ ...manualForm, paymentMethod: e.target.value })} style={{ marginTop: 4 }}>
+                    <option value="cash">Наличные</option>
+                    <option value="card">Карта (офлайн)</option>
+                    <option value="transfer">Перевод на карту</option>
+                    <option value="yukassa">ЮКасса</option>
+                    <option value="stripe">Stripe</option>
+                    <option value="manual">Другое</option>
+                  </select>
+                </label>
+                <label className="cms-label">
+                  Валюта
+                  <select className="cms-select" value={manualForm.currency} onChange={(e) => setManualForm({ ...manualForm, currency: e.target.value })} style={{ marginTop: 4 }}>
+                    <option value="RUB">₽ RUB</option>
+                    <option value="USD">$ USD</option>
+                    <option value="EUR">€ EUR</option>
+                  </select>
+                </label>
+                <label className="cms-label">
+                  Статус
+                  <select className="cms-select" value={manualForm.status} onChange={(e) => setManualForm({ ...manualForm, status: e.target.value })} style={{ marginTop: 4 }}>
+                    <option value="unpaid">Не оплачен</option>
+                    <option value="paid">Оплачен</option>
+                    <option value="assembling">Сборка</option>
+                    <option value="shipped">Отправлен</option>
+                    <option value="delivered">Доставлен</option>
+                    <option value="cancelled">Отменён</option>
+                  </select>
+                </label>
+              </div>
+
+              {/* ── Товары ── */}
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Товары (необязательно)</div>
               <div style={{ marginBottom: 14 }}>
-                <div className="cms-label" style={{ marginBottom: 8 }}>Товары (необязательно)</div>
                 {manualForm.items.map((item, idx) => (
                   <div key={idx} style={{ display: "grid", gridTemplateColumns: "2fr 60px 90px auto", gap: 6, marginBottom: 6, alignItems: "center" }}>
                     <select className="cms-select" value={item.productId} onChange={(e) => updateManualItem(idx, "productId", e.target.value)}>
@@ -488,26 +597,16 @@ export default function AdminOrdersPage() {
                 </button>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+              {/* ── Сумма и заметки ── */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 10, marginBottom: 14, marginTop: 4 }}>
                 <label className="cms-label">
-                  Сумма заказа (₽) *
+                  Сумма заказа (в выбранной валюте) *
                   <input className="cms-input" type="number" value={manualForm.totalAmount} onChange={(e) => setManualForm({ ...manualForm, totalAmount: e.target.value })} placeholder="0" style={{ marginTop: 4 }} />
-                </label>
-                <label className="cms-label">
-                  Статус
-                  <select className="cms-select" value={manualForm.status} onChange={(e) => setManualForm({ ...manualForm, status: e.target.value })} style={{ marginTop: 4 }}>
-                    <option value="unpaid">Не оплачен</option>
-                    <option value="paid">Оплачен</option>
-                    <option value="assembling">Сборка</option>
-                    <option value="shipped">Отправлен</option>
-                    <option value="delivered">Доставлен</option>
-                    <option value="cancelled">Отменён</option>
-                  </select>
                 </label>
               </div>
 
               <label className="cms-label" style={{ display: "block" }}>
-                Заметки
+                Заметки / комментарий
                 <textarea className="cms-textarea" rows={2} value={manualForm.notes} onChange={(e) => setManualForm({ ...manualForm, notes: e.target.value })} style={{ marginTop: 4, width: "100%" }} />
               </label>
             </div>

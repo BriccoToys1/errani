@@ -10,7 +10,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { customerName, customerEmail, customerPhone, city, country, notes, status, items, totalAmount } = body;
+    const {
+      customerName, customerEmail, customerPhone,
+      country, oblast, city, zipCode, street, house, apartment,
+      shippingMethod, paymentMethod, currency,
+      notes, status, items, totalAmount,
+    } = body;
 
     if (!customerName || !totalAmount) {
       return NextResponse.json({ error: 'Имя и сумма обязательны' }, { status: 400 });
@@ -39,11 +44,17 @@ export async function POST(req: NextRequest) {
         customerEmail: (customerEmail || '').trim(),
         customerPhone: (customerPhone || '').trim(),
         country: country || 'RU',
+        oblast: oblast || '',
         city: city || '',
+        zipCode: zipCode || '',
+        street: street || '',
+        house: house || '',
+        apartment: apartment || '',
+        shippingMethod: shippingMethod || '',
+        paymentMethod: paymentMethod || 'manual',
+        currency: currency || 'RUB',
         totalAmount: Number(totalAmount),
-        currency: 'RUB',
         status: status || 'unpaid',
-        paymentMethod: 'manual',
         notes: notes || '',
         isManual: true,
         ...(orderItemsData.length > 0 ? { items: { create: orderItemsData } } : {}),
