@@ -117,9 +117,6 @@ export function buildReceiptHtml(order: ReceiptOrder, forPdf = false): string {
   const statusLabel = STATUS_LABELS[order.status] || order.status;
   const statusCls = STATUS_CLASS[order.status] || 'status-pending';
 
-  const itemsSubtotal = order.items.reduce((s, i) => s + i.price * i.quantity, 0);
-  const shippingCost = Math.round(Math.max(0, order.totalAmount - itemsSubtotal));
-
   const itemsHtml = order.items
     .map(
       item => `
@@ -351,9 +348,6 @@ export function buildReceiptHtml(order: ReceiptOrder, forPdf = false): string {
         </table>
         <div class="total-section">
           <div class="total-inner">
-            ${shippingCost > 0 ? `
-            <div style="display:flex;justify-content:space-between;gap:16px;font-size:11px;font-weight:500;color:#aaa;margin-bottom:5px;"><span>Товары</span><span>${fmt(itemsSubtotal)}</span></div>
-            <div style="display:flex;justify-content:space-between;gap:16px;font-size:11px;font-weight:500;color:#aaa;margin-bottom:8px;"><span>Доставка</span><span>${fmt(shippingCost)}</span></div>` : ''}
             <div class="grand-total"><span>Итого</span><span>${fmt(order.totalAmount)}</span></div>
           </div>
         </div>

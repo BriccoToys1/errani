@@ -23,14 +23,15 @@ const NAV_ITEMS = [
   { section: 'Управление' },
   { href: '/admin/orders', icon: 'orders', label: 'Заказы', countKey: 'newOrders' },
   { href: '/admin/products', icon: 'products', label: 'Товары' },
-  { href: '/admin/inquiries', icon: 'inquiries', label: 'Заявки', countKey: 'newInquiries' },
+  { href: '/admin/inquiries', icon: 'inquiries', label: 'Обращения', countKey: 'newInquiries' },
   { href: '/admin/email', icon: 'email', label: 'Почта', countKey: 'newEmails' },
-  { href: '/admin/users', icon: 'users', label: 'Клиенты' },
-  { section: 'Техническое' },
-  { href: '/admin/technical', icon: 'code', label: 'Техническое' },
-  { section: '' },
+  { href: '/admin/content', icon: 'content', label: 'Контент' },
+  { href: '/admin/pages', icon: 'pages', label: 'Страницы' },
+  { section: 'Система' },
+  { href: '/admin/files', icon: 'files', label: 'Файлы' },
+  { href: '/admin/seo', icon: 'seo', label: 'SEO' },
+  { href: '/admin/database', icon: 'database', label: 'База данных' },
   { href: '/admin/settings', icon: 'settings', label: 'Настройки' },
-  { href: '/admin/info', icon: 'info', label: 'Информация' },
   { href: '/admin/account', icon: 'account', label: 'Аккаунт' },
 ];
 
@@ -48,22 +49,13 @@ const ICONS: Record<string, React.ReactNode> = {
   settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
   database: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>,
   account: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-  users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
-  code: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="14" y1="4" x2="10" y2="20"/></svg>,
-  info: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
 };
-
-interface HealthStatus {
-  level: 'green' | 'yellow' | 'red';
-  message: string;
-}
 
 export function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0, newEmails: 0 });
-  const [health, setHealth] = useState<HealthStatus>({ level: 'green', message: 'Всё в порядке' });
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -75,32 +67,16 @@ export function AdminSidebar() {
     try {
       const token = localStorage.getItem('admin_token');
       if (!token) return;
-      const [dashRes, statsRes] = await Promise.all([
-        fetch('/api/admin/dashboard', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/server-stats', { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-      if (dashRes.ok) {
-        const data = await dashRes.json();
+      const res = await fetch('/api/admin/dashboard', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
         setCounts({
           newOrders: data.newOrdersCount || 0,
           newInquiries: data.newInquiriesCount || 0,
           newEmails: data.newEmailsCount || 0,
         });
-      }
-      if (statsRes.ok) {
-        const s = await statsRes.json();
-        const issues: string[] = [];
-        if (s.dbConnected === false) issues.push('БД недоступна');
-        if (s.cpu?.usage > 85) issues.push(`CPU ${s.cpu.usage}%`);
-        if (s.memory?.usage > 85) issues.push(`RAM ${s.memory.usage}%`);
-        if (s.disk?.usage > 90) issues.push(`Disk ${s.disk.usage}%`);
-        if (s.dbConnected === false) {
-          setHealth({ level: 'red', message: issues.join(', ') });
-        } else if (issues.length > 0) {
-          setHealth({ level: 'yellow', message: issues.join(', ') });
-        } else {
-          setHealth({ level: 'green', message: 'Всё в порядке' });
-        }
       }
     } catch {
       // ignore
@@ -286,9 +262,6 @@ export function AdminSidebar() {
       <nav className="cms-sidebar-nav">
         {NAV_ITEMS.map((item, i) => {
           if ('section' in item && !('href' in item)) {
-            if (!item.section) {
-              return <div key={i} style={{ borderTop: '1px solid var(--cms-border)', margin: '6px 12px' }} />;
-            }
             return !collapsed ? <div key={i} className="cms-sidebar-section">{item.section}</div> : null;
           }
           const nav = item as { href: string; icon: string; label: string; countKey?: string };
@@ -307,16 +280,6 @@ export function AdminSidebar() {
           );
         })}
       </nav>
-
-      {/* Traffic Light */}
-      {!collapsed && (
-        <div className="cms-traffic-light" title={health.message}>
-          <span className={`cms-traffic-dot ${health.level === 'red' ? 'red' : 'off'}`} />
-          <span className={`cms-traffic-dot ${health.level === 'yellow' ? 'yellow' : 'off'}`} />
-          <span className={`cms-traffic-dot ${health.level === 'green' ? 'green' : 'off'}`} />
-          <span className="cms-traffic-tooltip">{health.message}</span>
-        </div>
-      )}
 
       <div className="cms-sidebar-footer">
         <Link href="/admin/account" className="cms-sidebar-user" style={{ textDecoration: 'none', color: 'inherit' }} title="Аккаунт">

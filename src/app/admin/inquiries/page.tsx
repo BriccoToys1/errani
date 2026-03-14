@@ -86,7 +86,7 @@ export default function AdminInquiriesPage() {
       body: JSON.stringify({ status: editStatus, notes: editNotes }),
     });
     if (res.ok) {
-      notify("Заявка обновлена");
+      notify("Обращение обновлено");
       setSelected(null);
       fetchInquiries();
     }
@@ -98,7 +98,7 @@ export default function AdminInquiriesPage() {
     for (const id of ids) {
       await fetch(`/api/inquiries/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     }
-    notify(`${ids.length} заявок удалено`);
+    notify(`${ids.length} обращение(й) удалено`);
     setDeleteConfirm(null);
     setCheckedIds(new Set());
     fetchInquiries();
@@ -135,7 +135,7 @@ export default function AdminInquiriesPage() {
     const token = getToken();
     try {
       await fetch("/api/inquiries", { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
-      notify("Все заявки отмечены как прочитанные");
+      notify("Все обращения отмечены как прочитанные");
       fetchInquiries();
     } catch { /* ignore */ }
   };
@@ -150,12 +150,14 @@ export default function AdminInquiriesPage() {
       <main className="cms-main">
         <div className="cms-header">
           <h1 className="cms-header-title">
-            Заявки
+            Обращения
             {newCount > 0 && <span className="cms-badge cms-badge-blue" style={{ marginLeft: "10px", fontSize: "12px" }}>{newCount} новых</span>}
           </h1>
           <div className="cms-header-actions">
             <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>{inquiries.length} всего</span>
-            <button className={`cms-refresh-btn`} onClick={fetchInquiries} title="Обновить">
+            <a href="/api/admin/export?type=inquiries&format=csv" className="cms-btn cms-btn-sm" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</a>
+            <a href="/api/admin/export?type=inquiries&format=xls" className="cms-btn cms-btn-sm" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> XLS</a>
+            <button className="cms-btn cms-btn-sm" onClick={fetchInquiries} title="Обновить">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
             </button>
             <button className="cms-btn cms-btn-sm" onClick={markAllRead} title="Отметить все как прочитанные">
@@ -237,7 +239,7 @@ export default function AdminInquiriesPage() {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={9} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Заявок не найдено</td></tr>
+                  <tr><td colSpan={9} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Обращений не найдено</td></tr>
                 )}
               </tbody>
             </table>
@@ -249,7 +251,7 @@ export default function AdminInquiriesPage() {
           <div className="cms-modal-overlay" onClick={() => setSelected(null)}>
             <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
               <div className="cms-modal-header">
-                <h2 className="cms-modal-title">Заявка от {selected.name}</h2>
+                <h2 className="cms-modal-title">Обращение от {selected.name}</h2>
                 <button className="cms-modal-close" onClick={() => setSelected(null)}>×</button>
               </div>
               <div className="cms-modal-body">
@@ -324,7 +326,7 @@ export default function AdminInquiriesPage() {
                 <button className="cms-modal-close" onClick={() => setDeleteConfirm(null)}>×</button>
               </div>
               <div className="cms-modal-body">
-                <p>Вы уверены, что хотите удалить {deleteConfirm.length} заявок?</p>
+                <p>Вы уверены, что хотите удалить {deleteConfirm.length} обращение(й)?</p>
                 <p style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>Это действие нельзя отменить.</p>
               </div>
               <div className="cms-modal-footer">

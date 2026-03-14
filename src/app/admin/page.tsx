@@ -228,6 +228,39 @@ export default function AdminDashboard() {
 
   const formatDuration = (s: number) => s < 60 ? `${s}с` : `${Math.floor(s / 60)}м ${s % 60}с`;
 
+  const [showExport, setShowExport] = useState(false);
+  const [exportFrom, setExportFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); });
+  const [exportTo, setExportTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [exportFormat, setExportFormat] = useState("csv");
+
+  const handleExport = () => {
+    if (!analytics) return;
+    const fromDate = new Date(exportFrom);
+    const toDate = new Date(exportTo);
+    const chartFiltered = analytics.chart.filter((d) => {
+      const dd = new Date(d.date);
+      return dd >= fromDate && dd <= toDate;
+    });
+    if (exportFormat === "csv") {
+      const header = "Date,Views,Visitors,Orders,Revenue";
+      const rows = chartFiltered.map((d) => `${d.date},${d.views},${d.visitors},${d.orders},${d.revenue}`);
+      const csv = [header, ...rows].join("\n");
+      downloadExportFile(csv, "analytics-report.csv", "text/csv");
+    } else {
+      const report = { period: { from: exportFrom, to: exportTo }, summary: analytics.totals, today: analytics.today, dailyData: chartFiltered, topPages: analytics.topPages, countries: analytics.countries, languages: analytics.languages, referrers: analytics.referrers };
+      downloadExportFile(JSON.stringify(report, null, 2), "analytics-report.json", "application/json");
+    }
+    setShowExport(false);
+  };
+
+  const downloadExportFile = (content: string, filename: string, type: string) => {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
   }
@@ -249,17 +282,21 @@ export default function AdminDashboard() {
                 </span>
               ) : null}
             </h1>
+            <p style={{ fontSize: "13px", color: "var(--cms-text-muted)", marginTop: "4px" }}>
+              Обзор магазина errani
+            </p>
           </div>
           <div className="cms-header-actions">
             <a href="https://errani.ru" target="_blank" rel="noopener noreferrer" className="cms-btn cms-btn-sm">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: "6px" }}><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg>
               Открыть сайт
             </a>
+            <button className="cms-btn cms-btn-sm" onClick={() => setShowExport(true)}>Экспорт отчёта</button>
             <button
-              className={`cms-refresh-btn ${refreshing ? 'spinning' : ''}`}
+              className="cms-btn cms-btn-sm cms-btn-ghost"
               onClick={() => fetchData(true)}
               disabled={refreshing}
-              title="Обновить"
+              style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 90 }}
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                 style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }}>
@@ -304,7 +341,7 @@ export default function AdminDashboard() {
             />
             <StatCard
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>}
-              label="Заявки"
+              label="Обращения"
               value={data?.inquiryCount ?? 0}
               sub={data?.newInquiryCount ? `${data.newInquiryCount} новых` : "все прочитаны"}
               color="rgba(245, 158, 11, 0.15)"
@@ -511,6 +548,26 @@ export default function AdminDashboard() {
               ) : <div style={{ color: "var(--cms-text-muted)", fontSize: "13px" }}>Нет данных</div>}
             </div>
 
+            {/* Referrers */}
+            <div className="cms-table-wrap" style={{ padding: "16px" }}>
+              <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "10px" }}>Источники трафика</div>
+              {analytics?.referrers && analytics.referrers.length > 0 ? (
+                analytics.referrers.slice(0, 7).map((r, i) => {
+                  const maxV = analytics.referrers[0]?.count || 1;
+                  const label = r.referrer.replace(/^https?:\/\//, "").replace(/\/$/, "").split("/")[0] || "Прямой";
+                  return (
+                    <div key={i} style={{ marginBottom: 7 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: 2 }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%", color: "var(--cms-text-muted)" }}>{label}</span>
+                        <span style={{ fontWeight: 600 }}>{r.count}</span>
+                      </div>
+                      <GaugeBar value={r.count} max={maxV} color="#8b5cf6" />
+                    </div>
+                  );
+                })
+              ) : <div style={{ color: "var(--cms-text-muted)", fontSize: "13px" }}>Нет данных</div>}
+            </div>
+
             {/* Devices + Languages */}
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div className="cms-table-wrap" style={{ padding: "16px" }}>
@@ -546,9 +603,62 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* End of content */}
+          {/* Quick Links */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px", marginTop: "20px" }}>
+            {[
+              { href: "/admin/orders", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>, label: "Заказы" },
+              { href: "/admin/products", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>, label: "Товары" },
+              { href: "/admin/inquiries", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>, label: "Обращения" },
+              { href: "/admin/content", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, label: "Контент" },
+              { href: "/admin/settings", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>, label: "Настройки" },
+            ].map((item) => (
+              <Link key={item.href} href={item.href} className="cms-quick-link">
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            ))}
+          </div>
         </div>
       </main>
+
+      {/* Export Modal */}
+      {showExport && (
+        <div className="cms-modal-overlay" onClick={() => setShowExport(false)}>
+          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="cms-modal-header">
+              <h3>Экспорт отчёта</h3>
+              <button className="cms-modal-close" onClick={() => setShowExport(false)}>&times;</button>
+            </div>
+            <div className="cms-modal-body">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+                <label className="cms-label">
+                  С
+                  <input className="cms-input" type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} />
+                </label>
+                <label className="cms-label">
+                  По
+                  <input className="cms-input" type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} />
+                </label>
+              </div>
+              <label className="cms-label">
+                Формат
+                <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+                  {[{ v: "csv", l: "CSV" }, { v: "json", l: "JSON" }].map((f) => (
+                    <label key={f.v} className="cms-checkbox-label" style={{ padding: "8px 16px", borderRadius: "8px", border: `1px solid ${exportFormat === f.v ? "var(--cms-accent)" : "var(--cms-border)"}`, background: exportFormat === f.v ? "rgba(232,114,42,0.1)" : "transparent", cursor: "pointer" }}>
+                      <input type="radio" name="fmt" value={f.v} checked={exportFormat === f.v} onChange={() => setExportFormat(f.v)} style={{ display: "none" }} />
+                      {f.l}
+                    </label>
+                  ))}
+                </div>
+              </label>
+            </div>
+            <div className="cms-modal-actions">
+              <button className="cms-btn cms-btn-primary" onClick={handleExport}>Скачать</button>
+              <button className="cms-btn" onClick={() => setShowExport(false)}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
