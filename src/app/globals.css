@@ -2305,3 +2305,241 @@ select.form-field {
   transition: color 0.3s;
 }
 .privacy-back-link:hover { color: var(--orange); }
+
+/* ============================================================
+   PREORDER HERO — Main Page
+   ============================================================ */
+
+.preorder-hero {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--bg);
+  padding: 80px clamp(1.5rem, 5vw, 5rem) clamp(4rem, 8vw, 6rem);
+}
+
+/* Ambient glow orbs */
+.preorder-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(120px);
+  opacity: 0.12;
+}
+.preorder-orb-1 {
+  width: clamp(300px, 50vw, 700px);
+  height: clamp(300px, 50vw, 700px);
+  background: var(--orange);
+  top: -15%;
+  right: -10%;
+}
+.preorder-orb-2 {
+  width: clamp(200px, 35vw, 500px);
+  height: clamp(200px, 35vw, 500px);
+  background: #a84fc5;
+  bottom: 0;
+  left: -5%;
+}
+
+/* Two-column layout */
+.preorder-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(2rem, 5vw, 5rem);
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Text column */
+.preorder-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.preorder-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--orange);
+}
+
+.preorder-title {
+  font-family: var(--font-display);
+  font-size: clamp(3.5rem, 8vw, 7rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 0.92;
+  color: var(--text);
+}
+.preorder-title em {
+  font-style: italic;
+  color: var(--orange);
+}
+.preorder-title span {
+  color: var(--text);
+}
+
+.preorder-spec {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.preorder-badge {
+  display: inline-block;
+  padding: 0.35rem 0.9rem;
+  border-radius: 100px;
+  background: rgba(232, 114, 42, 0.15);
+  border: 1px solid rgba(232, 114, 42, 0.35);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--orange);
+  width: fit-content;
+}
+
+.preorder-desc {
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+  max-width: 460px;
+}
+
+.preorder-price {
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.preorder-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.preorder-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.9rem 2rem;
+  border-radius: 100px;
+  background: var(--orange);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: background 0.25s, transform 0.25s, box-shadow 0.25s;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.preorder-btn-primary:hover {
+  background: var(--orange-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(232, 114, 42, 0.35);
+}
+
+.preorder-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.9rem 1.8rem;
+  border-radius: 100px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: border-color 0.25s, color 0.25s, transform 0.25s;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.preorder-btn-ghost:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: var(--text);
+  transform: translateY(-2px);
+}
+
+/* Image column */
+.preorder-visual {
+  position: relative;
+}
+
+.preorder-img-wrap {
+  position: relative;
+  width: 100%;
+  padding-top: 130%;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
+}
+
+.preorder-img {
+  object-fit: cover;
+  transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.preorder-img-wrap:hover .preorder-img {
+  transform: scale(1.04);
+}
+
+.preorder-img-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 50%,
+    rgba(8, 8, 8, 0.5) 100%
+  );
+  pointer-events: none;
+}
+
+/* Scroll indicator */
+.preorder-scroll {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+.preorder-scroll-line {
+  width: 1px;
+  height: 50px;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.3), transparent);
+  animation: subtle-float 2s ease-in-out infinite;
+}
+
+/* Mobile */
+@media (max-width: 720px) {
+  .preorder-content {
+    grid-template-columns: 1fr;
+  }
+  .preorder-visual {
+    order: -1;
+  }
+  .preorder-img-wrap {
+    padding-top: 100%;
+    border-radius: 14px;
+  }
+  .preorder-title {
+    font-size: clamp(3rem, 14vw, 4.5rem);
+  }
+  .preorder-hero {
+    padding-top: 100px;
+    padding-bottom: 5rem;
+  }
+}

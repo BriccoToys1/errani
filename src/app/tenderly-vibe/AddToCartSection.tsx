@@ -8,7 +8,7 @@ import { t } from '@/lib/i18n';
 
 // Tenderly Vibe: preorder price 4590, regular price 5690
 const IS_PREORDER = true;
-const PRICE = IS_PREORDER ? 4590 : 5690;
+const PRICE = IS_PREORDER ? 4990 : 6990;
 
 export function AddToCartSection() {
   const { lang } = useLanguage();

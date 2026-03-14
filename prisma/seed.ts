@@ -25,7 +25,7 @@ async function main() {
       name: 'Errani Tarot — Авторская колода',
       slug: 'errani-tarot-deck',
       description: 'Авторская колода Таро от Ekaterina Errani. 78 карт, созданных с глубоким пониманием символизма и эстетики. Каждая карта — произведение искусства, наполненное энергией и смыслом. Идеально подходит как для начинающих, так и для опытных тарологов.',
-      price: 4900,
+      price: 4990,
       currency: 'RUB',
       image: '/media/photo-1.jpeg',
       images: JSON.stringify(['/media/photo-1.jpeg', '/media/photo-2.jpeg', '/media/photo-3.jpeg']),
