@@ -87,11 +87,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-
-      {/* Scroll indicator */}
-      <div className="preorder-scroll">
-        <div className="preorder-scroll-line" />
-      </div>
     </main>
   );
 }

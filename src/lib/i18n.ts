@@ -123,7 +123,7 @@ const translations: Translations = {
     'product.badge': 'Pre-order',
     'product.title': 'Tenderly Vibe Tarot',
     'product.subtitle': 'A deck about the softness we so often hide',
-    'product.price': '4 990 ₽',
+    'product.price': '4 890 ₽',
     'product.addToCart': 'Add to cart',
     'product.added': '✓ Added',
     'product.goToCart': 'Go to cart',
