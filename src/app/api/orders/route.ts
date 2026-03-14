@@ -51,7 +51,7 @@ export async function GET() {
           select: { name: true, email: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ isManual: 'desc' }, { createdAt: 'desc' }],
     });
     return NextResponse.json(orders);
   } catch (error) {

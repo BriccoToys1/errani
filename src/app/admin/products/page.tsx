@@ -349,8 +349,8 @@ export default function AdminProductsPage() {
     setIsNew(true);
     setSelected(null);
     setForm({
-      name: product.name + " (копия)",
-      nameRu: (product.nameRu || "") + " (копия)",
+      name: product.name + " (copy)",
+      nameRu: (product.nameRu || product.name) + " (копия)",
       slug: product.slug + "-copy",
       description: product.description,
       descriptionRu: product.descriptionRu || "",
@@ -534,7 +534,7 @@ export default function AdminProductsPage() {
                     <td>
                       {p.image && <img src={p.image} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} />}
                     </td>
-                    <td className="cms-td-bold">{p.name}</td>
+                    <td className="cms-td-bold">{p.nameRu || p.name}</td>
                     <td className="cms-td-mono" style={{ fontSize: "11px" }}>{p.slug}</td>
                     <td>{formatPrice(p.price)}</td>
                     <td>{p.discount > 0 ? <span className="cms-badge cms-badge-green">-{p.discount}%</span> : "\u2014"}</td>
@@ -580,20 +580,19 @@ export default function AdminProductsPage() {
             <div className="cms-modal-body" style={{ maxHeight: "65vh", overflow: "auto" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <label className="cms-label">
-                  Название (EN)
-                  <input className="cms-input" value={form.name} onChange={(e) => {
-                    const name = e.target.value;
-                    const updates: Partial<typeof form> = { name };
-                    // Auto-generate slug from English name for new products
-                    if (isNew && !form.slug || form.slug === slugify(form.name)) {
-                      updates.slug = slugify(name);
+                  Название (RU) — основное
+                  <input className="cms-input" value={form.nameRu} onChange={(e) => {
+                    const nameRu = e.target.value;
+                    const updates: Partial<typeof form> = { nameRu };
+                    if (isNew && (!form.slug || form.slug === slugify(form.nameRu))) {
+                      updates.slug = slugify(nameRu);
                     }
                     setForm({ ...form, ...updates });
                   }} />
                 </label>
                 <label className="cms-label">
-                  Название (RU)
-                  <input className="cms-input" value={form.nameRu} onChange={(e) => setForm({ ...form, nameRu: e.target.value })} />
+                  Name (EN) — перевод
+                  <input className="cms-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="English translation" />
                 </label>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px", marginBottom: "12px" }}>
@@ -603,12 +602,12 @@ export default function AdminProductsPage() {
                 </label>
               </div>
               <label className="cms-label" style={{ marginBottom: "12px", display: "block" }}>
-                Описание (EN)
-                <textarea className="cms-textarea" rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ width: "100%" }} />
+                Описание (RU) — основное
+                <textarea className="cms-textarea" rows={3} value={form.descriptionRu} onChange={(e) => setForm({ ...form, descriptionRu: e.target.value })} style={{ width: "100%" }} />
               </label>
               <label className="cms-label" style={{ marginBottom: "12px", display: "block" }}>
-                Описание (RU)
-                <textarea className="cms-textarea" rows={2} value={form.descriptionRu} onChange={(e) => setForm({ ...form, descriptionRu: e.target.value })} style={{ width: "100%" }} />
+                Description (EN) — перевод
+                <textarea className="cms-textarea" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ width: "100%" }} placeholder="English translation" />
               </label>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <label className="cms-label">

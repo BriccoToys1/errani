@@ -97,6 +97,7 @@ model Order {
   totalAmount     Float
   currency        String      @default("RUB")
   notes           String      @default("")
+  isManual        Boolean     @default(false) // created manually by admin
   items           OrderItem[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -203,6 +204,17 @@ model CustomPage {
   updatedAt   DateTime @updatedAt
 }
 
+// ─── Expenses ───
+
+model Expense {
+  id          String   @id @default(uuid())
+  amount      Float
+  description String
+  category    String   @default("") // e.g. shipping, packaging, marketing, other
+  date        String   // YYYY-MM-DD
+  createdAt   DateTime @default(now())
+}
+
 // ─── Admin Email ───
 
 model AdminEmail {
@@ -217,5 +229,6 @@ model AdminEmail {
   isRead    Boolean  @default(false)
   resendId  String   @default("") // Resend message ID
   inReplyTo String   @default("") // Parent email ID for threading
+  inquiryId String   @default("") // linked inquiry, if any
   createdAt DateTime @default(now())
 }

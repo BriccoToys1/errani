@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import prisma from '@/lib/db';
 
 export interface OrderEmailData {
   orderNumber: string;
@@ -176,7 +177,7 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
     : [];
 
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: 'errani <mail@errani.ru>',
       to: data.customerEmail,
       subject: `Заказ #${data.orderNumber} подтверждён — errani`,
@@ -184,6 +185,25 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
       ...(attachments.length ? { attachments } : {}),
     });
     console.log(`Order confirmation email sent to ${data.customerEmail}`);
+
+    // Save to adminEmail table so it's visible in admin email section
+    try {
+      await prisma.adminEmail.create({
+        data: {
+          direction: 'outbound',
+          fromAddr: 'mail@errani.ru',
+          toAddr: data.customerEmail,
+          subject: `Заказ #${data.orderNumber} подтверждён — errani`,
+          body: html,
+          textBody: `Заказ #${data.orderNumber} для ${data.customerName}. Сумма: ${data.totalAmount.toLocaleString('ru-RU')} ₽`,
+          status: 'sent',
+          isRead: true,
+          resendId: result.data?.id || '',
+        },
+      });
+    } catch (dbErr) {
+      console.error('Failed to save email to DB:', dbErr);
+    }
   } catch (err) {
     console.error('Failed to send order confirmation email:', err);
   }

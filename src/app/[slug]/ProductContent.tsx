@@ -73,11 +73,15 @@ export function ProductContent({ product }: { product: Product }) {
     };
   }, [lightboxIndex, nextLightbox, prevLightbox]);
 
-  const displayName = lang === 'ru' && product.nameRu ? product.nameRu : product.name;
-  const displayDesc = lang === 'ru' && product.descriptionRu ? product.descriptionRu : product.description;
+  const displayName = lang === 'ru'
+    ? (product.nameRu || product.name)
+    : (product.name || product.nameRu || '');
+  const displayDesc = lang === 'ru'
+    ? (product.descriptionRu || product.description)
+    : (product.description || product.descriptionRu || '');
   const price = product.price;
 
-  const characteristics: Array<{ key: string; value: string }> = (() => {
+  const characteristics: Array<{ key: string; keyEn?: string; value: string; valueEn?: string }> = (() => {
     try { return JSON.parse(product.characteristics || '[]'); } catch { return []; }
   })();
 
@@ -218,8 +222,8 @@ export function ProductContent({ product }: { product: Product }) {
           <div style={{ display: 'grid', gap: '0' }}>
             {characteristics.map((c, i) => (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.9rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{c.key}</span>
-                <span style={{ color: 'var(--text-primary)', fontWeight: 500, textAlign: 'right' }}>{c.value}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{lang === 'en' && c.keyEn ? c.keyEn : c.key}</span>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 500, textAlign: 'right' }}>{lang === 'en' && c.valueEn ? c.valueEn : c.value}</span>
               </div>
             ))}
           </div>

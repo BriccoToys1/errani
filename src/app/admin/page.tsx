@@ -5,11 +5,21 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AdminSidebar } from "./AdminSidebar";
 
+interface Expense {
+  id: string;
+  amount: number;
+  description: string;
+  category: string;
+  date: string;
+}
+
 interface DashboardData {
   orderCount: number;
   pendingCount: number;
   productCount: number;
   totalRevenue: number;
+  totalExpenses: number;
+  profit: number;
   inquiryCount: number;
   newInquiryCount: number;
   recentOrders: Array<{
@@ -217,21 +227,60 @@ export default function AdminDashboard() {
     }
   }, [getToken, router, period]);
 
+  const [showExport, setShowExport] = useState(false);
+  const [exportFrom, setExportFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); });
+  const [exportTo, setExportTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [exportFormat, setExportFormat] = useState("csv");
+
+  const [showExpenses, setShowExpenses] = useState(false);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expenseForm, setExpenseForm] = useState({ amount: "", description: "", category: "other", date: new Date().toISOString().slice(0, 10) });
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
+
+  const fetchExpenses = useCallback(async () => {
+    const token = getToken();
+    const res = await fetch("/api/admin/expenses", { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) { const d = await res.json(); setExpenses(d.expenses || []); }
+  }, [getToken]);
+
+  const handleAddExpense = async () => {
+    if (!expenseForm.amount || !expenseForm.description) return;
+    setSavingExpense(true);
+    const token = getToken();
+    const res = await fetch("/api/admin/expenses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(expenseForm),
+    });
+    if (res.ok) {
+      setExpenseForm({ amount: "", description: "", category: "other", date: new Date().toISOString().slice(0, 10) });
+      fetchExpenses();
+      fetchData(true);
+    }
+    setSavingExpense(false);
+  };
+
+  const handleDeleteExpense = async (id: string) => {
+    setDeletingExpenseId(id);
+    const token = getToken();
+    await fetch(`/api/admin/expenses?id=${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    fetchExpenses();
+    fetchData(true);
+    setDeletingExpenseId(null);
+  };
+
   useEffect(() => {
     fetchData();
+    fetchExpenses();
     const interval = setInterval(() => fetchData(), 30000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, fetchExpenses]);
 
   const formatPrice = (n: number) =>
     new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(n);
 
   const formatDuration = (s: number) => s < 60 ? `${s}с` : `${Math.floor(s / 60)}м ${s % 60}с`;
-
-  const [showExport, setShowExport] = useState(false);
-  const [exportFrom, setExportFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); });
-  const [exportTo, setExportTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const [exportFormat, setExportFormat] = useState("csv");
 
   const handleExport = () => {
     if (!analytics) return;
@@ -309,7 +358,7 @@ export default function AdminDashboard() {
 
         <div className="cms-content">
           {/* Main Stat Cards */}
-          <div className="cms-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "8px" }}>
+          <div className="cms-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px" }}>
             <StatCard
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e8722a" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>}
               label="Заказы (оплач.)"
@@ -317,12 +366,21 @@ export default function AdminDashboard() {
               sub={data?.pendingCount ? `${data.pendingCount} ждут оплаты` : `${analytics?.today.orders ?? 0} сегодня`}
               color="rgba(232, 114, 42, 0.15)"
             />
+            <div onClick={() => { setShowExpenses(true); fetchExpenses(); }} style={{ cursor: "pointer" }} title="Нажмите для управления расходами">
+              <StatCard
+                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>}
+                label="Выручка ↗ (нажмите)"
+                value={formatPrice(data?.totalRevenue ?? 0)}
+                sub={data?.totalExpenses ? `расходы: ${formatPrice(data.totalExpenses)}` : "добавить расходы"}
+                color="rgba(34, 197, 94, 0.15)"
+              />
+            </div>
             <StatCard
-              icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>}
-              label="Выручка"
-              value={formatPrice(data?.totalRevenue ?? 0)}
-              sub="оплаченные"
-              color="rgba(34, 197, 94, 0.15)"
+              icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={(data?.profit ?? 0) >= 0 ? "#10b981" : "#ef4444"} strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>}
+              label="Прибыль"
+              value={formatPrice(data?.profit ?? 0)}
+              sub={(data?.profit ?? 0) >= 0 ? "в плюсе" : "в минусе"}
+              color={(data?.profit ?? 0) >= 0 ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)"}
             />
             <StatCard
               icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
@@ -620,6 +678,94 @@ export default function AdminDashboard() {
           </div>
         </div>
       </main>
+
+      {/* Expenses Modal */}
+      {showExpenses && (
+        <div className="cms-modal-overlay" onClick={() => setShowExpenses(false)}>
+          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <div className="cms-modal-header">
+              <h3>Расходы</h3>
+              <button className="cms-modal-close" onClick={() => setShowExpenses(false)}>&times;</button>
+            </div>
+            <div className="cms-modal-body" style={{ maxHeight: "55vh", overflowY: "auto" }}>
+              {/* Summary */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
+                <div style={{ background: "rgba(34,197,94,0.08)", borderRadius: 8, padding: "10px 14px" }}>
+                  <div style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>Выручка</div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{formatPrice(data?.totalRevenue ?? 0)}</div>
+                </div>
+                <div style={{ background: "rgba(239,68,68,0.08)", borderRadius: 8, padding: "10px 14px" }}>
+                  <div style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>Расходы</div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{formatPrice(data?.totalExpenses ?? 0)}</div>
+                </div>
+                <div style={{ background: (data?.profit ?? 0) >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)", borderRadius: 8, padding: "10px 14px" }}>
+                  <div style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>Прибыль</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: (data?.profit ?? 0) >= 0 ? "#10b981" : "#ef4444" }}>{formatPrice(data?.profit ?? 0)}</div>
+                </div>
+              </div>
+
+              {/* Add expense form */}
+              <div style={{ background: "var(--cms-bg-hover)", borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Добавить расход</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <label className="cms-label">
+                    Описание
+                    <input className="cms-input" value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} placeholder="Упаковка, доставка..." style={{ marginTop: 4 }} />
+                  </label>
+                  <label className="cms-label">
+                    Сумма (₽)
+                    <input className="cms-input" type="number" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} placeholder="0" style={{ marginTop: 4 }} />
+                  </label>
+                  <label className="cms-label">
+                    Категория
+                    <select className="cms-select" value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })} style={{ marginTop: 4 }}>
+                      <option value="shipping">Доставка</option>
+                      <option value="packaging">Упаковка</option>
+                      <option value="marketing">Маркетинг</option>
+                      <option value="product">Закупка товара</option>
+                      <option value="other">Прочее</option>
+                    </select>
+                  </label>
+                  <label className="cms-label">
+                    Дата
+                    <input className="cms-input" type="date" value={expenseForm.date} onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })} style={{ marginTop: 4 }} />
+                  </label>
+                </div>
+                <button className="cms-btn cms-btn-primary cms-btn-sm" onClick={handleAddExpense} disabled={savingExpense}>
+                  {savingExpense ? "Сохранение..." : "+ Добавить расход"}
+                </button>
+              </div>
+
+              {/* Expense list */}
+              {expenses.length > 0 ? (
+                <table className="cms-table">
+                  <thead>
+                    <tr><th>Дата</th><th>Описание</th><th>Категория</th><th style={{ textAlign: "right" }}>Сумма</th><th style={{ width: 40 }}></th></tr>
+                  </thead>
+                  <tbody>
+                    {expenses.map((exp) => (
+                      <tr key={exp.id}>
+                        <td style={{ fontSize: 12, color: "var(--cms-text-muted)" }}>{exp.date}</td>
+                        <td style={{ fontSize: 13 }}>{exp.description}</td>
+                        <td><span style={{ fontSize: 11, background: "var(--cms-border)", borderRadius: 4, padding: "2px 6px" }}>{exp.category}</span></td>
+                        <td style={{ textAlign: "right", fontWeight: 600, color: "#ef4444" }}>−{formatPrice(exp.amount)}</td>
+                        <td>
+                          <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => handleDeleteExpense(exp.id)} disabled={deletingExpenseId === exp.id} title="Удалить">×</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ textAlign: "center", padding: "20px", color: "var(--cms-text-muted)", fontSize: 13 }}>Расходов пока нет</div>
+              )}
+            </div>
+            <div className="cms-modal-actions">
+              <button className="cms-btn" onClick={() => setShowExpenses(false)}>Закрыть</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Export Modal */}
       {showExport && (

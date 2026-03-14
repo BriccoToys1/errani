@@ -40,6 +40,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
       data: {
         status: body.status,
         notes: body.notes,
+        ...(body.customerName !== undefined ? { customerName: body.customerName } : {}),
+        ...(body.customerEmail !== undefined ? { customerEmail: body.customerEmail } : {}),
+        ...(body.customerPhone !== undefined ? { customerPhone: body.customerPhone } : {}),
+        ...(body.city !== undefined ? { city: body.city } : {}),
+        ...(body.totalAmount !== undefined ? { totalAmount: Number(body.totalAmount) } : {}),
       },
     });
 
