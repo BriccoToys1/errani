@@ -152,6 +152,9 @@ export default function AdminOrdersPage() {
     return true;
   });
 
+  const totalItems = filtered.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0);
+  const totalSum = filtered.reduce((sum, o) => sum + o.totalAmount, 0);
+
   if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
 
   return (
@@ -199,9 +202,9 @@ export default function AdminOrdersPage() {
               <thead>
                 <tr>
                   <th>Order #</th>
-                  <th>Клиент</th>
-                  <th>Товары</th>
-                  <th>Сумма</th>
+                  <th>Клиент ({filtered.length})</th>
+                  <th>Товары ({totalItems})</th>
+                  <th>Сумма ({formatPrice(totalSum)})</th>
                   <th>Статус</th>
                   <th>Доставка</th>
                   <th>Дата</th>
