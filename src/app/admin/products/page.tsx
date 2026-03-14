@@ -249,7 +249,7 @@ function slugify(text: string): string {
 }
 
 function CharacteristicsEditor({ value, onChange }: { value: string; onChange: (val: string) => void }) {
-  let chars: Array<{ key: string; value: string }> = [];
+  let chars: Array<{ key: string; keyEn?: string; value: string; valueEn?: string }> = [];
   try { chars = JSON.parse(value || '[]'); } catch { chars = []; }
 
   const update = (newChars: typeof chars) => onChange(JSON.stringify(newChars));
@@ -258,25 +258,39 @@ function CharacteristicsEditor({ value, onChange }: { value: string; onChange: (
     <div style={{ marginTop: "16px" }}>
       <label className="cms-label" style={{ display: "block", marginBottom: "8px" }}>Характеристики</label>
       {chars.map((c, i) => (
-        <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "6px", alignItems: "center" }}>
-          <input
-            className="cms-input"
-            placeholder="Название"
-            value={c.key}
-            onChange={(e) => { const nc = chars.map((x, j) => j === i ? { ...x, key: e.target.value } : x); update(nc); }}
-            style={{ flex: 1 }}
-          />
-          <input
-            className="cms-input"
-            placeholder="Значение"
-            value={c.value}
-            onChange={(e) => { const nc = chars.map((x, j) => j === i ? { ...x, value: e.target.value } : x); update(nc); }}
-            style={{ flex: 1 }}
-          />
-          <button type="button" className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => update(chars.filter((_, j) => j !== i))}>×</button>
+        <div key={i} style={{ border: "1px solid #333", borderRadius: "6px", padding: "10px", marginBottom: "8px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginBottom: "6px" }}>
+            <input
+              className="cms-input"
+              placeholder="Название (RU)"
+              value={c.key}
+              onChange={(e) => { const nc = chars.map((x, j) => j === i ? { ...x, key: e.target.value } : x); update(nc); }}
+            />
+            <input
+              className="cms-input"
+              placeholder="Name (EN)"
+              value={c.keyEn || ""}
+              onChange={(e) => { const nc = chars.map((x, j) => j === i ? { ...x, keyEn: e.target.value } : x); update(nc); }}
+            />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "6px", alignItems: "center" }}>
+            <input
+              className="cms-input"
+              placeholder="Значение (RU)"
+              value={c.value}
+              onChange={(e) => { const nc = chars.map((x, j) => j === i ? { ...x, value: e.target.value } : x); update(nc); }}
+            />
+            <input
+              className="cms-input"
+              placeholder="Value (EN)"
+              value={c.valueEn || ""}
+              onChange={(e) => { const nc = chars.map((x, j) => j === i ? { ...x, valueEn: e.target.value } : x); update(nc); }}
+            />
+            <button type="button" className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => update(chars.filter((_, j) => j !== i))}>×</button>
+          </div>
         </div>
       ))}
-      <button type="button" className="cms-btn cms-btn-xs" onClick={() => update([...chars, { key: "", value: "" }])}>+ Добавить характеристику</button>
+      <button type="button" className="cms-btn cms-btn-xs" onClick={() => update([...chars, { key: "", keyEn: "", value: "", valueEn: "" }])}>+ Добавить характеристику</button>
     </div>
   );
 }

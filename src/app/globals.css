@@ -2482,8 +2482,9 @@ select.form-field {
 
 .preorder-img-wrap {
   position: relative;
-  width: 100%;
-  padding-top: 130%;
+  width: 90%;
+  margin-left: auto;
+  padding-top: 117%;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);

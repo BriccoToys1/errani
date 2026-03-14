@@ -6,6 +6,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
 import { AddToCartSection } from './AddToCartSection';
+import { SPEC_KEYS } from '@/lib/i18n';
 
 const GALLERY_IMAGES = [
   '/media/photo-1.jpeg',
@@ -98,7 +99,20 @@ export function TenderlyVibeContent() {
         </div>
       </section>
 
-
+      {/* Specs */}
+      <section className="specs-section">
+        <h2 className="specs-heading">{t(lang, 'product.specs')}</h2>
+        <table className="specs-table">
+          <tbody>
+            {SPEC_KEYS.map((key) => (
+              <tr key={key}>
+                <td>{t(lang, key)}</td>
+                <td>{t(lang, `${key}.value`)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
 
       {/* Gallery */}
       <section className="gallery-section">
