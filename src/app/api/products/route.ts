@@ -50,6 +50,8 @@ export async function POST(req: NextRequest) {
         stock: body.stock || 0,
         inStock: body.inStock ?? true,
         isPreorder: body.isPreorder ?? false,
+        preorderClosed: body.preorderClosed ?? false,
+        preorderAvailableDate: body.preorderAvailableDate ? new Date(body.preorderAvailableDate) : null,
         isAuthor: body.isAuthor ?? false,
         isLimited: body.isLimited ?? false,
         limitedEditionText: body.limitedEditionText ?? '',

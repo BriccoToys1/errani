@@ -227,6 +227,8 @@ interface Product {
   images: string;
   inStock: boolean;
   isPreorder: boolean;
+  preorderClosed: boolean;
+  preorderAvailableDate: string | null;
   isAuthor: boolean;
   isLimited: boolean;
   limitedEditionText: string;
@@ -240,6 +242,7 @@ const emptyProduct = {
   name: "", nameRu: "", slug: "", description: "", descriptionRu: "",
   price: 0, oldPrice: null as number | null, discount: 0, stock: 0,
   currency: "RUB", image: "", images: "[]", inStock: true, isPreorder: false,
+  preorderClosed: false, preorderAvailableDate: "",
   isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true, sortOrder: 0,
   characteristics: "[]",
 };
@@ -336,6 +339,8 @@ export default function AdminProductsPage() {
       price: product.price, oldPrice: product.oldPrice, discount: product.discount,
       stock: product.stock, currency: product.currency, image: product.image,
       images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
+      preorderClosed: product.preorderClosed || false,
+      preorderAvailableDate: product.preorderAvailableDate ? new Date(product.preorderAvailableDate).toISOString().split('T')[0] : "",
       isAuthor: product.isAuthor, isLimited: product.isLimited || false, limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "", isActive: product.isActive,
       sortOrder: product.sortOrder,
       characteristics: product.characteristics || "[]",
@@ -363,6 +368,8 @@ export default function AdminProductsPage() {
       images: product.images,
       inStock: product.inStock,
       isPreorder: product.isPreorder,
+      preorderClosed: product.preorderClosed || false,
+      preorderAvailableDate: product.preorderAvailableDate ? new Date(product.preorderAvailableDate).toISOString().split('T')[0] : "",
       isAuthor: product.isAuthor,
       isLimited: product.isLimited || false,
       limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
@@ -394,6 +401,8 @@ export default function AdminProductsPage() {
         images: product.images,
         inStock: product.inStock,
         isPreorder: product.isPreorder,
+        preorderClosed: product.preorderClosed || false,
+        preorderAvailableDate: product.preorderAvailableDate || null,
         isAuthor: product.isAuthor,
         isLimited: product.isLimited,
         limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
@@ -422,6 +431,7 @@ export default function AdminProductsPage() {
         sortOrder: Number(form.sortOrder),
         limitedEditionText: form.limitedEditionText,
         characteristics: form.characteristics,
+        preorderAvailableDate: form.preorderAvailableDate ? new Date(form.preorderAvailableDate).toISOString() : null,
       }),
     });
     if (res.ok) {
@@ -654,10 +664,28 @@ export default function AdminProductsPage() {
                 {(["isActive", "inStock", "isPreorder", "isAuthor", "isLimited"] as const).map((key) => (
                   <label key={key} className="cms-checkbox-label">
                     <input type="checkbox" checked={form[key] as boolean} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />
-                    {key === "isActive" ? "Активен" : key === "inStock" ? "В наличии" : key === "isPreorder" ? "Предзаказ" : key === "isAuthor" ? "Авторская" : "Лимитированный тираж"}
+                    {key === "isActive" ? "Активен" : key === "inStock" ? "В наличии" : key === "isPreorder" ? "Это предзаказ?" : key === "isAuthor" ? "Авторская" : "Лимитированный тираж"}
                   </label>
                 ))}
               </div>
+              {form.isPreorder && (
+                <div style={{ marginTop: "12px", padding: "12px", background: "rgba(232,96,28,0.08)", borderRadius: "8px", border: "1px solid rgba(232,96,28,0.25)" }}>
+                  <label className="cms-checkbox-label" style={{ marginBottom: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <input type="checkbox" checked={form.preorderClosed} onChange={(e) => setForm({ ...form, preorderClosed: e.target.checked })} />
+                    <span>Предзаказ закрыт</span>
+                  </label>
+                  <label className="cms-label" style={{ display: "block" }}>
+                    Доступна к продаже с (дата показывается в сообщении)
+                    <input
+                      className="cms-input"
+                      type="date"
+                      value={form.preorderAvailableDate || ""}
+                      onChange={(e) => setForm({ ...form, preorderAvailableDate: e.target.value })}
+                      style={{ marginTop: "4px" }}
+                    />
+                  </label>
+                </div>
+              )}
               {form.isLimited && (
                 <div style={{ marginTop: "12px" }}>
                   <label className="cms-label" style={{ display: "block", marginBottom: "6px" }}>Описание лимитированного тиража</label>

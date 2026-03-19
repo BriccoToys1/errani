@@ -20,6 +20,8 @@ interface Product {
   image: string;
   images: string;
   isPreorder: boolean;
+  preorderClosed?: boolean;
+  preorderAvailableDate?: string | null;
   isLimited: boolean;
   limitedEditionText: string;
   isAuthor: boolean;
@@ -80,6 +82,13 @@ export function ProductContent({ product }: { product: Product }) {
     ? (product.descriptionRu || product.description)
     : (product.description || product.descriptionRu || '');
   const price = product.price;
+
+  const formatPreorderDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const day = d.getDate().toString().padStart(2, '0');
+    const month = (d.getMonth() + 1).toString().padStart(2, '0');
+    return `${day}.${month}`;
+  };
 
   const characteristics: Array<{ key: string; keyEn?: string; value: string; valueEn?: string }> = (() => {
     try { return JSON.parse(product.characteristics || '[]'); } catch { return []; }
@@ -180,13 +189,30 @@ export function ProductContent({ product }: { product: Product }) {
 
           {/* Single add-to-cart / go-to-cart button */}
           <div className="product-actions anim-fade-up anim-fade-up-d4">
-            <button
-              type="button"
-              className={`product-btn ${inCart ? 'in-cart' : ''}`}
-              onClick={handleAddOrGoToCart}
-            >
-              {inCart ? t(lang, 'product.goToCart') : t(lang, 'product.addToCart')}
-            </button>
+            {product.isPreorder && product.preorderClosed ? (
+              <div style={{
+                padding: '14px 20px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: '10px',
+                fontSize: '14px',
+                lineHeight: 1.6,
+                color: 'var(--text-secondary)',
+              }}>
+                <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>Предзаказ закрыт.</strong>
+                {product.preorderAvailableDate
+                  ? `Доступна к продаже будет с ${formatPreorderDate(product.preorderAvailableDate)}`
+                  : 'Следите за обновлениями.'}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className={`product-btn ${inCart ? 'in-cart' : ''}`}
+                onClick={handleAddOrGoToCart}
+              >
+                {inCart ? t(lang, 'product.goToCart') : t(lang, 'product.addToCart')}
+              </button>
+            )}
           </div>
         </div>
       </section>

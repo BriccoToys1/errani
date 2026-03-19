@@ -30,6 +30,8 @@ export default async function TenderlyVibePage() {
         image: product.image,
         images: product.images,
         isPreorder: product.isPreorder,
+        preorderClosed: product.preorderClosed,
+        preorderAvailableDate: product.preorderAvailableDate?.toISOString() ?? null,
         isLimited: product.isLimited,
         limitedEditionText: product.limitedEditionText,
         isAuthor: product.isAuthor,

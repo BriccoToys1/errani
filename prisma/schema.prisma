@@ -49,7 +49,9 @@ model Product {
   images        String         @default("[]") // JSON array of image URLs
   stock         Int            @default(0) // Quantity in stock
   inStock       Boolean        @default(true)
-  isPreorder    Boolean        @default(false)
+  isPreorder            Boolean    @default(false)
+  preorderClosed        Boolean    @default(false)  // предзаказ закрыт
+  preorderAvailableDate DateTime?                   // дата открытия продажи (отображается в сообщении)
   isAuthor      Boolean        @default(false) // авторская колода
   isLimited          Boolean        @default(false) // лимитированный тираж
   limitedEditionText String         @default("") // editable limited edition description
