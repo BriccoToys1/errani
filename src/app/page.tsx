@@ -43,8 +43,8 @@ export default function HomePage() {
             {lang === 'ru' ? '78 карт · Лимитированный тираж' : '78 cards · Limited edition'}
           </p>
 
-          <div className="preorder-badge anim-fade-up anim-fade-up-d3">
-            {lang === 'ru' ? 'Предзаказ открыт' : 'Pre-order open'}
+          <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)', borderColor: 'rgba(255,255,255,0.12)' }}>
+            {lang === 'ru' ? 'Предзаказ закрыт. Скоро в продаже...' : 'Pre-order closed. Coming soon...'}
           </div>
 
           <p className="preorder-desc anim-fade-up anim-fade-up-d3">
@@ -60,12 +60,6 @@ export default function HomePage() {
           )}
 
           <div className="preorder-actions anim-fade-up anim-fade-up-d4">
-            <Link href="/tenderly-vibe" className="preorder-btn-primary">
-              {lang === 'ru' ? 'Оформить предзаказ' : 'Pre-order now'}
-              <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-              </svg>
-            </Link>
             <Link href="/tenderly-vibe" className="preorder-btn-ghost">
               {lang === 'ru' ? 'Подробнее' : 'Learn more'}
             </Link>
