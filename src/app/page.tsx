@@ -47,7 +47,7 @@ export default function HomePage() {
             {lang === 'ru' ? 'Предзаказ закрыт. Скоро в продаже...' : 'Pre-order closed. Coming soon...'}
           </div>
 
-          <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255, 180, 0, 0.12)', color: '#ffb400', borderColor: 'rgba(255, 180, 0, 0.35)', fontWeight: 700, fontSize: '0.82rem', letterSpacing: '0.03em' }}>
+          <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255, 180, 0, 0.12)', color: '#ffb400', borderColor: 'rgba(255, 180, 0, 0.35)' }}>
             ⚠️&nbsp;{lang === 'ru' ? 'Ориентировочная дата доставок — начало мая' : 'Estimated delivery — early May'}
           </div>
 
