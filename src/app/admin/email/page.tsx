@@ -143,6 +143,67 @@ export default function AdminEmailPage() {
     setSending(false);
   };
 
+  // Newsletter: derived values
+  const nlFiltered = nlCustomers.filter(c =>
+    !nlSearch ||
+    c.email.toLowerCase().includes(nlSearch.toLowerCase()) ||
+    c.name.toLowerCase().includes(nlSearch.toLowerCase()) ||
+    c.city.toLowerCase().includes(nlSearch.toLowerCase())
+  );
+  const nlAllFilteredSelected = nlFiltered.length > 0 && nlFiltered.every(c => nlSelected.has(c.email));
+
+  // Newsletter: handlers
+  const openNewsletter = async () => {
+    setShowNewsletter(true);
+    setNlView('select');
+    setNlResult(null);
+    setNlSearch('');
+    setNlSelected(new Set());
+    if (nlCustomers.length === 0) {
+      setNlLoadingCustomers(true);
+      const token = getToken();
+      try {
+        const res = await fetch('/api/admin/newsletter', { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setNlCustomers(data.customers || []);
+        }
+      } catch { /* ignore */ }
+      setNlLoadingCustomers(false);
+    }
+  };
+
+  const nlSelectFiltered = () =>
+    setNlSelected(prev => { const n = new Set(prev); nlFiltered.forEach(c => n.add(c.email)); return n; });
+
+  const nlDeselectFiltered = () =>
+    setNlSelected(prev => { const n = new Set(prev); nlFiltered.forEach(c => n.delete(c.email)); return n; });
+
+  const nlToggle = (email: string) =>
+    setNlSelected(prev => { const n = new Set(prev); n.has(email) ? n.delete(email) : n.add(email); return n; });
+
+  const handleSendNewsletter = async () => {
+    if (!confirm(`Отправить рассылку ${nlSelected.size} получателям?`)) return;
+    setNlView('sending');
+    const token = getToken();
+    const recipients = nlCustomers
+      .filter(c => nlSelected.has(c.email))
+      .map(c => ({ email: c.email, name: c.name }));
+    try {
+      const res = await fetch('/api/admin/newsletter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ recipients, subject: nlSubject, body: nlBody }),
+      });
+      const data = await res.json();
+      setNlResult(data);
+      fetchEmails();
+    } catch {
+      setNlResult({ sent: 0, failed: nlSelected.size, errors: ['Сетевая ошибка'] });
+    }
+    setNlView('done');
+  };
+
   const markAllRead = async () => {
     const token = getToken();
     try {
