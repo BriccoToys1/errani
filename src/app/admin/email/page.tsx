@@ -19,6 +19,13 @@ interface Email {
   createdAt: string;
 }
 
+interface NlCustomer {
+  email: string;
+  name: string;
+  city: string;
+  orderCount: number;
+}
+
 export default function AdminEmailPage() {
   const router = useRouter();
   const [emails, setEmails] = useState<Email[]>([]);
@@ -36,6 +43,17 @@ export default function AdminEmailPage() {
   const [compSubject, setCompSubject] = useState("");
   const [compBody, setCompBody] = useState("");
   const [sending, setSending] = useState(false);
+
+  // Newsletter state
+  const [showNewsletter, setShowNewsletter] = useState(false);
+  const [nlView, setNlView] = useState<'select' | 'sending' | 'done'>('select');
+  const [nlCustomers, setNlCustomers] = useState<NlCustomer[]>([]);
+  const [nlLoadingCustomers, setNlLoadingCustomers] = useState(false);
+  const [nlSearch, setNlSearch] = useState('');
+  const [nlSelected, setNlSelected] = useState<Set<string>>(new Set());
+  const [nlSubject, setNlSubject] = useState('');
+  const [nlBody, setNlBody] = useState('');
+  const [nlResult, setNlResult] = useState<{ sent: number; failed: number; errors: string[] } | null>(null);
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
@@ -175,6 +193,12 @@ export default function AdminEmailPage() {
             {unreadCount > 0 && <span className="cms-badge cms-badge-blue" style={{ marginLeft: "10px", fontSize: "12px" }}>{unreadCount}</span>}
           </h1>
           <div className="cms-header-actions">
+            <button className="cms-btn cms-btn-sm" onClick={openNewsletter} title="Рассылка">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}>
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+              </svg>
+              Рассылка
+            </button>
             <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={handleCompose}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}>
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -383,6 +407,220 @@ export default function AdminEmailPage() {
               </button>
               <button className="cms-btn" onClick={() => setComposing(false)}>Отмена</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Newsletter Modal */}
+      {showNewsletter && (
+        <div className="cms-modal-overlay" onClick={() => { if (nlView !== 'sending') setShowNewsletter(false); }}>
+          <div
+            className="cms-modal"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: 960, width: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0 }}
+          >
+            {/* Header */}
+            <div className="cms-modal-header" style={{ padding: '14px 20px', borderBottom: '1px solid var(--cms-border)' }}>
+              <h3 style={{ fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+                </svg>
+                Рассылка
+              </h3>
+              {nlView !== 'sending' && (
+                <button className="cms-modal-close" onClick={() => setShowNewsletter(false)}>&times;</button>
+              )}
+            </div>
+
+            {/* SELECT VIEW */}
+            {nlView === 'select' && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+                  {/* Left: Recipients */}
+                  <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--cms-border)', padding: 16, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--cms-text-muted)' }}>Получатели</span>
+                      {nlSelected.size > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(232,96,28,0.12)', color: 'var(--cms-accent)', padding: '2px 10px', borderRadius: 20 }}>
+                          {nlSelected.size} выбрано
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                      <input
+                        className="cms-input cms-input-sm"
+                        placeholder="Поиск по имени, email, городу..."
+                        value={nlSearch}
+                        onChange={e => setNlSearch(e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        className={`cms-btn cms-btn-sm${nlAllFilteredSelected ? ' cms-btn-primary' : ''}`}
+                        onClick={() => nlAllFilteredSelected ? nlDeselectFiltered() : nlSelectFiltered()}
+                        title={nlAllFilteredSelected ? 'Снять выделение' : 'Выбрать всех из списка'}
+                      >
+                        {nlAllFilteredSelected ? 'Снять' : 'Все'}
+                      </button>
+                    </div>
+                    {nlLoadingCustomers ? (
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className="cms-spinner" />
+                      </div>
+                    ) : (
+                      <div style={{ flex: 1, overflowY: 'auto' }}>
+                        <table className="cms-table" style={{ fontSize: 12 }}>
+                          <thead>
+                            <tr>
+                              <th style={{ width: 32 }}>
+                                <input
+                                  type="checkbox"
+                                  checked={nlAllFilteredSelected && nlFiltered.length > 0}
+                                  onChange={() => nlAllFilteredSelected ? nlDeselectFiltered() : nlSelectFiltered()}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                              </th>
+                              <th>Имя</th>
+                              <th>Email</th>
+                              <th style={{ width: 80 }}>Город</th>
+                              <th style={{ width: 44, textAlign: 'center' }}>Зак.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {nlFiltered.map(c => (
+                              <tr
+                                key={c.email}
+                                style={{ cursor: 'pointer', background: nlSelected.has(c.email) ? 'var(--cms-surface-hover)' : undefined }}
+                                onClick={() => nlToggle(c.email)}
+                              >
+                                <td onClick={e => e.stopPropagation()}>
+                                  <input type="checkbox" checked={nlSelected.has(c.email)} onChange={() => nlToggle(c.email)} style={{ cursor: 'pointer' }} />
+                                </td>
+                                <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>
+                                  {c.name || <span style={{ color: 'var(--cms-text-muted)' }}>—</span>}
+                                </td>
+                                <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150, color: 'var(--cms-accent)' }}>
+                                  {c.email}
+                                </td>
+                                <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {c.city || <span style={{ color: 'var(--cms-text-muted)' }}>—</span>}
+                                </td>
+                                <td style={{ textAlign: 'center', fontWeight: 600 }}>{c.orderCount}</td>
+                              </tr>
+                            ))}
+                            {nlFiltered.length === 0 && (
+                              <tr>
+                                <td colSpan={5} style={{ textAlign: 'center', padding: '28px', color: 'var(--cms-text-muted)', fontSize: 12 }}>
+                                  {nlCustomers.length === 0 ? 'Нет клиентов с email-адресом' : 'Ничего не найдено'}
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <div style={{ paddingTop: 8, marginTop: 8, borderTop: '1px solid var(--cms-border)', fontSize: 11, color: 'var(--cms-text-muted)' }}>
+                      Всего клиентов с email: {nlCustomers.length}
+                    </div>
+                  </div>
+
+                  {/* Right: Compose */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--cms-text-muted)' }}>Письмо</span>
+                    <label className="cms-label">
+                      Тема
+                      <input
+                        className="cms-input"
+                        value={nlSubject}
+                        onChange={e => setNlSubject(e.target.value)}
+                        placeholder="Тема рассылки..."
+                      />
+                    </label>
+                    <label className="cms-label" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                      Текст письма
+                      <textarea
+                        className="cms-textarea"
+                        value={nlBody}
+                        onChange={e => setNlBody(e.target.value)}
+                        placeholder={"Здравствуйте!\n\nТекст вашего сообщения...\n\nПоддерживается HTML: <b>жирный</b>, <a href=\"https://errani.ru\">ссылка</a>"}
+                        style={{ flex: 1, resize: 'none', minHeight: 200, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.6 }}
+                      />
+                    </label>
+                    <div style={{ fontSize: 11, color: 'var(--cms-text-muted)', background: 'var(--cms-surface)', padding: '8px 10px', borderRadius: 6, lineHeight: 1.7 }}>
+                      HTML:&nbsp;
+                      <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 3 }}>&lt;b&gt;</code>{' '}
+                      <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 3 }}>&lt;i&gt;</code>{' '}
+                      <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 3 }}>&lt;a href=&quot;...&quot;&gt;</code>{' '}
+                      <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 3 }}>&lt;br&gt;</code>
+                      &nbsp;·&nbsp; Двойной Enter = новый абзац
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px', borderTop: '1px solid var(--cms-border)' }}>
+                  <span style={{ marginRight: 'auto', fontSize: 12, color: nlSelected.size > 0 ? 'var(--cms-text-primary)' : 'var(--cms-text-muted)' }}>
+                    {nlSelected.size > 0
+                      ? <><strong>{nlSelected.size}</strong>{' '}{nlSelected.size === 1 ? 'получатель выбран' : nlSelected.size < 5 ? 'получателя выбрано' : 'получателей выбрано'}</>
+                      : 'Выберите получателей слева'}
+                  </span>
+                  <button className="cms-btn" onClick={() => setShowNewsletter(false)}>Отмена</button>
+                  <button
+                    className="cms-btn cms-btn-primary"
+                    disabled={nlSelected.size === 0 || !nlSubject.trim() || !nlBody.trim()}
+                    onClick={handleSendNewsletter}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 5, verticalAlign: 'middle' }}>
+                      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                    Отправить ({nlSelected.size})
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* SENDING VIEW */}
+            {nlView === 'sending' && (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 48, gap: 16 }}>
+                <div className="cms-spinner" style={{ width: 36, height: 36 }} />
+                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Идёт отправка...</h3>
+                <p style={{ color: 'var(--cms-text-muted)', fontSize: 13, textAlign: 'center', lineHeight: 1.7 }}>
+                  Рассылка отправляется {nlSelected.size} получателям.<br />
+                  Пожалуйста, не закрывайте окно.
+                </p>
+              </div>
+            )}
+
+            {/* DONE VIEW */}
+            {nlView === 'done' && nlResult && (
+              <>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', gap: 12 }}>
+                  <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 4 }}>
+                    {nlResult.failed === 0 ? '✅' : '⚠️'}
+                  </div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700 }}>Рассылка завершена</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, width: '100%', maxWidth: 300, margin: '8px 0' }}>
+                    <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 12, padding: '18px 12px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 36, fontWeight: 900, color: '#10b981', lineHeight: 1 }}>{nlResult.sent}</div>
+                      <div style={{ fontSize: 10, color: 'var(--cms-text-muted)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Отправлено</div>
+                    </div>
+                    <div style={{ background: nlResult.failed > 0 ? 'rgba(239,68,68,0.1)' : 'var(--cms-surface)', border: `1px solid ${nlResult.failed > 0 ? 'rgba(239,68,68,0.25)' : 'var(--cms-border)'}`, borderRadius: 12, padding: '18px 12px', textAlign: 'center' }}>
+                      <div style={{ fontSize: 36, fontWeight: 900, color: nlResult.failed > 0 ? '#ef4444' : 'var(--cms-text-muted)', lineHeight: 1 }}>{nlResult.failed}</div>
+                      <div style={{ fontSize: 10, color: 'var(--cms-text-muted)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ошибок</div>
+                    </div>
+                  </div>
+                  {nlResult.errors.length > 0 && (
+                    <div style={{ width: '100%', maxWidth: 420, background: 'var(--cms-surface)', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: 'var(--cms-text-muted)', maxHeight: 100, overflowY: 'auto', lineHeight: 1.8 }}>
+                      {nlResult.errors.map((e, i) => <div key={i}>{e}</div>)}
+                    </div>
+                  )}
+                </div>
+                <div style={{ padding: '12px 20px', borderTop: '1px solid var(--cms-border)', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="cms-btn cms-btn-primary" onClick={() => { setShowNewsletter(false); setNlView('select'); setNlResult(null); }}>
+                    Готово
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
