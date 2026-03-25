@@ -34,8 +34,9 @@ export async function POST(req: NextRequest) {
 
         // Generate receipt PDF
         let receiptPdf: Buffer | undefined;
+        let receiptHtml: string | undefined;
         try {
-          const receiptHtml = buildReceiptHtml(
+          receiptHtml = buildReceiptHtml(
             {
               ...order,
               items: order.items.map(i => ({
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
             price: i.price,
           })),
           receiptPdf,
+          receiptHtml,
         });
         break;
       }

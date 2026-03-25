@@ -187,6 +187,21 @@ export function ProductContent({ product }: { product: Product }) {
             )}
           </div>
 
+          {/* Delivery disclaimer */}
+          <div className="anim-fade-up anim-fade-up-d3" style={{
+            margin: '12px 0 4px',
+            padding: '10px 14px',
+            background: 'rgba(255, 180, 0, 0.10)',
+            border: '1px solid rgba(255, 180, 0, 0.35)',
+            borderRadius: '8px',
+            color: '#ffb400',
+            fontSize: '0.82rem',
+            fontWeight: 700,
+            lineHeight: 1.5,
+          }}>
+            ⚠️&nbsp;{lang === 'ru' ? 'Ориентировочная дата доставок — начало мая' : 'Estimated delivery — early May'}
+          </div>
+
           {/* Single add-to-cart / go-to-cart button */}
           <div className="product-actions anim-fade-up anim-fade-up-d4">
             {product.isPreorder && product.preorderClosed ? (

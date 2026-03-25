@@ -12,6 +12,7 @@ export interface OrderEmailData {
   totalAmount: number;
   items: { name: string; quantity: number; price: number }[];
   receiptPdf?: Buffer;
+  receiptHtml?: string;
 }
 
 const SHIPPING_LABELS: Record<string, string> = {
@@ -176,12 +177,14 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
     ? [{ filename: `receipt-${data.orderNumber}.pdf`, content: data.receiptPdf }]
     : [];
 
+  const emailBody = data.receiptHtml || html;
+
   try {
     const result = await resend.emails.send({
       from: 'errani <mail@errani.ru>',
       to: data.customerEmail,
       subject: `Заказ #${data.orderNumber} подтверждён — errani`,
-      html,
+      html: emailBody,
       ...(attachments.length ? { attachments } : {}),
     });
     console.log(`Order confirmation email sent to ${data.customerEmail}`);
