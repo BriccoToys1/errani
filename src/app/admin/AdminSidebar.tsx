@@ -119,9 +119,21 @@ export function AdminSidebar() {
     if (saved === 'true') setCollapsed(true);
   }, []);
 
+  // Close on route change
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  // Body scroll lock when mobile drawer open
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileOpen]);
 
   const toggleCollapse = () => {
     setCollapsed(prev => {
