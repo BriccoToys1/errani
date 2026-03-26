@@ -18,6 +18,7 @@ interface Product {
   oldPrice: number | null;
   discount: number;
   stock: number;
+  inStock: boolean;
   image: string;
   images: string;
   isAuthor: boolean;
@@ -68,6 +69,10 @@ export function CatalogContent() {
   const handleAddToCart = (e: React.MouseEvent, product: Product) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (!product.inStock) {
+      return;
+    }
 
     if (cartIds.has(product.id)) {
       window.location.href = '/cart';
@@ -199,8 +204,14 @@ export function CatalogContent() {
                     <button
                       className="catalog-card-cart-btn"
                       onClick={(e) => handleAddToCart(e, product)}
+                      disabled={!product.inStock}
+                      style={!product.inStock ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
                     >
-                      {isInCart ? (lang === 'ru' ? 'Перейти в корзину' : 'Go to cart') : t(lang, 'catalog.view')}
+                      {!product.inStock
+                        ? (lang === 'ru' ? 'Недоступно' : 'Unavailable')
+                        : isInCart
+                          ? (lang === 'ru' ? 'Перейти в корзину' : 'Go to cart')
+                          : t(lang, 'catalog.view')}
                     </button>
                   </div>
                 </Link>

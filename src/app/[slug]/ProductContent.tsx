@@ -19,6 +19,7 @@ interface Product {
   discount: number;
   image: string;
   images: string;
+  inStock: boolean;
   isPreorder: boolean;
   preorderClosed?: boolean;
   preorderAvailableDate?: string | null;
@@ -204,7 +205,22 @@ export function ProductContent({ product }: { product: Product }) {
 
           {/* Single add-to-cart / go-to-cart button */}
           <div className="product-actions anim-fade-up anim-fade-up-d4">
-            {product.isPreorder && product.preorderClosed ? (
+            {!product.inStock ? (
+              <div style={{
+                padding: '14px 20px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: '10px',
+                fontSize: '14px',
+                lineHeight: 1.6,
+                color: 'var(--text-secondary)',
+              }}>
+                <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>
+                  {lang === 'ru' ? 'Товар недоступен для заказа.' : 'Product is unavailable for ordering.'}
+                </strong>
+                {lang === 'ru' ? 'Добавление в корзину временно отключено администратором.' : 'Add to cart is temporarily disabled by admin.'}
+              </div>
+            ) : product.isPreorder && product.preorderClosed ? (
               <div style={{
                 padding: '14px 20px',
                 background: 'rgba(255,255,255,0.05)',

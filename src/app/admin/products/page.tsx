@@ -414,6 +414,40 @@ export default function AdminProductsPage() {
     fetchProducts();
   };
 
+  const toggleOrderAvailability = async (product: Product) => {
+    const token = getToken();
+    if (!token) return;
+    await fetch(`/api/products/${product.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name: product.name,
+        nameRu: product.nameRu || "",
+        slug: product.slug,
+        description: product.description,
+        descriptionRu: product.descriptionRu || "",
+        price: product.price,
+        oldPrice: product.oldPrice,
+        discount: product.discount,
+        stock: product.stock,
+        currency: product.currency,
+        image: product.image,
+        images: product.images,
+        inStock: !product.inStock,
+        isPreorder: product.isPreorder,
+        preorderClosed: product.preorderClosed || false,
+        preorderAvailableDate: product.preorderAvailableDate || null,
+        isAuthor: product.isAuthor,
+        isLimited: product.isLimited,
+        limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
+        isActive: product.isActive,
+        characteristics: product.characteristics || "[]",
+        sortOrder: product.sortOrder,
+      }),
+    });
+    fetchProducts();
+  };
+
   const handleSave = async () => {
     setSaving(true);
     const token = getToken();
@@ -533,6 +567,7 @@ export default function AdminProductsPage() {
                   <th>Скидка</th>
                   <th>Остаток</th>
                   <th>Активен</th>
+                  <th>Доступно</th>
                   <th>Авторская</th>
                   <th style={{ width: 110 }}>Действия</th>
                 </tr>
@@ -559,6 +594,16 @@ export default function AdminProductsPage() {
                         {p.isActive ? "Да" : "Нет"}
                       </button>
                     </td>
+                    <td>
+                      <button
+                        className={`cms-badge ${p.inStock ? "cms-badge-green" : "cms-badge-red"}`}
+                        style={{ cursor: "pointer", border: "none" }}
+                        onClick={() => toggleOrderAvailability(p)}
+                        title="Переключить доступность для заказа"
+                      >
+                        {p.inStock ? "Да" : "Нет"}
+                      </button>
+                    </td>
                     <td>{p.isAuthor ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#9b59b6"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> : "\u2014"}</td>
                     <td>
                       <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Редактировать">
@@ -571,7 +616,7 @@ export default function AdminProductsPage() {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={10} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Товары не найдены</td></tr>
+                  <tr><td colSpan={11} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Товары не найдены</td></tr>
                 )}
               </tbody>
             </table>

@@ -37,6 +37,8 @@ export default function CartPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [consentOferta, setConsentOferta] = useState(false);
   const [consentData, setConsentData] = useState(false);
+  const [unavailableProductIds, setUnavailableProductIds] = useState<Set<string>>(new Set());
+  const [availabilityChecked, setAvailabilityChecked] = useState(false);
 
   const [deliveryEstimate, setDeliveryEstimate] = useState('Ориентировочный срок доставки ~ начало Мая');
 
@@ -50,6 +52,45 @@ export default function CartPage() {
     setCart(getCart());
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    const checkAvailability = async () => {
+      if (loading) return;
+      if (cart.length === 0) {
+        setUnavailableProductIds(new Set());
+        setAvailabilityChecked(true);
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/products?showAll=true');
+        const products = await res.json();
+        if (!Array.isArray(products)) {
+          setAvailabilityChecked(true);
+          return;
+        }
+
+        const byId = new Map<string, { id: string; inStock: boolean; isActive: boolean }>(
+          products.map((p: { id: string; inStock: boolean; isActive: boolean }) => [p.id, p])
+        );
+
+        const blocked = new Set<string>();
+        for (const item of cart) {
+          const p = byId.get(item.productId);
+          if (!p || !p.isActive || !p.inStock) {
+            blocked.add(item.productId);
+          }
+        }
+        setUnavailableProductIds(blocked);
+      } catch {
+        // If check fails, keep existing state and avoid false-negative ordering.
+      } finally {
+        setAvailabilityChecked(true);
+      }
+    };
+
+    checkAvailability();
+  }, [cart, loading]);
 
   useEffect(() => {
     fetch('/api/admin/settings?key=deliveryEstimate')
@@ -74,6 +115,8 @@ export default function CartPage() {
   const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
   const shippingCost = isRussia ? getShippingCost(itemCount) : 0;
   const grandTotal = total + shippingCost;
+  const unavailableItems = cart.filter(item => unavailableProductIds.has(item.productId));
+  const hasUnavailableItems = unavailableItems.length > 0;
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -153,6 +196,10 @@ export default function CartPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (hasUnavailableItems) {
+      alert('Некоторые товары в корзине сейчас недоступны. Удалите их, чтобы продолжить оформление.');
+      return;
+    }
     if (!validate()) return;
     setSubmitting(true);
 
@@ -290,6 +337,11 @@ export default function CartPage() {
               <div className="cart-item-info">
                 <div className="cart-item-name">{item.name}</div>
                 {item.isPreorder && <span className="cart-item-tag">{t(lang, 'cart.preorder')}</span>}
+                {unavailableProductIds.has(item.productId) && (
+                  <span className="cart-item-tag" style={{ background: 'rgba(239,68,68,0.18)', color: '#fda4af' }}>
+                    {lang === 'ru' ? 'Недоступно к заказу' : 'Unavailable'}
+                  </span>
+                )}
                 <div className="cart-item-price">{formatPrice(item.price * item.quantity, item.currency)}</div>
               </div>
               <div className="cart-item-actions">
@@ -306,6 +358,23 @@ export default function CartPage() {
           ))}
 
           {/* Summary */}
+          {hasUnavailableItems && (
+            <div style={{
+              marginTop: '0.7rem',
+              marginBottom: '0.8rem',
+              padding: '0.9rem 1rem',
+              background: 'rgba(239,68,68,0.10)',
+              border: '1px solid rgba(239,68,68,0.35)',
+              borderRadius: '10px',
+              fontSize: '0.82rem',
+              lineHeight: 1.7,
+              color: '#fecaca',
+            }}>
+              {lang === 'ru'
+                ? 'В корзине есть недоступные товары. Удалите их, чтобы перейти к оформлению.'
+                : 'Your cart contains unavailable products. Remove them to continue checkout.'}
+            </div>
+          )}
           <div className="cart-summary-inline">
             <span className="cart-total-label-inline">{t(lang, 'cart.total')}</span>
             <span className="cart-total-price-inline">{formatPrice(total)}</span>
@@ -313,6 +382,7 @@ export default function CartPage() {
               type="button"
               className="cart-checkout-btn"
               onClick={() => setStep('checkout')}
+              disabled={hasUnavailableItems || !availabilityChecked}
             >
               {t(lang, 'cart.checkout')}
             </button>
@@ -320,6 +390,22 @@ export default function CartPage() {
         </>
       ) : (
         <form onSubmit={handleSubmit}>
+          {hasUnavailableItems && (
+            <div style={{
+              marginBottom: '1rem',
+              padding: '0.95rem 1rem',
+              background: 'rgba(239,68,68,0.10)',
+              border: '1px solid rgba(239,68,68,0.35)',
+              borderRadius: '10px',
+              fontSize: '0.82rem',
+              lineHeight: 1.75,
+              color: '#fecaca',
+            }}>
+              {lang === 'ru'
+                ? 'Оформление недоступно: часть товаров в корзине отключена администратором. Удалите недоступные позиции и повторите попытку.'
+                : 'Checkout is unavailable: some products in your cart are disabled by admin. Remove unavailable items and try again.'}
+            </div>
+          )}
           <div className="checkout-form" style={{ borderTop: 'none', marginTop: 0, paddingTop: 0 }}>
             <h2 className="checkout-heading">{lang === 'ru' ? 'Контактные данные' : 'Contact details'}</h2>
             <div className="checkout-grid">
@@ -503,7 +589,7 @@ export default function CartPage() {
             <span style={{ flex: 1 }} />
             <span className="cart-total-label-inline">К оплате</span>
             <span className="cart-total-price-inline">{formatPrice(grandTotal)}</span>
-            <button type="submit" className="cart-checkout-btn" disabled={submitting}>
+            <button type="submit" className="cart-checkout-btn" disabled={submitting || hasUnavailableItems || !availabilityChecked}>
               {submitting ? 'Обработка...' : 'Перейти к оплате'}
             </button>
           </div>}

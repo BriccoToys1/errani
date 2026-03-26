@@ -39,6 +39,7 @@ export default async function ProductPage({ params }: Props) {
         discount: product.discount,
         image: product.image,
         images: product.images,
+        inStock: product.inStock,
         isPreorder: product.isPreorder,
         isLimited: product.isLimited,
         limitedEditionText: product.limitedEditionText,

@@ -96,6 +96,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Some products not found' }, { status: 400 });
     }
 
+    const unavailable = products.filter(p => !p.isActive || !p.inStock);
+    if (unavailable.length > 0) {
+      const names = unavailable.map(p => p.nameRu || p.name).join(', ');
+      return NextResponse.json(
+        { error: `These products are currently unavailable: ${names}` },
+        { status: 409 }
+      );
+    }
+
     let totalAmount = 0;
     const orderItems = items.map(item => {
       const product = products.find(p => p.id === item.productId)!;
