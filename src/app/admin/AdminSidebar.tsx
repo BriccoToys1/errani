@@ -62,6 +62,7 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0, newEmails: 0 });
   const [health, setHealth] = useState<HealthStatus>({ level: 'green', message: 'Всё в порядке' });
   const [search, setSearch] = useState('');
@@ -118,6 +119,10 @@ export function AdminSidebar() {
     if (saved === 'true') setCollapsed(true);
   }, []);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   const toggleCollapse = () => {
     setCollapsed(prev => {
       localStorage.setItem('cms_sidebar_collapsed', String(!prev));
@@ -169,7 +174,22 @@ export function AdminSidebar() {
   }, [search]);
 
   return (
-    <aside className={`cms-sidebar ${collapsed ? 'collapsed' : ''}`}>
+    <>
+      <button
+        className="cms-mobile-nav-toggle"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Открыть меню"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
+
+      {mobileOpen && <div className="cms-sidebar-backdrop" onClick={() => setMobileOpen(false)} />}
+
+      <aside className={`cms-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="cms-sidebar-brand">
         <svg className="cms-sidebar-brand-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
           <rect x="3" y="3" width="7" height="9" rx="1.5"/>
@@ -299,6 +319,7 @@ export function AdminSidebar() {
               href={nav.href}
               className={`cms-nav-item ${isActive(nav.href) ? 'active' : ''}`}
               title={collapsed ? nav.label : undefined}
+              onClick={() => setMobileOpen(false)}
             >
               <span className="cms-nav-icon">{ICONS[nav.icon]}</span>
               {!collapsed && <span className="cms-nav-label">{nav.label}</span>}
@@ -344,6 +365,7 @@ export function AdminSidebar() {
           </svg>
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
