@@ -56,6 +56,8 @@ model Product {
   isLimited          Boolean        @default(false) // лимитированный тираж
   limitedEditionText String         @default("") // editable limited edition description
   isActive           Boolean        @default(true) // Show in catalog
+  isSaleDisabled     Boolean        @default(false) // "Скоро" — товар в каталоге, кнопка "Скоро"
+  isSoldOut          Boolean        @default(false) // Плашка "Sold Out" на фото
   characteristics    String         @default("") // JSON array of {key, value} pairs
   avitoUrl      String         @default("") // link to avito listing if parsed
   sortOrder     Int            @default(0)

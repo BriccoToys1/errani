@@ -233,6 +233,8 @@ interface Product {
   isLimited: boolean;
   limitedEditionText: string;
   isActive: boolean;
+  isSaleDisabled: boolean;
+  isSoldOut: boolean;
   sortOrder: number;
   characteristics: string;
   createdAt: string;
@@ -243,7 +245,8 @@ const emptyProduct = {
   price: 0, oldPrice: null as number | null, discount: 0, stock: 0,
   currency: "RUB", image: "", images: "[]", inStock: true, isPreorder: false,
   preorderClosed: false, preorderAvailableDate: "",
-  isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true, sortOrder: 0,
+  isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true,
+  isSaleDisabled: false, isSoldOut: false, sortOrder: 0,
   characteristics: "[]",
 };
 
@@ -342,6 +345,8 @@ export default function AdminProductsPage() {
       preorderClosed: product.preorderClosed || false,
       preorderAvailableDate: product.preorderAvailableDate ? new Date(product.preorderAvailableDate).toISOString().split('T')[0] : "",
       isAuthor: product.isAuthor, isLimited: product.isLimited || false, limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "", isActive: product.isActive,
+      isSaleDisabled: product.isSaleDisabled || false,
+      isSoldOut: product.isSoldOut || false,
       sortOrder: product.sortOrder,
       characteristics: product.characteristics || "[]",
     });
@@ -374,6 +379,8 @@ export default function AdminProductsPage() {
       isLimited: product.isLimited || false,
       limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
       isActive: false,
+      isSaleDisabled: product.isSaleDisabled || false,
+      isSoldOut: product.isSoldOut || false,
       characteristics: product.characteristics || "[]",
       sortOrder: product.sortOrder,
     });
@@ -407,6 +414,8 @@ export default function AdminProductsPage() {
         isLimited: product.isLimited,
         limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
         isActive: !product.isActive,
+        isSaleDisabled: product.isSaleDisabled || false,
+        isSoldOut: product.isSoldOut || false,
         characteristics: product.characteristics || "[]",
         sortOrder: product.sortOrder,
       }),
@@ -421,28 +430,63 @@ export default function AdminProductsPage() {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        name: product.name,
-        nameRu: product.nameRu || "",
-        slug: product.slug,
-        description: product.description,
-        descriptionRu: product.descriptionRu || "",
-        price: product.price,
-        oldPrice: product.oldPrice,
-        discount: product.discount,
-        stock: product.stock,
-        currency: product.currency,
-        image: product.image,
-        images: product.images,
-        inStock: !product.inStock,
-        isPreorder: product.isPreorder,
-        preorderClosed: product.preorderClosed || false,
-        preorderAvailableDate: product.preorderAvailableDate || null,
-        isAuthor: product.isAuthor,
-        isLimited: product.isLimited,
+        name: product.name, nameRu: product.nameRu || "", slug: product.slug,
+        description: product.description, descriptionRu: product.descriptionRu || "",
+        price: product.price, oldPrice: product.oldPrice, discount: product.discount,
+        stock: product.stock, currency: product.currency, image: product.image,
+        images: product.images, inStock: !product.inStock, isPreorder: product.isPreorder,
+        preorderClosed: product.preorderClosed || false, preorderAvailableDate: product.preorderAvailableDate || null,
+        isAuthor: product.isAuthor, isLimited: product.isLimited,
         limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
-        isActive: product.isActive,
-        characteristics: product.characteristics || "[]",
-        sortOrder: product.sortOrder,
+        isActive: product.isActive, isSaleDisabled: product.isSaleDisabled || false,
+        isSoldOut: product.isSoldOut || false,
+        characteristics: product.characteristics || "[]", sortOrder: product.sortOrder,
+      }),
+    });
+    fetchProducts();
+  };
+
+  const toggleSaleDisabled = async (product: Product) => {
+    const token = getToken();
+    if (!token) return;
+    await fetch(`/api/products/${product.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name: product.name, nameRu: product.nameRu || "", slug: product.slug,
+        description: product.description, descriptionRu: product.descriptionRu || "",
+        price: product.price, oldPrice: product.oldPrice, discount: product.discount,
+        stock: product.stock, currency: product.currency, image: product.image,
+        images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
+        preorderClosed: product.preorderClosed || false, preorderAvailableDate: product.preorderAvailableDate || null,
+        isAuthor: product.isAuthor, isLimited: product.isLimited,
+        limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
+        isActive: product.isActive, isSaleDisabled: !product.isSaleDisabled,
+        isSoldOut: product.isSoldOut || false,
+        characteristics: product.characteristics || "[]", sortOrder: product.sortOrder,
+      }),
+    });
+    fetchProducts();
+  };
+
+  const toggleSoldOut = async (product: Product) => {
+    const token = getToken();
+    if (!token) return;
+    await fetch(`/api/products/${product.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name: product.name, nameRu: product.nameRu || "", slug: product.slug,
+        description: product.description, descriptionRu: product.descriptionRu || "",
+        price: product.price, oldPrice: product.oldPrice, discount: product.discount,
+        stock: product.stock, currency: product.currency, image: product.image,
+        images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
+        preorderClosed: product.preorderClosed || false, preorderAvailableDate: product.preorderAvailableDate || null,
+        isAuthor: product.isAuthor, isLimited: product.isLimited,
+        limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
+        isActive: product.isActive, isSaleDisabled: product.isSaleDisabled || false,
+        isSoldOut: !product.isSoldOut,
+        characteristics: product.characteristics || "[]", sortOrder: product.sortOrder,
       }),
     });
     fetchProducts();
@@ -568,6 +612,8 @@ export default function AdminProductsPage() {
                   <th>Остаток</th>
                   <th>Активен</th>
                   <th>Доступно</th>
+                  <th title="Disable of Sale — кнопка «Скоро»">Скоро</th>
+                  <th title="Плашка Sold Out на фото">Sold Out</th>
                   <th>Авторская</th>
                   <th style={{ width: 110 }}>Действия</th>
                 </tr>
@@ -604,6 +650,26 @@ export default function AdminProductsPage() {
                         {p.inStock ? "Да" : "Нет"}
                       </button>
                     </td>
+                    <td>
+                      <button
+                        className={`cms-badge ${p.isSaleDisabled ? "cms-badge-yellow" : "cms-badge-green"}`}
+                        style={{ cursor: "pointer", border: "none" }}
+                        onClick={() => toggleSaleDisabled(p)}
+                        title="Disable of Sale — показывает «Скоро» вместо кнопки купить"
+                      >
+                        {p.isSaleDisabled ? "Скоро" : "—"}
+                      </button>
+                    </td>
+                    <td>
+                      <button
+                        className={`cms-badge ${p.isSoldOut ? "cms-badge-red" : "cms-badge-green"}`}
+                        style={{ cursor: "pointer", border: "none" }}
+                        onClick={() => toggleSoldOut(p)}
+                        title="Плашка Sold Out на фото товара"
+                      >
+                        {p.isSoldOut ? "Да" : "—"}
+                      </button>
+                    </td>
                     <td>{p.isAuthor ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#9b59b6"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> : "\u2014"}</td>
                     <td>
                       <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Редактировать">
@@ -616,7 +682,7 @@ export default function AdminProductsPage() {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={11} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Товары не найдены</td></tr>
+                  <tr><td colSpan={13} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Товары не найдены</td></tr>
                 )}
               </tbody>
             </table>
@@ -712,6 +778,14 @@ export default function AdminProductsPage() {
                     {key === "isActive" ? "Активен" : key === "inStock" ? "В наличии" : key === "isPreorder" ? "Это предзаказ?" : key === "isAuthor" ? "Авторская" : "Лимитированный тираж"}
                   </label>
                 ))}
+                <label className="cms-checkbox-label">
+                  <input type="checkbox" checked={form.isSaleDisabled} onChange={(e) => setForm({ ...form, isSaleDisabled: e.target.checked })} />
+                  Скоро (кнопка «Скоро»)
+                </label>
+                <label className="cms-checkbox-label">
+                  <input type="checkbox" checked={form.isSoldOut} onChange={(e) => setForm({ ...form, isSoldOut: e.target.checked })} />
+                  Sold Out (плашка на фото)
+                </label>
               </div>
               {form.isPreorder && (
                 <div style={{ marginTop: "12px", padding: "12px", background: "rgba(232,96,28,0.08)", borderRadius: "8px", border: "1px solid rgba(232,96,28,0.25)" }}>

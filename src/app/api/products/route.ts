@@ -57,6 +57,8 @@ export async function POST(req: NextRequest) {
         limitedEditionText: body.limitedEditionText ?? '',
         characteristics: body.characteristics ?? '[]',
         isActive: body.isActive ?? true,
+        isSaleDisabled: body.isSaleDisabled ?? false,
+        isSoldOut: body.isSoldOut ?? false,
         sortOrder: body.sortOrder || 0,
       },
     });

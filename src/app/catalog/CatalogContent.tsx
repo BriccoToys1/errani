@@ -19,6 +19,8 @@ interface Product {
   discount: number;
   stock: number;
   inStock: boolean;
+  isSaleDisabled: boolean;
+  isSoldOut: boolean;
   image: string;
   images: string;
   isAuthor: boolean;
@@ -70,7 +72,7 @@ export function CatalogContent() {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!product.inStock) {
+    if (!product.inStock || product.isSaleDisabled) {
       return;
     }
 
@@ -187,6 +189,9 @@ export function CatalogContent() {
                         quality={85}
                       />
                     )}
+                    {product.isSoldOut && (
+                      <span className="catalog-sold-out-badge">Sold Out</span>
+                    )}
                     <div className="catalog-card-badges">
                       {product.isAuthor && <span className="badge badge-author"><i className="fi fi-rr-thumbtack" style={{ fontSize: 10, marginRight: 4 }} />{lang === 'ru' ? 'Авторская' : 'Author'}</span>}
                       {product.discount > 0 && <span className="badge badge-discount">-{product.discount}%</span>}
@@ -204,14 +209,16 @@ export function CatalogContent() {
                     <button
                       className="catalog-card-cart-btn"
                       onClick={(e) => handleAddToCart(e, product)}
-                      disabled={!product.inStock}
-                      style={!product.inStock ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+                      disabled={!product.inStock || product.isSaleDisabled}
+                      style={(!product.inStock || product.isSaleDisabled) ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
                     >
                       {!product.inStock
                         ? (lang === 'ru' ? 'Недоступно' : 'Unavailable')
-                        : isInCart
-                          ? (lang === 'ru' ? 'Перейти в корзину' : 'Go to cart')
-                          : t(lang, 'catalog.view')}
+                        : product.isSaleDisabled
+                          ? (lang === 'ru' ? 'Скоро' : 'Coming soon')
+                          : isInCart
+                            ? (lang === 'ru' ? 'Перейти в корзину' : 'Go to cart')
+                            : t(lang, 'catalog.view')}
                     </button>
                   </div>
                 </Link>

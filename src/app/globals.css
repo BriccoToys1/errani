@@ -1544,6 +1544,26 @@ select.form-field {
   padding-top: 112%;
 }
 
+/* Sold Out overlay badge */
+.catalog-sold-out-badge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0.55rem 0;
+  pointer-events: none;
+}
+
 /* Catalog Badges */
 .catalog-card-badges {
   position: absolute;

@@ -7,14 +7,17 @@ import { useEffect, useState } from 'react';
 
 export default function HomePage() {
   const { lang } = useLanguage();
-  const [price, setPrice] = useState<number | null>(null);
+  const [tvPrice, setTvPrice] = useState<number | null>(null);
+  const [pgvtPrice, setPgvtPrice] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/products')
       .then(r => r.json())
       .then((list: Array<{ slug: string; price: number }>) => {
         const tv = list.find(p => p.slug === 'tenderly-vibe');
-        if (tv) setPrice(tv.price);
+        if (tv) setTvPrice(tv.price);
+        const pgvt = list.find(p => p.slug === 'pgvt');
+        if (pgvt) setPgvtPrice(pgvt.price);
       })
       .catch(() => {});
   }, []);
@@ -22,69 +25,128 @@ export default function HomePage() {
   const formatPrice = (p: number) => `${p.toLocaleString('ru-RU')} ₽`;
 
   return (
-    <main className="preorder-hero">
-      {/* Ambient glow orbs */}
-      <div className="preorder-orb preorder-orb-1" />
-      <div className="preorder-orb preorder-orb-2" />
+    <>
+      {/* Pink Gothic Vibe Tarot Hero */}
+      <main className="preorder-hero" style={{ background: 'linear-gradient(135deg, #1a0a1e 0%, #2d1030 50%, #1a0a1e 100%)' }}>
+        <div className="preorder-orb preorder-orb-1" style={{ background: 'radial-gradient(circle, rgba(180,60,180,0.18) 0%, transparent 70%)' }} />
+        <div className="preorder-orb preorder-orb-2" style={{ background: 'radial-gradient(circle, rgba(120,0,120,0.12) 0%, transparent 70%)' }} />
 
-      <div className="preorder-content">
-        {/* ── Text Column ── */}
-        <div className="preorder-text">
-          <div className="preorder-eyebrow anim-fade-up">
-            {lang === 'ru' ? 'Авторская колода Таро' : 'Original Tarot Deck'}
-          </div>
-
-          <h1 className="preorder-title anim-fade-up anim-fade-up-d2">
-            <em>Tenderly</em><br />
-            <span>Vibe</span>
-          </h1>
-
-          <p className="preorder-spec anim-fade-up anim-fade-up-d2">
-            {lang === 'ru' ? '78 карт · Лимитированный тираж' : '78 cards · Limited edition'}
-          </p>
-
-          <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)', borderColor: 'rgba(255,255,255,0.12)' }}>
-            {lang === 'ru' ? 'Предзаказ закрыт. Скоро в продаже...' : 'Pre-order closed. Coming soon...'}
-          </div>
-
-          <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255, 180, 0, 0.12)', color: '#ffb400', borderColor: 'rgba(255, 180, 0, 0.35)' }}>
-            ⚠️&nbsp;{lang === 'ru' ? 'Ориентировочная дата доставок — начало мая' : 'Estimated delivery — early May'}
-          </div>
-
-          <p className="preorder-desc anim-fade-up anim-fade-up-d3">
-            {lang === 'ru'
-              ? 'Уникальная колода, созданная с любовью — каждая карта несёт особую энергетику и смысл. Станьте одним из первых владельцев.'
-              : 'A unique deck crafted with love — every card carries a special energy and meaning. Be one of the first to own it.'}
-          </p>
-
-          {price !== null && (
-            <div className="preorder-price anim-fade-up anim-fade-up-d3">
-              {formatPrice(price)}
+        <div className="preorder-content">
+          <div className="preorder-text">
+            <div className="preorder-eyebrow anim-fade-up">
+              {lang === 'ru' ? 'Новая авторская колода Таро' : 'New Original Tarot Deck'}
             </div>
-          )}
 
-          <div className="preorder-actions anim-fade-up anim-fade-up-d4">
-            <Link href="/tenderly-vibe" className="preorder-btn-ghost">
-              {lang === 'ru' ? 'Подробнее' : 'Learn more'}
-            </Link>
+            <h1 className="preorder-title anim-fade-up anim-fade-up-d2">
+              <em>Pink Gothic</em><br />
+              <span>Vibe</span>
+            </h1>
+
+            <p className="preorder-spec anim-fade-up anim-fade-up-d2">
+              {lang === 'ru' ? '78 карт · Лимитированный тираж' : '78 cards · Limited edition'}
+            </p>
+
+            <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(180,60,180,0.12)', color: '#d070e0', borderColor: 'rgba(180,60,180,0.35)' }}>
+              {lang === 'ru' ? 'Скоро в продаже' : 'Coming soon'}
+            </div>
+
+            <p className="preorder-desc anim-fade-up anim-fade-up-d3">
+              {lang === 'ru'
+                ? 'Тёмная романтика и нежная эстетика в одной колоде. Погрузись в мир готической нежности.'
+                : 'Dark romance and tender aesthetics in one deck. Immerse yourself in the world of gothic tenderness.'}
+            </p>
+
+            {pgvtPrice !== null && (
+              <div className="preorder-price anim-fade-up anim-fade-up-d3">
+                {formatPrice(pgvtPrice)}
+              </div>
+            )}
+
+            <div className="preorder-actions anim-fade-up anim-fade-up-d4">
+              <Link href="/pgvt" className="preorder-btn-ghost">
+                {lang === 'ru' ? 'Подробнее' : 'Learn more'}
+              </Link>
+            </div>
+          </div>
+
+          <div className="preorder-visual anim-fade-up anim-fade-up-d2">
+            <div className="preorder-img-wrap">
+              <Image
+                src="/media/photo-1.jpeg"
+                alt="Pink Gothic Vibe Tarot"
+                fill
+                className="preorder-img"
+                priority
+                sizes="(max-width: 768px) 80vw, 42vw"
+              />
+              <div className="preorder-img-overlay" />
+            </div>
           </div>
         </div>
+      </main>
 
-        {/* ── Image Column ── */}
-        <div className="preorder-visual anim-fade-up anim-fade-up-d2">
-          <div className="preorder-img-wrap">
-            <Image
-              src="/media/photo-11.jpeg"
-              alt="Tenderly Vibe Tarot"
-              fill
-              className="preorder-img"
-              priority
-              sizes="(max-width: 768px) 80vw, 42vw"
-            />
-            <div className="preorder-img-overlay" />
+      {/* Tenderly Vibe Hero */}
+      <main className="preorder-hero">
+        <div className="preorder-orb preorder-orb-1" />
+        <div className="preorder-orb preorder-orb-2" />
+
+        <div className="preorder-content">
+          <div className="preorder-text">
+            <div className="preorder-eyebrow anim-fade-up">
+              {lang === 'ru' ? 'Авторская колода Таро' : 'Original Tarot Deck'}
+            </div>
+
+            <h1 className="preorder-title anim-fade-up anim-fade-up-d2">
+              <em>Tenderly</em><br />
+              <span>Vibe</span>
+            </h1>
+
+            <p className="preorder-spec anim-fade-up anim-fade-up-d2">
+              {lang === 'ru' ? '78 карт · Лимитированный тираж' : '78 cards · Limited edition'}
+            </p>
+
+            <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)', borderColor: 'rgba(255,255,255,0.12)' }}>
+              {lang === 'ru' ? 'Предзаказ закрыт. Скоро в продаже...' : 'Pre-order closed. Coming soon...'}
+            </div>
+
+            <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255, 180, 0, 0.12)', color: '#ffb400', borderColor: 'rgba(255, 180, 0, 0.35)' }}>
+              {lang === 'ru' ? '⚠️ Ориентировочная дата доставок — начало мая' : '⚠️ Estimated delivery — early May'}
+            </div>
+
+            <p className="preorder-desc anim-fade-up anim-fade-up-d3">
+              {lang === 'ru'
+                ? 'Уникальная колода, созданная с любовью — каждая карта несёт особую энергетику и смысл. Станьте одним из первых владельцев.'
+                : 'A unique deck crafted with love — every card carries a special energy and meaning. Be one of the first to own it.'}
+            </p>
+
+            {tvPrice !== null && (
+              <div className="preorder-price anim-fade-up anim-fade-up-d3">
+                {formatPrice(tvPrice)}
+              </div>
+            )}
+
+            <div className="preorder-actions anim-fade-up anim-fade-up-d4">
+              <Link href="/tenderly-vibe" className="preorder-btn-ghost">
+                {lang === 'ru' ? 'Подробнее' : 'Learn more'}
+              </Link>
+            </div>
+          </div>
+
+          <div className="preorder-visual anim-fade-up anim-fade-up-d2">
+            <div className="preorder-img-wrap">
+              <Image
+                src="/media/photo-11.jpeg"
+                alt="Tenderly Vibe Tarot"
+                fill
+                className="preorder-img"
+                priority
+                sizes="(max-width: 768px) 80vw, 42vw"
+              />
+              <div className="preorder-img-overlay" />
+            </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
