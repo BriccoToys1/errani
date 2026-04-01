@@ -38,7 +38,7 @@ export default function HomePage() {
             </div>
 
             <h1 className="preorder-title anim-fade-up anim-fade-up-d2">
-              <em>Pink <span style={{ color: '#ff6eb4' }}>Gothic</span></em><br />
+              <em><span style={{ color: '#ff6eb4' }}>Gothic</span></em><br />
               <span style={{ color: '#ff6eb4' }}>Vibe</span>
             </h1>
 
