@@ -27,9 +27,9 @@ export default function HomePage() {
   return (
     <>
       {/* Pink Gothic Vibe Tarot Hero */}
-      <main className="preorder-hero" style={{ background: 'linear-gradient(135deg, #1a0a1e 0%, #2d1030 50%, #1a0a1e 100%)' }}>
-        <div className="preorder-orb preorder-orb-1" style={{ background: 'radial-gradient(circle, rgba(180,60,180,0.18) 0%, transparent 70%)' }} />
-        <div className="preorder-orb preorder-orb-2" style={{ background: 'radial-gradient(circle, rgba(120,0,120,0.12) 0%, transparent 70%)' }} />
+      <main className="preorder-hero">
+        <div className="preorder-orb preorder-orb-1" />
+        <div className="preorder-orb preorder-orb-2" />
 
         <div className="preorder-content">
           <div className="preorder-text">
@@ -38,15 +38,15 @@ export default function HomePage() {
             </div>
 
             <h1 className="preorder-title anim-fade-up anim-fade-up-d2">
-              <em>Pink Gothic</em><br />
-              <span>Vibe</span>
+              <em>Pink <span style={{ color: '#ff6eb4' }}>Gothic</span></em><br />
+              <span style={{ color: '#ff6eb4' }}>Vibe</span>
             </h1>
 
             <p className="preorder-spec anim-fade-up anim-fade-up-d2">
               {lang === 'ru' ? '78 карт · Лимитированный тираж' : '78 cards · Limited edition'}
             </p>
 
-            <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(180,60,180,0.12)', color: '#d070e0', borderColor: 'rgba(180,60,180,0.35)' }}>
+            <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255,110,180,0.1)', color: '#ff6eb4', borderColor: 'rgba(255,110,180,0.3)' }}>
               {lang === 'ru' ? 'Скоро в продаже' : 'Coming soon'}
             </div>
 
@@ -72,11 +72,12 @@ export default function HomePage() {
           <div className="preorder-visual anim-fade-up anim-fade-up-d2">
             <div className="preorder-img-wrap">
               <Image
-                src="/media/photo-1.jpeg"
+                src="/pgvt/7.svg"
                 alt="Pink Gothic Vibe Tarot"
                 fill
                 className="preorder-img"
                 priority
+                unoptimized
                 sizes="(max-width: 768px) 80vw, 42vw"
               />
               <div className="preorder-img-overlay" />
