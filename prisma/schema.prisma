@@ -52,6 +52,8 @@ model Product {
   isPreorder            Boolean    @default(false)
   preorderClosed        Boolean    @default(false)  // предзаказ закрыт
   preorderAvailableDate DateTime?                   // дата открытия продажи (отображается в сообщении)
+  preorderDeliveryTextEn String?                    // Preorder delivery text English
+  preorderDeliveryTextRu String?                    // Preorder delivery text Russian
   isAuthor      Boolean        @default(false) // авторская колода
   isLimited          Boolean        @default(false) // лимитированный тираж
   limitedEditionText String         @default("") // editable limited edition description
