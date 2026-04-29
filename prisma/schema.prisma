@@ -55,8 +55,6 @@ model Product {
   isAuthor      Boolean        @default(false) // авторская колода
   isLimited          Boolean        @default(false) // лимитированный тираж
   limitedEditionText String         @default("") // editable limited edition description
-  preorderDeliveryTextRu String   @default("") // custom preorder delivery info (RU)
-  preorderDeliveryTextEn String   @default("") // custom preorder delivery info (EN)
   isActive           Boolean        @default(true) // Show in catalog
   isSaleDisabled     Boolean        @default(false) // "Скоро" — товар в каталоге, кнопка "Скоро"
   isSoldOut          Boolean        @default(false) // Плашка "Sold Out" на фото

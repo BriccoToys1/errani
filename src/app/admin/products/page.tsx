@@ -229,8 +229,6 @@ interface Product {
   isPreorder: boolean;
   preorderClosed: boolean;
   preorderAvailableDate: string | null;
-  preorderDeliveryTextRu: string;
-  preorderDeliveryTextEn: string;
   isAuthor: boolean;
   isLimited: boolean;
   limitedEditionText: string;
@@ -249,8 +247,6 @@ const emptyProduct = {
   preorderClosed: false, preorderAvailableDate: "",
   isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true,
   isSaleDisabled: false, isSoldOut: false, sortOrder: 0,
-  preorderDeliveryTextRu: "",
-  preorderDeliveryTextEn: "",
   characteristics: "[]",
 };
 
@@ -348,8 +344,6 @@ export default function AdminProductsPage() {
       images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
       preorderClosed: product.preorderClosed || false,
       preorderAvailableDate: product.preorderAvailableDate ? new Date(product.preorderAvailableDate).toISOString().split('T')[0] : "",
-      preorderDeliveryTextRu: product.preorderDeliveryTextRu || "",
-      preorderDeliveryTextEn: product.preorderDeliveryTextEn || "",
       isAuthor: product.isAuthor, isLimited: product.isLimited || false, limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "", isActive: product.isActive,
       isSaleDisabled: product.isSaleDisabled || false,
       isSoldOut: product.isSoldOut || false,
@@ -381,8 +375,6 @@ export default function AdminProductsPage() {
       isPreorder: product.isPreorder,
       preorderClosed: product.preorderClosed || false,
       preorderAvailableDate: product.preorderAvailableDate ? new Date(product.preorderAvailableDate).toISOString().split('T')[0] : "",
-      preorderDeliveryTextRu: product.preorderDeliveryTextRu || "",
-      preorderDeliveryTextEn: product.preorderDeliveryTextEn || "",
       isAuthor: product.isAuthor,
       isLimited: product.isLimited || false,
       limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
