@@ -61,9 +61,7 @@ export const metadata: Metadata = {
     apple: '/logos/my_logo.png',
   },
   verification: {
-    other: {
-      'p:domain_verify': '51403cd5dee1f8bfed79e2518ed7c1c1',
-    },
+    other: {},
   },
 };
 
