@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const viewedSetting = await prisma.siteSettings.findUnique({ where: { key: 'ordersViewedAt' } });
     const ordersViewedAt = viewedSetting ? new Date(viewedSetting.value) : new Date(0);
     
-    const [orderCount, productCount, totalRevenue, pendingCount, recentOrders, inquiryCount, newInquiryCount, newOrdersCount, newEmailsCount, expenseAgg] = await Promise.all([
+    const [orderCount, productCount, totalRevenue, pendingCount, recentOrders, inquiryCount, newInquiryCount, waitlistCount, newOrdersCount, newEmailsCount, expenseAgg] = await Promise.all([
       prisma.order.count({ where: paidFilter }),
       prisma.product.count(),
       prisma.order.aggregate({ where: paidFilter, _sum: { totalAmount: true } }),
@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.inquiry.count(),
       prisma.inquiry.count({ where: { status: 'new' } }),
+      prisma.waitlistRequest.count({ where: { status: 'pending' } }),
       prisma.order.count({ where: { status: { in: ['paid', 'assembling'] }, createdAt: { gt: ordersViewedAt } } }),
       prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }),
       prisma.expense.aggregate({ _sum: { amount: true } }),
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
       recentOrders,
       inquiryCount,
       newInquiryCount,
+      waitlistCount,
       newOrdersCount,
       newInquiriesCount: newInquiryCount,
       newEmailsCount,

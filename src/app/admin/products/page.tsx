@@ -229,6 +229,8 @@ interface Product {
   isPreorder: boolean;
   preorderClosed: boolean;
   preorderAvailableDate: string | null;
+  preorderDeliveryTextRu: string;
+  preorderDeliveryTextEn: string;
   isAuthor: boolean;
   isLimited: boolean;
   limitedEditionText: string;
@@ -247,6 +249,8 @@ const emptyProduct = {
   preorderClosed: false, preorderAvailableDate: "",
   isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true,
   isSaleDisabled: false, isSoldOut: false, sortOrder: 0,
+  preorderDeliveryTextRu: "",
+  preorderDeliveryTextEn: "",
   characteristics: "[]",
 };
 
@@ -321,7 +325,7 @@ export default function AdminProductsPage() {
   const fetchProducts = useCallback(async () => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
-    const res = await fetch("/api/products");
+    const res = await fetch("/api/products?showAll=true&includeArchived=true");
     const data = await res.json();
     setProducts(Array.isArray(data) ? data : []);
     setLoading(false);
@@ -528,7 +532,7 @@ export default function AdminProductsPage() {
     for (const id of ids) {
       await fetch(`/api/products/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     }
-    notify(`${ids.length} product(s) deleted`);
+    notify(`${ids.length} товар(ов) архивировано`);
     setDeleteConfirm(null);
     setCheckedIds(new Set());
     fetchProducts();
@@ -594,7 +598,7 @@ export default function AdminProductsPage() {
             </select>
             {checkedIds.size > 0 && (
               <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={() => setDeleteConfirm(Array.from(checkedIds))}>
-                Удалить ({checkedIds.size})
+                Архивировать ({checkedIds.size})
               </button>
             )}
           </div>
@@ -675,7 +679,7 @@ export default function AdminProductsPage() {
                       <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Редактировать">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                       </button>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([p.id])} title="Удалить" style={{ color: "var(--cms-danger)" }}>
+                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([p.id])} title="Архивировать" style={{ color: "var(--cms-danger)" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                       </button>
                     </td>
@@ -838,16 +842,16 @@ export default function AdminProductsPage() {
         <div className="cms-modal-overlay" onClick={() => setDeleteConfirm(null)}>
           <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="cms-modal-header">
-              <h3>Подтверждение удаления</h3>
+              <h3>Подтверждение архивации</h3>
               <button className="cms-modal-close" onClick={() => setDeleteConfirm(null)}>&times;</button>
             </div>
             <div className="cms-modal-body">
               <p style={{ fontSize: "14px" }}>
-                Вы уверены, что хотите удалить <strong>{deleteConfirm.length}</strong> товар(ов)?<br />Это действие нельзя отменить.
+                Вы уверены, что хотите архивировать <strong>{deleteConfirm.length}</strong> товар(ов)?<br />Архивированные товары будут скрыты из витрины, но не будут удалены навсегда.
               </p>
             </div>
             <div className="cms-modal-actions">
-              <button className="cms-btn cms-btn-danger" onClick={() => handleDelete(deleteConfirm)}>Удалить</button>
+              <button className="cms-btn cms-btn-danger" onClick={() => handleDelete(deleteConfirm)}>Архивировать</button>
               <button className="cms-btn" onClick={() => setDeleteConfirm(null)}>Отмена</button>
             </div>
           </div>

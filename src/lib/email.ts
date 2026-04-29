@@ -212,4 +212,80 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
   }
 }
 
+export async function sendStockAvailableEmail(data: {
+  recipientEmail: string;
+  recipientName: string;
+  productName: string;
+  productSlug: string;
+}) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY not set, skipping stock notification email');
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://errani.ru';
+  const productUrl = `${siteUrl.replace(/\/$/, '')}/${encodeURIComponent(data.productSlug)}`;
+  const subject = `Товар ${data.productName} снова в наличии — errani`;
+  const html = `<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f2f2f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:36px 16px 48px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;">
+        <tr><td style="padding:0 0 18px;text-align:center;"><span style="font-size:26px;font-weight:900;color:#1a1a1a;">errani</span></td></tr>
+        <tr><td style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.09);">
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;background:#e8601c;font-size:0;line-height:0;">&nbsp;</td></tr></table>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:26px 28px 18px;">
+            <p style="margin:0 0 6px;font-size:10px;font-weight:700;color:#e8601c;letter-spacing:0.14em;text-transform:uppercase;">errani</p>
+            <h1 style="margin:0;font-size:24px;font-weight:900;color:#1a1a1a;">${data.productName} снова в наличии</h1>
+          </td></tr></table>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 24px;">
+            <p style="margin:0 0 18px;font-size:15px;color:#555;line-height:1.75;">Привет, ${data.recipientName}. Товар, на который вы подписались, снова доступен для заказа.</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#555;line-height:1.75;">Нажмите на кнопку ниже, чтобы перейти на страницу товара и оформить покупку.</p>
+            <a href="${productUrl}" style="display:inline-block;padding:14px 22px;background:#e8601c;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:700;">Перейти к товару</a>
+          </td></tr></table>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 28px;">
+            <p style="margin:0;font-size:13px;color:#888;line-height:1.7;">Если у вас есть вопросы, ответьте на это письмо или напишите нам на mail@errani.ru.</p>
+          </td></tr></table>
+        </td></tr>
+        <tr><td style="padding:22px 0 0;text-align:center;"><p style="margin:0;font-size:12px;color:#aaa;">© ${new Date().getFullYear()} errani.ru</p></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  try {
+    const result = await resend.emails.send({
+      from: 'errani <mail@errani.ru>',
+      to: data.recipientEmail,
+      subject,
+      html,
+    });
+
+    try {
+      await prisma.adminEmail.create({
+        data: {
+          direction: 'outbound',
+          fromAddr: 'mail@errani.ru',
+          toAddr: data.recipientEmail,
+          subject,
+          body: html,
+          textBody: `Товар ${data.productName} снова в наличии.`,
+          status: 'sent',
+          isRead: true,
+          resendId: result.data?.id || '',
+        },
+      });
+    } catch (dbErr) {
+      console.error('Failed to save waitlist notification email to DB:', dbErr);
+    }
+  } catch (err) {
+    console.error('Failed to send stock notification email:', err);
+  }
+}
+
 // Receipt PDF is now attached directly to sendOrderConfirmation — no separate email needed.

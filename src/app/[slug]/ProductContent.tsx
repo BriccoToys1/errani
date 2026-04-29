@@ -23,6 +23,8 @@ interface Product {
   isPreorder: boolean;
   preorderClosed?: boolean;
   preorderAvailableDate?: string | null;
+  preorderDeliveryTextRu?: string | null;
+  preorderDeliveryTextEn?: string | null;
   isLimited: boolean;
   limitedEditionText: string;
   isAuthor: boolean;
@@ -34,6 +36,12 @@ export function ProductContent({ product }: { product: Product }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [inCart, setInCart] = useState(false);
+  const [showWaitlistModal, setShowWaitlistModal] = useState(false);
+  const [waitlistName, setWaitlistName] = useState('');
+  const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
+  const [waitlistSuccess, setWaitlistSuccess] = useState('');
+  const [waitlistError, setWaitlistError] = useState('');
 
   // Check if product is already in cart on mount
   useEffect(() => {
@@ -83,6 +91,7 @@ export function ProductContent({ product }: { product: Product }) {
     ? (product.descriptionRu || product.description)
     : (product.description || product.descriptionRu || '');
   const price = product.price;
+  const canJoinWaitlist = !product.inStock && !product.isPreorder;
 
   const formatPreorderDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -219,6 +228,26 @@ export function ProductContent({ product }: { product: Product }) {
                   {lang === 'ru' ? 'Товар недоступен для заказа.' : 'Product is unavailable for ordering.'}
                 </strong>
                 {lang === 'ru' ? 'Добавление в корзину временно отключено администратором.' : 'Add to cart is temporarily disabled by admin.'}
+                {canJoinWaitlist && (
+                  <button
+                    type="button"
+                    className="product-btn"
+                    style={{ marginTop: '14px', width: '100%', borderColor: 'rgba(255,255,255,0.18)' }}
+                    onClick={() => {
+                      setShowWaitlistModal(true);
+                      setWaitlistError('');
+                      setWaitlistSuccess('');
+                    }}
+                  >
+                    {lang === 'ru' ? 'Уведомить о поступлении' : 'Notify me when restocked'}
+                  </button>
+                )}
+                {waitlistSuccess && (
+                  <p style={{ marginTop: '12px', color: '#8ec07c', fontSize: '13px' }}>{waitlistSuccess}</p>
+                )}
+                {waitlistError && (
+                  <p style={{ marginTop: '12px', color: '#f28b82', fontSize: '13px' }}>{waitlistError}</p>
+                )}
               </div>
             ) : product.isPreorder && product.preorderClosed ? (
               <div style={{
@@ -247,6 +276,121 @@ export function ProductContent({ product }: { product: Product }) {
           </div>
         </div>
       </section>
+
+      {showWaitlistModal && (
+        <div
+          className="product-modal-overlay"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+          onClick={() => setShowWaitlistModal(false)}
+        >
+          <div
+            style={{ width: '100%', maxWidth: '520px', background: '#111', borderRadius: '18px', padding: '28px', boxShadow: '0 30px 90px rgba(0,0,0,0.45)', position: 'relative' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              style={{ position: 'absolute', top: '16px', right: '16px', border: 'none', background: 'transparent', color: '#fff', fontSize: '24px', cursor: 'pointer' }}
+              onClick={() => setShowWaitlistModal(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <h2 style={{ margin: 0, marginBottom: '12px', fontSize: '22px', color: '#fff' }}>
+              {lang === 'ru' ? 'Уведомить о поступлении' : 'Notify when back in stock'}
+            </h2>
+            <p style={{ margin: '0 0 18px', color: '#bbb', lineHeight: 1.6 }}>
+              {lang === 'ru'
+                ? 'Оставьте имя и email, и мы сообщим вам, когда товар снова появится в продаже.'
+                : 'Leave your name and email, and we will notify you when this item is back in stock.'}
+            </p>
+            <div style={{ display: 'grid', gap: '14px' }}>
+              <label style={{ display: 'block' }}>
+                <span style={{ display: 'block', color: '#ddd', marginBottom: '6px' }}>{lang === 'ru' ? 'Имя' : 'Name'}</span>
+                <input
+                  type="text"
+                  value={waitlistName}
+                  onChange={(e) => setWaitlistName(e.target.value)}
+                  placeholder={lang === 'ru' ? 'Ваше имя' : 'Your name'}
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', background: '#121212', color: '#fff' }}
+                />
+              </label>
+              <label style={{ display: 'block' }}>
+                <span style={{ display: 'block', color: '#ddd', marginBottom: '6px' }}>{lang === 'ru' ? 'Email' : 'Email'}</span>
+                <input
+                  type="email"
+                  value={waitlistEmail}
+                  onChange={(e) => setWaitlistEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', background: '#121212', color: '#fff' }}
+                />
+              </label>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setWaitlistError('');
+                    setWaitlistSuccess('');
+                    if (!waitlistName.trim() || !waitlistEmail.trim()) {
+                      setWaitlistError(lang === 'ru' ? 'Имя и email обязательны.' : 'Name and email are required.');
+                      return;
+                    }
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(waitlistEmail.trim())) {
+                      setWaitlistError(lang === 'ru' ? 'Введите корректный email.' : 'Please enter a valid email.');
+                      return;
+                    }
+                    setWaitlistLoading(true);
+                    try {
+                      const res = await fetch('/api/waitlist', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          productId: product.id,
+                          productSlug: product.slug,
+                          productName: product.nameRu || product.name,
+                          name: waitlistName.trim(),
+                          email: waitlistEmail.trim(),
+                        }),
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        setWaitlistSuccess(lang === 'ru'
+                          ? 'Вы добавлены в список ожидания. Мы сообщим, когда товар будет в наличии.'
+                          : 'You are on the waitlist. We will notify you when the item is back in stock.');
+                        setWaitlistName('');
+                        setWaitlistEmail('');
+                      } else {
+                        setWaitlistError(data.error || (lang === 'ru' ? 'Не удалось добавить в список.' : 'Failed to join the waitlist.'));
+                      }
+                    } catch {
+                      setWaitlistError(lang === 'ru' ? 'Ошибка сети. Попробуйте ещё раз.' : 'Network error. Please try again.');
+                    }
+                    setWaitlistLoading(false);
+                  }}
+                  className="product-btn"
+                  style={{ width: '100%', opacity: waitlistLoading ? 0.7 : 1 }}
+                  disabled={waitlistLoading}
+                >
+                  {waitlistLoading
+                    ? (lang === 'ru' ? 'Отправка...' : 'Sending...')
+                    : (lang === 'ru' ? 'Отправить' : 'Submit')}
+                </button>
+                <button
+                  type="button"
+                  className="product-btn"
+                  style={{ width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+                  onClick={() => setShowWaitlistModal(false)}
+                >
+                  {lang === 'ru' ? 'Отмена' : 'Cancel'}
+                </button>
+              </div>
+              {(waitlistSuccess || waitlistError) && (
+                <p style={{ color: waitlistSuccess ? '#8ec07c' : '#f28b82', margin: '0 0 0', fontSize: '13px' }}>
+                  {waitlistSuccess || waitlistError}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* About / Description */}
       {displayDesc && (

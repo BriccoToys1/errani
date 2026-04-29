@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import prisma from '@/lib/db';
 import { ProductContent } from '../[slug]/ProductContent';
 
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata() {
   const product = await prisma.product.findUnique({ where: { slug: 'tenderly-vibe' } });
   if (!product) return { title: 'Tenderly Vibe Tarot' };
@@ -25,8 +27,8 @@ export default async function TenderlyVibePage() {
         description: product.description,
         descriptionRu: product.descriptionRu,
         price: product.price,
-        oldPrice: null,
-        discount: 0,
+        oldPrice: product.oldPrice,
+        discount: product.discount,
         image: product.image,
         images: product.images,
         inStock: product.inStock,

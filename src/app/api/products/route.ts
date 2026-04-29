@@ -11,8 +11,10 @@ export async function GET(req: NextRequest) {
     const isAuthor = filter === 'author' || searchParams.get('author') === 'true';
     const isDiscount = filter === 'discount' || searchParams.get('discount') === 'true';
     const isPreorder = filter === 'preorder' || searchParams.get('preorder') === 'true';
-    
-    let where: Record<string, unknown> = showAll ? {} : { inStock: true };
+    const includeArchived = searchParams.get('includeArchived') === 'true';
+
+    let where: Record<string, unknown> = includeArchived ? {} : { isActive: true };
+    if (!showAll) where = { ...where, inStock: true };
     if (isAuthor) where = { ...where, isAuthor: true };
     if (isDiscount) where = { ...where, discount: { gt: 0 } };
     if (isPreorder) where = { ...where, isPreorder: true };

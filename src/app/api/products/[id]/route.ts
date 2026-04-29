@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { sendStockAvailableEmail } from '@/lib/email';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -12,11 +13,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     const product = await prisma.product.findUnique({
       where: { id },
     });
-    
+
     if (!product) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
-    
+
     return NextResponse.json(product);
   } catch (error) {
     console.error('Error fetching product:', error);
@@ -29,7 +30,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
     const body = await req.json();
-    
+    const currentProduct = await prisma.product.findUnique({ where: { id } });
+
+    if (!currentProduct) {
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    }
+
     const product = await prisma.product.update({
       where: { id },
       data: {
@@ -61,7 +67,29 @@ export async function PUT(req: NextRequest, { params }: Params) {
         sortOrder: body.sortOrder,
       },
     });
-    
+
+    if (!currentProduct.inStock && body.inStock === true) {
+      const pendingRequests = await prisma.waitlistRequest.findMany({
+        where: { productId: id, status: 'pending' },
+      });
+
+      if (pendingRequests.length > 0) {
+        await Promise.all(pendingRequests.map(async (request) => {
+          await sendStockAvailableEmail({
+            recipientEmail: request.email,
+            recipientName: request.name,
+            productName: product.nameRu || product.name,
+            productSlug: product.slug,
+          });
+        }));
+
+        await prisma.waitlistRequest.updateMany({
+          where: { productId: id, status: 'pending' },
+          data: { status: 'notified' },
+        });
+      }
+    }
+
     return NextResponse.json(product);
   } catch (error) {
     console.error('Error updating product:', error);
@@ -69,14 +97,17 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 }
 
-// DELETE product (admin only)
+// DELETE product (admin only) — archive instead of permanent delete
 export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
-    await prisma.product.delete({ where: { id } });
+    await prisma.product.update({
+      where: { id },
+      data: { isActive: false },
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting product:', error);
-    return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 });
+    console.error('Error archiving product:', error);
+    return NextResponse.json({ error: 'Failed to archive product' }, { status: 500 });
   }
 }

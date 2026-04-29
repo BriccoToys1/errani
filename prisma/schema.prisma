@@ -55,6 +55,8 @@ model Product {
   isAuthor      Boolean        @default(false) // авторская колода
   isLimited          Boolean        @default(false) // лимитированный тираж
   limitedEditionText String         @default("") // editable limited edition description
+  preorderDeliveryTextRu String   @default("") // custom preorder delivery info (RU)
+  preorderDeliveryTextEn String   @default("") // custom preorder delivery info (EN)
   isActive           Boolean        @default(true) // Show in catalog
   isSaleDisabled     Boolean        @default(false) // "Скоро" — товар в каталоге, кнопка "Скоро"
   isSoldOut          Boolean        @default(false) // Плашка "Sold Out" на фото
@@ -66,6 +68,7 @@ model Product {
   orderItems    OrderItem[]
   favorites     Favorite[]
   avitoProducts AvitoProduct[]
+  waitlistRequests WaitlistRequest[]
 }
 
 model Favorite {
@@ -165,6 +168,19 @@ model Inquiry {
   userAgent String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model WaitlistRequest {
+  id          String   @id @default(uuid())
+  productId   String?  
+  product     Product? @relation(fields: [productId], references: [id])
+  productSlug String
+  productName String
+  name        String
+  email       String
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // ─── Avito Integration ───

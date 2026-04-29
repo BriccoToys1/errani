@@ -8,6 +8,7 @@ interface Counts {
   newOrders: number;
   newInquiries: number;
   newEmails: number;
+  newWaitlist: number;
 }
 
 interface SearchResult {
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { href: '/admin/orders', icon: 'orders', label: 'Заказы', countKey: 'newOrders' },
   { href: '/admin/products', icon: 'products', label: 'Товары' },
   { href: '/admin/inquiries', icon: 'inquiries', label: 'Заявки', countKey: 'newInquiries' },
+  { href: '/admin/waitlist', icon: 'inquiries', label: 'В ожидании', countKey: 'newWaitlist' },
   { href: '/admin/email', icon: 'email', label: 'Почта', countKey: 'newEmails' },
   { href: '/admin/users', icon: 'users', label: 'Клиенты' },
   { section: 'Техническое' },
@@ -63,7 +65,7 @@ export function AdminSidebar() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0, newEmails: 0 });
+  const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0, newEmails: 0, newWaitlist: 0 });
   const [health, setHealth] = useState<HealthStatus>({ level: 'green', message: 'Всё в порядке' });
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -85,6 +87,7 @@ export function AdminSidebar() {
         setCounts({
           newOrders: data.newOrdersCount || 0,
           newInquiries: data.newInquiriesCount || 0,
+          newWaitlist: data.waitlistCount || 0,
           newEmails: data.newEmailsCount || 0,
         });
       }
