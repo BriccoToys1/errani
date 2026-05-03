@@ -22,8 +22,8 @@ fi
 # 4. Сгенерировать Prisma Client
 npx prisma generate
 
-# 5. Применить миграции БД (без потери данных)
-npx prisma migrate deploy
+# 5. Синхронизировать схему БД
+npx prisma db push --accept-data-loss
 
 # 6. Собрать проект
 npm run build
