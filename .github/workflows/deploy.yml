@@ -1,4 +1,4 @@
-name: Deploy to VPS
+name: Deploy to reg.ru
 
 on:
   push:
@@ -9,16 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 89.169.152.115
-          username: errani
-          key: ${{ secrets.VPS_SSH_KEY }}
+          host: 168.222.143.43
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /var/www/errani
-            git fetch origin
-            git reset --hard origin/main
-            npm install
+            git pull origin main
+            npm ci --omit=dev
             npx prisma generate
+            npx prisma db push --accept-data-loss
             npm run build
-            pm2 restart errani-site
+            pm2 reload errani-site --update-env
+            echo "✅ Деплой завершён"
