@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { sendStockAvailableEmail } from '@/lib/email';
+import { adminGuard } from '@/lib/admin-auth';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -27,14 +27,14 @@ export async function GET(req: NextRequest, { params }: Params) {
 
 // PUT update product (admin only)
 export async function PUT(req: NextRequest, { params }: Params) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const body = await req.json();
-    const currentProduct = await prisma.product.findUnique({ where: { id } });
-
-    if (!currentProduct) {
-      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
-    }
+    const stock = Number(body.stock ?? 0);
+    const inStock = Boolean(body.inStock ?? true) && stock > 0;
 
     const product = await prisma.product.update({
       where: { id },
@@ -52,8 +52,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
         images: body.images !== undefined 
           ? (typeof body.images === 'string' ? body.images : JSON.stringify(body.images)) 
           : undefined,
-        stock: body.stock ?? 0,
-        inStock: body.inStock,
+        stock,
+        inStock,
         isPreorder: body.isPreorder,
         preorderClosed: body.preorderClosed ?? false,
         preorderAvailableDate: body.preorderAvailableDate ? new Date(body.preorderAvailableDate) : null,
@@ -68,30 +68,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
       },
     });
 
-    if (!currentProduct.inStock && body.inStock === true) {
-      const pendingRequests = await prisma.waitlistRequest.findMany({
-        where: { productId: id, status: 'pending' },
-      });
-
-      if (pendingRequests.length > 0) {
-        await Promise.all(pendingRequests.map(async (request) => {
-          await sendStockAvailableEmail({
-            recipientEmail: request.email,
-            recipientName: request.name,
-            productName: product.nameRu || product.name,
-            productSlug: product.slug,
-          });
-        }));
-
-        await prisma.waitlistRequest.updateMany({
-          where: { productId: id, status: 'pending' },
-          data: { status: 'notified' },
-        });
-      }
-    }
-
     return NextResponse.json(product);
   } catch (error) {
+    if (typeof error === 'object' && error && 'code' in error && (error as { code?: string }).code === 'P2025') {
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    }
     console.error('Error updating product:', error);
     return NextResponse.json({ error: 'Failed to update product' }, { status: 500 });
   }
@@ -99,13 +80,26 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 // DELETE product (admin only) — archive instead of permanent delete
 export async function DELETE(req: NextRequest, { params }: Params) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
-    await prisma.product.update({
-      where: { id },
-      data: { isActive: false },
-    });
-    return NextResponse.json({ success: true });
+    const product = await prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    }
+
+    if (product.isActive) {
+      await prisma.product.update({
+        where: { id },
+        data: { isActive: false },
+      });
+      return NextResponse.json({ success: true, archived: true });
+    }
+
+    await prisma.product.delete({ where: { id } });
+    return NextResponse.json({ success: true, deleted: true });
   } catch (error) {
     console.error('Error archiving product:', error);
     return NextResponse.json({ error: 'Failed to archive product' }, { status: 500 });

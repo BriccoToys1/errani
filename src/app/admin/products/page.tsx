@@ -4,6 +4,26 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AdminSidebar } from "../AdminSidebar";
 
+const SUPPORTED_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".svg", ".heic", ".webp", ".avif"];
+const SUPPORTED_IMAGE_MIME_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/svg+xml",
+  "image/heic",
+  "image/heif",
+  "image/webp",
+  "image/avif",
+];
+const IMAGE_ACCEPT = SUPPORTED_IMAGE_EXTENSIONS.join(",");
+
+function isSupportedImageFile(file: File): boolean {
+  const lowerName = (file.name || "").toLowerCase();
+  const hasAllowedExt = SUPPORTED_IMAGE_EXTENSIONS.some((ext) => lowerName.endsWith(ext));
+  const hasAllowedMime = SUPPORTED_IMAGE_MIME_TYPES.includes((file.type || "").toLowerCase());
+  return hasAllowedExt || hasAllowedMime;
+}
+
 // Image uploader component with drag & drop
 function ImageUploader({
   value,
@@ -39,7 +59,7 @@ function ImageUploader({
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith("image/")) uploadFile(file);
+    if (file && isSupportedImageFile(file)) uploadFile(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -52,7 +72,7 @@ function ImageUploader({
     for (const item of items) {
       if (item.type.startsWith("image/")) {
         const file = item.getAsFile();
-        if (file) uploadFile(file);
+        if (file && isSupportedImageFile(file)) uploadFile(file);
         break;
       }
     }
@@ -90,11 +110,11 @@ function ImageUploader({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept={IMAGE_ACCEPT}
           style={{ display: "none" }}
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) uploadFile(file);
+            if (file && isSupportedImageFile(file)) uploadFile(file);
           }}
         />
       </div>
@@ -102,12 +122,14 @@ function ImageUploader({
         className="cms-input"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder || "/media/photo.jpeg"}
+        placeholder={placeholder || "https://i.postimg.cc/... или /media/photo.jpeg"}
         style={{ marginTop: "6px" }}
       />
     </div>
   );
 }
+
+const MAX_IMAGES = 20;
 
 // Multi-image uploader for additional photos
 function MultiImageUploader({
@@ -121,13 +143,15 @@ function MultiImageUploader({
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const images: string[] = (() => {
     try { return JSON.parse(value) || []; } catch { return []; }
   })();
 
   const uploadFile = async (file: File) => {
+    if (images.length >= MAX_IMAGES) { alert(`Максимум ${MAX_IMAGES} фотографий`); return; }
     setUploading(true);
     try {
       const formData = new FormData();
@@ -135,8 +159,7 @@ function MultiImageUploader({
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (data.url) {
-        const newImages = [...images, data.url];
-        onChange(JSON.stringify(newImages));
+        onChange(JSON.stringify([...images, data.url]));
       } else {
         alert(data.error || "Ошибка загрузки");
       }
@@ -146,26 +169,37 @@ function MultiImageUploader({
     setUploading(false);
   };
 
+  const addUrl = () => {
+    const url = urlInput.trim();
+    if (!url) return;
+    if (images.length >= MAX_IMAGES) { alert(`Максимум ${MAX_IMAGES} фотографий`); return; }
+    if (images.includes(url)) { alert("Этот URL уже добавлен"); return; }
+    onChange(JSON.stringify([...images, url]));
+    setUrlInput("");
+  };
+
   const removeImage = (index: number) => {
-    const newImages = images.filter((_, i) => i !== index);
-    onChange(JSON.stringify(newImages));
+    onChange(JSON.stringify(images.filter((_, i) => i !== index)));
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
-    files.filter(f => f.type.startsWith("image/")).forEach(uploadFile);
+    files.filter(isSupportedImageFile).forEach(uploadFile);
   };
 
   return (
     <div style={{ marginBottom: "12px" }}>
-      <span className="cms-label" style={{ display: "block", marginBottom: "6px" }}>{label}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+        <span className="cms-label">{label}</span>
+        <span style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{images.length} / {MAX_IMAGES}</span>
+      </div>
       {images.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
           {images.map((img, i) => (
             <div key={i} style={{ position: "relative" }}>
-              <img src={img} alt="" style={{ height: "60px", borderRadius: "4px" }} />
+              <img src={img} alt="" style={{ height: "60px", borderRadius: "4px", objectFit: "cover" }} />
               <button
                 type="button"
                 onClick={() => removeImage(i)}
@@ -180,33 +214,57 @@ function MultiImageUploader({
           ))}
         </div>
       )}
-      <div
-        onDrop={handleDrop}
-        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-        onDragLeave={() => setIsDragging(false)}
-        onClick={() => fileInputRef.current?.click()}
-        style={{
-          border: isDragging ? "2px dashed #9b87f5" : "2px dashed #444",
-          borderRadius: "8px", padding: "12px", textAlign: "center",
-          cursor: "pointer", backgroundColor: isDragging ? "rgba(155,135,245,0.1)" : "transparent",
-        }}
-      >
-        {uploading ? (
-          <span style={{ color: "#9b87f5" }}>Загрузка...</span>
-        ) : (
-          <span style={{ color: "#888", fontSize: "13px" }}>+ Добавить фото</span>
-        )}
+
+      {/* URL input */}
+      <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
         <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          style={{ display: "none" }}
-          onChange={(e) => {
-            Array.from(e.target.files || []).forEach(uploadFile);
-          }}
+          className="cms-input"
+          style={{ flex: 1, fontSize: "12px" }}
+          placeholder="https://i.postimg.cc/... (вставьте ссылку на фото)"
+          value={urlInput}
+          onChange={(e) => setUrlInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }}
         />
+        <button
+          type="button"
+          className="cms-btn cms-btn-sm cms-btn-secondary"
+          onClick={addUrl}
+          disabled={!urlInput.trim() || images.length >= MAX_IMAGES}
+        >
+          + URL
+        </button>
       </div>
+
+      {/* File upload drop zone */}
+      {images.length < MAX_IMAGES && (
+        <div
+          onDrop={handleDrop}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            border: isDragging ? "2px dashed #9b87f5" : "2px dashed #444",
+            borderRadius: "8px", padding: "10px", textAlign: "center",
+            cursor: "pointer", backgroundColor: isDragging ? "rgba(155,135,245,0.1)" : "transparent",
+          }}
+        >
+          {uploading ? (
+            <span style={{ color: "#9b87f5", fontSize: "12px" }}>Загрузка...</span>
+          ) : (
+            <span style={{ color: "#888", fontSize: "12px" }}>или перетащите / выберите файл</span>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={IMAGE_ACCEPT}
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              Array.from(e.target.files || []).filter(isSupportedImageFile).forEach(uploadFile);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -315,6 +373,7 @@ export default function AdminProductsPage() {
   const [search, setSearch] = useState("");
   const [filterStock, setFilterStock] = useState("all");
   const [filterType, setFilterType] = useState("all");
+  const [archiveView, setArchiveView] = useState<"active" | "archived" | "all">("active");
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
@@ -528,7 +587,7 @@ export default function AdminProductsPage() {
     for (const id of ids) {
       await fetch(`/api/products/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     }
-    notify(`${ids.length} товар(ов) архивировано`);
+    notify(`${ids.length} товар(ов) обработано`);
     setDeleteConfirm(null);
     setCheckedIds(new Set());
     fetchProducts();
@@ -544,6 +603,8 @@ export default function AdminProductsPage() {
     new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(n);
 
   const filtered = products.filter((p) => {
+    if (archiveView === "active" && !p.isActive) return false;
+    if (archiveView === "archived" && p.isActive) return false;
     // Search filter
     if (search) {
       const q = search.toLowerCase();
@@ -592,9 +653,14 @@ export default function AdminProductsPage() {
               <option value="all">Все типы</option>
               <option value="author">Авторская</option>
             </select>
+            <select className="cms-select" value={archiveView} onChange={(e) => setArchiveView(e.target.value as "active" | "archived" | "all")}>
+              <option value="active">Активные</option>
+              <option value="archived">Архив</option>
+              <option value="all">Все</option>
+            </select>
             {checkedIds.size > 0 && (
               <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={() => setDeleteConfirm(Array.from(checkedIds))}>
-                Архивировать ({checkedIds.size})
+                {archiveView === "archived" ? `Удалить навсегда (${checkedIds.size})` : `В архив (${checkedIds.size})`}
               </button>
             )}
           </div>
@@ -675,7 +741,7 @@ export default function AdminProductsPage() {
                       <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Редактировать">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                       </button>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([p.id])} title="Архивировать" style={{ color: "var(--cms-danger)" }}>
+                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([p.id])} title="Архив / удалить" style={{ color: "var(--cms-danger)" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                       </button>
                     </td>
@@ -838,16 +904,22 @@ export default function AdminProductsPage() {
         <div className="cms-modal-overlay" onClick={() => setDeleteConfirm(null)}>
           <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
             <div className="cms-modal-header">
-              <h3>Подтверждение архивации</h3>
+              <h3>{archiveView === "archived" ? "Удаление из архива" : "Подтверждение архивации"}</h3>
               <button className="cms-modal-close" onClick={() => setDeleteConfirm(null)}>&times;</button>
             </div>
             <div className="cms-modal-body">
               <p style={{ fontSize: "14px" }}>
-                Вы уверены, что хотите архивировать <strong>{deleteConfirm.length}</strong> товар(ов)?<br />Архивированные товары будут скрыты из витрины, но не будут удалены навсегда.
+                {archiveView === "archived" ? (
+                  <>Вы уверены, что хотите удалить навсегда <strong>{deleteConfirm.length}</strong> товар(ов) из архива?</>
+                ) : (
+                  <>Вы уверены, что хотите архивировать <strong>{deleteConfirm.length}</strong> товар(ов)?<br />Архивированные товары будут скрыты из витрины, но не будут удалены навсегда.</>
+                )}
               </p>
             </div>
             <div className="cms-modal-actions">
-              <button className="cms-btn cms-btn-danger" onClick={() => handleDelete(deleteConfirm)}>Архивировать</button>
+              <button className="cms-btn cms-btn-danger" onClick={() => handleDelete(deleteConfirm)}>
+                {archiveView === "archived" ? "Удалить навсегда" : "Архивировать"}
+              </button>
               <button className="cms-btn" onClick={() => setDeleteConfirm(null)}>Отмена</button>
             </div>
           </div>

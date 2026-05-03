@@ -9,7 +9,10 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   try {
+    const { searchParams } = new URL(req.url);
+    const includeArchived = searchParams.get('includeArchived') === 'true';
     const requests = await prisma.waitlistRequest.findMany({
+      where: includeArchived ? {} : { status: { not: 'archived' } },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json(requests);
@@ -26,9 +29,18 @@ export async function POST(req: NextRequest) {
     const name = String(body.name || '').trim();
     const productSlug = String(body.productSlug || '').trim();
     const productName = String(body.productName || '').trim();
+    const consentPersonalData = body.consentPersonalData === true;
+    const requestTag = `WaitlistRequest_${productSlug}`;
 
     if (!name || !email || !productSlug || !productName) {
       return NextResponse.json({ error: 'Name, email and product are required' }, { status: 400 });
+    }
+
+    if (!consentPersonalData) {
+      return NextResponse.json(
+        { error: 'Personal data consent is required' },
+        { status: 400 }
+      );
     }
 
     if (!emailRegex.test(email)) {
@@ -52,8 +64,10 @@ export async function POST(req: NextRequest) {
         productId: body.productId || null,
         productSlug,
         productName,
+        requestTag,
         name,
         email,
+        consentPersonalData: true,
       },
     });
 

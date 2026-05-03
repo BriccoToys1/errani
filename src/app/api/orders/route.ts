@@ -86,17 +86,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    const normalizedItems = items
+      .map((item) => ({
+        productId: String(item.productId || ''),
+        quantity: Number(item.quantity || 0),
+      }))
+      .filter((item) => item.productId && item.quantity > 0);
+
+    if (normalizedItems.length !== items.length) {
+      return NextResponse.json({ error: 'Invalid cart items' }, { status: 400 });
+    }
+
+    const quantityByProductId = new Map<string, number>();
+    for (const item of normalizedItems) {
+      quantityByProductId.set(item.productId, (quantityByProductId.get(item.productId) || 0) + item.quantity);
+    }
+
     // Get products and calculate total
-    const productIds = items.map(i => i.productId);
+    const productIds = [...quantityByProductId.keys()];
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
     });
 
-    if (products.length !== items.length) {
+    if (products.length !== productIds.length) {
       return NextResponse.json({ error: 'Some products not found' }, { status: 400 });
     }
 
-    const unavailable = products.filter(p => !p.isActive || !p.inStock);
+    const unavailable = products.filter((p) => !p.isActive || !p.inStock || p.isSaleDisabled || p.stock <= 0);
     if (unavailable.length > 0) {
       const names = unavailable.map(p => p.nameRu || p.name).join(', ');
       return NextResponse.json(
@@ -105,8 +121,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const insufficient = products.filter((product) => {
+      const requestedQty = quantityByProductId.get(product.id) || 0;
+      return requestedQty > product.stock;
+    });
+    if (insufficient.length > 0) {
+      const names = insufficient.map((p) => `${p.nameRu || p.name} (доступно: ${p.stock})`).join(', ');
+      return NextResponse.json(
+        { error: `Not enough stock for: ${names}` },
+        { status: 409 }
+      );
+    }
+
     let totalAmount = 0;
-    const orderItems = items.map(item => {
+    const orderItems = normalizedItems.map(item => {
       const product = products.find(p => p.id === item.productId)!;
       totalAmount += product.price * item.quantity;
       return {

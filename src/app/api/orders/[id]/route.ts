@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { markOrderPaidAndDecrementStock } from '@/lib/stock';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -34,6 +35,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
     const body = await req.json();
+
+    if (body.status === 'paid') {
+      const { order } = await markOrderPaidAndDecrementStock(id);
+      return NextResponse.json(order);
+    }
 
     const order = await prisma.order.update({
       where: { id },

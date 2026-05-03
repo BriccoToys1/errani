@@ -9,18 +9,28 @@ interface WaitlistRequest {
   productId: string | null;
   productSlug: string;
   productName: string;
+  requestTag: string;
   name: string;
   email: string;
+  consentPersonalData: boolean;
   status: string;
   createdAt: string;
+  notifiedAt: string | null;
 }
+
+type GroupedWaitlist = {
+  productSlug: string;
+  productName: string;
+  requests: WaitlistRequest[];
+};
+
+type ViewMode = "active" | "archived" | "all";
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   pending: { label: "Ожидает", cls: "cms-badge-yellow" },
   notified: { label: "Уведомлено", cls: "cms-badge-green" },
+  archived: { label: "Архив", cls: "cms-badge" },
 };
-
-const ALL_STATUSES = ["all", "pending", "notified"];
 
 export default function AdminWaitlistPage() {
   const router = useRouter();
@@ -28,23 +38,42 @@ export default function AdminWaitlistPage() {
   const [loading, setLoading] = useState(true);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("active");
   const [search, setSearch] = useState("");
   const [notification, setNotification] = useState("");
+  const [notifyProductConfirm, setNotifyProductConfirm] = useState<GroupedWaitlist | null>(null);
+  const [notifyingProductSlug, setNotifyingProductSlug] = useState<string | null>(null);
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
   const fetchRequests = useCallback(async () => {
     const token = getToken();
-    if (!token) { router.push("/admin/login"); return; }
-    const res = await fetch("/api/waitlist", { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
+    if (!token) {
+      router.push("/admin/login");
+      return;
+    }
+
+    const res = await fetch("/api/waitlist?includeArchived=true", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 401) {
+      localStorage.removeItem("admin_token");
+      router.push("/admin/login");
+      return;
+    }
     const data = await res.json();
     setRequests(Array.isArray(data) ? data : []);
     setLoading(false);
   }, [getToken, router]);
 
-  useEffect(() => { fetchRequests(); }, [fetchRequests]);
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
+
+  const notify = (msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(""), 3000);
+  };
 
   const toggleCheck = (id: string) => {
     setCheckedIds((prev) => {
@@ -54,35 +83,83 @@ export default function AdminWaitlistPage() {
     });
   };
 
+  const filtered = requests.filter((item) => {
+    if (viewMode === "active" && item.status === "archived") return false;
+    if (viewMode === "archived" && item.status !== "archived") return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        item.productName.toLowerCase().includes(q) ||
+        item.productSlug.toLowerCase().includes(q) ||
+        item.requestTag.toLowerCase().includes(q) ||
+        item.name.toLowerCase().includes(q) ||
+        item.email.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
   const toggleAll = () => {
     if (checkedIds.size === filtered.length) setCheckedIds(new Set());
     else setCheckedIds(new Set(filtered.map((item) => item.id)));
   };
 
-  const handleDelete = async (ids: string[]) => {
+  const grouped: GroupedWaitlist[] = Object.values(
+    filtered.reduce<Record<string, GroupedWaitlist>>((acc, item) => {
+      if (!acc[item.productSlug]) {
+        acc[item.productSlug] = {
+          productSlug: item.productSlug,
+          productName: item.productName,
+          requests: [],
+        };
+      }
+      acc[item.productSlug].requests.push(item);
+      return acc;
+    }, {})
+  ).sort((a, b) => a.productName.localeCompare(b.productName, "ru"));
+
+  const handleArchiveOrDelete = async (ids: string[]) => {
     const token = getToken();
     for (const id of ids) {
-      await fetch(`/api/waitlist/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      await fetch(`/api/waitlist/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
     }
-    notify(`${ids.length} заявка(ок) удалена`);
+    notify(`${ids.length} запись(ей) обработано`);
     setDeleteConfirm(null);
     setCheckedIds(new Set());
     fetchRequests();
   };
 
-  const notify = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(""), 3000);
-  };
+  const handleNotifyByProduct = async (group: GroupedWaitlist) => {
+    const token = getToken();
+    if (!token) return;
 
-  const filtered = requests.filter((item) => {
-    if (filterStatus !== "all" && item.status !== filterStatus) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return item.productName.toLowerCase().includes(q) || item.productSlug.toLowerCase().includes(q) || item.name.toLowerCase().includes(q) || item.email.toLowerCase().includes(q);
+    setNotifyingProductSlug(group.productSlug);
+    try {
+      const res = await fetch("/api/waitlist/notify-product", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productSlug: group.productSlug }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        notify(`Отправлено уведомлений: ${data.notified || 0}`);
+        setNotifyProductConfirm(null);
+        fetchRequests();
+      } else {
+        notify(data.error || "Не удалось отправить уведомления");
+      }
+    } catch {
+      notify("Ошибка сети при отправке уведомлений");
+    } finally {
+      setNotifyingProductSlug(null);
     }
-    return true;
-  });
+  };
 
   if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
 
@@ -101,83 +178,160 @@ export default function AdminWaitlistPage() {
         </div>
 
         <div className="cms-content">
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" }}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
             <input
               className="cms-input cms-input-sm"
               placeholder="Поиск..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "220px" }}
+              style={{ width: "260px" }}
             />
-            <select className="cms-select cms-select-sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-              {ALL_STATUSES.map((status) => (
-                <option key={status} value={status}>{status === 'all' ? 'Все статусы' : STATUS_MAP[status]?.label || status}</option>
-              ))}
+            <select className="cms-select cms-select-sm" value={viewMode} onChange={(e) => setViewMode(e.target.value as ViewMode)}>
+              <option value="active">Активные</option>
+              <option value="archived">Архив</option>
+              <option value="all">Все</option>
             </select>
+            {filtered.length > 0 && (
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--cms-text-muted)" }}>
+                <input
+                  type="checkbox"
+                  checked={checkedIds.size === filtered.length && filtered.length > 0}
+                  onChange={toggleAll}
+                />
+                Выбрать все
+              </label>
+            )}
             {checkedIds.size > 0 && (
               <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={() => setDeleteConfirm(Array.from(checkedIds))}>
-                Удалить ({checkedIds.size})
+                {viewMode === "archived" ? `Удалить навсегда (${checkedIds.size})` : `В архив (${checkedIds.size})`}
               </button>
             )}
           </div>
 
-          <div className="cms-table-wrap">
-            <table className="cms-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 36 }}><input type="checkbox" checked={checkedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>
-                  <th>Товар</th>
-                  <th>Имя</th>
-                  <th>Email</th>
-                  <th>Статус</th>
-                  <th>Дата</th>
-                  <th style={{ width: 90 }}>Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((item) => (
-                  <tr key={item.id} className={checkedIds.has(item.id) ? 'cms-row-selected' : ''}>
-                    <td><input type="checkbox" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} /></td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <span className="cms-td-bold">{item.productName}</span>
-                        <a href={`/${item.productSlug}`} target="_blank" rel="noreferrer" style={{ fontSize: '12px', color: 'var(--cms-accent)' }}>{item.productSlug}</a>
-                      </div>
-                    </td>
-                    <td className="cms-td-bold">{item.name}</td>
-                    <td><a href={`mailto:${item.email}`} style={{ color: 'var(--cms-accent)' }}>{item.email}</a></td>
-                    <td><span className={`cms-badge ${STATUS_MAP[item.status]?.cls || 'cms-badge'}`}>{STATUS_MAP[item.status]?.label || item.status}</span></td>
-                    <td>{new Date(item.createdAt).toLocaleDateString('ru-RU')}</td>
-                    <td>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([item.id])} title="Удалить" style={{ color: 'var(--cms-danger)' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+          {grouped.map((group) => {
+            const pendingCount = group.requests.filter((r) => r.status === "pending").length;
+            return (
+              <div key={group.productSlug} className="cms-card" style={{ marginBottom: "14px", border: "1px solid var(--cms-border)" }}>
+                <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--cms-border)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{group.productName}</div>
+                    <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>{group.productSlug}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>
+                      {group.requests.length} заявка(ок)
+                    </div>
+                    {pendingCount > 0 && viewMode !== "archived" && (
+                      <button
+                        className="cms-btn cms-btn-xs"
+                        disabled={notifyingProductSlug === group.productSlug}
+                        onClick={() => setNotifyProductConfirm(group)}
+                        title="Отправить уведомление всем ожидающим по этому товару"
+                      >
+                        Уведомить о поступлении ({pendingCount})
                       </button>
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: '32px', color: 'var(--cms-text-muted)' }}>Записей не найдено</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="cms-table-wrap">
+                  <table className="cms-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 36 }} />
+                        <th>Тег</th>
+                        <th>Имя</th>
+                        <th>Email</th>
+                        <th>Согласие</th>
+                        <th>Статус</th>
+                        <th>Дата</th>
+                        <th style={{ width: 170 }}>Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.requests.map((item) => (
+                        <tr key={item.id} className={checkedIds.has(item.id) ? "cms-row-selected" : ""}>
+                          <td><input type="checkbox" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} /></td>
+                          <td style={{ fontFamily: "monospace", fontSize: "12px" }}>{item.requestTag || `WaitlistRequest_${item.productSlug}`}</td>
+                          <td className="cms-td-bold">{item.name}</td>
+                          <td><a href={`mailto:${item.email}`} style={{ color: "var(--cms-accent)" }}>{item.email}</a></td>
+                          <td>{item.consentPersonalData ? "Да" : "Нет"}</td>
+                          <td><span className={`cms-badge ${STATUS_MAP[item.status]?.cls || "cms-badge"}`}>{STATUS_MAP[item.status]?.label || item.status}</span></td>
+                          <td>{new Date(item.createdAt).toLocaleDateString("ru-RU")}</td>
+                          <td style={{ display: "flex", gap: "8px" }}>
+                            <button
+                              className="cms-btn cms-btn-xs cms-btn-ghost"
+                              onClick={() => setDeleteConfirm([item.id])}
+                              style={{ color: "var(--cms-danger)" }}
+                            >
+                              {item.status === "archived" ? "Удалить навсегда" : "В архив"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+
+          {grouped.length === 0 && (
+            <div className="cms-card" style={{ padding: "24px", textAlign: "center", color: "var(--cms-text-muted)" }}>
+              Записей не найдено
+            </div>
+          )}
         </div>
       </main>
+
+      {notifyProductConfirm && (
+        <div className="cms-modal-overlay" onClick={() => setNotifyProductConfirm(null)}>
+          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="cms-modal-header">
+              <h3>Подтвердите отправку</h3>
+              <button className="cms-modal-close" onClick={() => setNotifyProductConfirm(null)}>&times;</button>
+            </div>
+            <div className="cms-modal-body">
+              <p style={{ fontSize: "14px", marginBottom: "6px" }}>
+                Отправить уведомления о поступлении товара всем ожидающим:
+              </p>
+              <p style={{ fontWeight: 700, marginBottom: "10px" }}>{notifyProductConfirm.productName}</p>
+              <p style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>
+                Получателей: {notifyProductConfirm.requests.filter((r) => r.status === "pending").length}
+              </p>
+            </div>
+            <div className="cms-modal-actions">
+              <button
+                className="cms-btn cms-btn-primary"
+                disabled={notifyingProductSlug === notifyProductConfirm.productSlug}
+                onClick={() => handleNotifyByProduct(notifyProductConfirm)}
+              >
+                {notifyingProductSlug === notifyProductConfirm.productSlug ? "Отправка..." : "Да, отправить"}
+              </button>
+              <button className="cms-btn" onClick={() => setNotifyProductConfirm(null)}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteConfirm && (
         <div className="cms-modal-overlay" onClick={() => setDeleteConfirm(null)}>
           <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="cms-modal-header">
-              <h3>Удаление запроса</h3>
+              <h3>{viewMode === "archived" ? "Удаление из архива" : "Архивация"}</h3>
               <button className="cms-modal-close" onClick={() => setDeleteConfirm(null)}>&times;</button>
             </div>
             <div className="cms-modal-body">
-              <p style={{ fontSize: '14px' }}>
-                Вы уверены, что хотите удалить <strong>{deleteConfirm.length}</strong> запись(ей)?
+              <p style={{ fontSize: "14px" }}>
+                {viewMode === "archived"
+                  ? <>Удалить навсегда <strong>{deleteConfirm.length}</strong> запись(ей) из архива?</>
+                  : <>Перенести в архив <strong>{deleteConfirm.length}</strong> запись(ей)?</>}
               </p>
             </div>
             <div className="cms-modal-actions">
-              <button className="cms-btn cms-btn-danger" onClick={() => handleDelete(deleteConfirm)}>Удалить</button>
+              <button className="cms-btn cms-btn-danger" onClick={() => handleArchiveOrDelete(deleteConfirm)}>
+                {viewMode === "archived" ? "Удалить навсегда" : "В архив"}
+              </button>
               <button className="cms-btn" onClick={() => setDeleteConfirm(null)}>Отмена</button>
             </div>
           </div>

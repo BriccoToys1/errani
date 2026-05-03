@@ -23,8 +23,6 @@ interface Product {
   isPreorder: boolean;
   preorderClosed?: boolean;
   preorderAvailableDate?: string | null;
-  preorderDeliveryTextRu?: string | null;
-  preorderDeliveryTextEn?: string | null;
   isLimited: boolean;
   limitedEditionText: string;
   isAuthor: boolean;
@@ -39,6 +37,7 @@ export function ProductContent({ product }: { product: Product }) {
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [waitlistName, setWaitlistName] = useState('');
   const [waitlistEmail, setWaitlistEmail] = useState('');
+  const [waitlistConsent, setWaitlistConsent] = useState(false);
   const [waitlistLoading, setWaitlistLoading] = useState(false);
   const [waitlistSuccess, setWaitlistSuccess] = useState('');
   const [waitlistError, setWaitlistError] = useState('');
@@ -227,7 +226,7 @@ export function ProductContent({ product }: { product: Product }) {
                 <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>
                   {lang === 'ru' ? 'Товар недоступен для заказа.' : 'Product is unavailable for ordering.'}
                 </strong>
-                {lang === 'ru' ? 'Добавление в корзину временно отключено администратором.' : 'Add to cart is temporarily disabled by admin.'}
+                {lang === 'ru' ? 'Оставьте заявку, и мы сообщим, когда товар появится в наличии.' : 'Join the waitlist and we will notify you when the item is back in stock.'}
                 {canJoinWaitlist && (
                   <button
                     type="button"
@@ -323,6 +322,22 @@ export function ProductContent({ product }: { product: Product }) {
                   style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', background: '#121212', color: '#fff' }}
                 />
               </label>
+              <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', color: '#ddd', fontSize: '13px', lineHeight: 1.5 }}>
+                <input
+                  type="checkbox"
+                  checked={waitlistConsent}
+                  onChange={(e) => setWaitlistConsent(e.target.checked)}
+                  style={{ marginTop: '2px' }}
+                />
+                <span>
+                  {lang === 'ru'
+                    ? 'Я даю согласие на обработку персональных данных.'
+                    : 'I consent to the processing of personal data.'}{' '}
+                  <Link href="/privacy" target="_blank" rel="noreferrer" style={{ color: '#fff', textDecoration: 'underline' }}>
+                    {lang === 'ru' ? 'Политика конфиденциальности' : 'Privacy policy'}
+                  </Link>
+                </span>
+              </label>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <button
                   type="button"
@@ -337,6 +352,14 @@ export function ProductContent({ product }: { product: Product }) {
                       setWaitlistError(lang === 'ru' ? 'Введите корректный email.' : 'Please enter a valid email.');
                       return;
                     }
+                    if (!waitlistConsent) {
+                      setWaitlistError(
+                        lang === 'ru'
+                          ? 'Нужно согласие на обработку персональных данных.'
+                          : 'Personal data consent is required.'
+                      );
+                      return;
+                    }
                     setWaitlistLoading(true);
                     try {
                       const res = await fetch('/api/waitlist', {
@@ -348,6 +371,7 @@ export function ProductContent({ product }: { product: Product }) {
                           productName: product.nameRu || product.name,
                           name: waitlistName.trim(),
                           email: waitlistEmail.trim(),
+                          consentPersonalData: true,
                         }),
                       });
                       const data = await res.json();
@@ -357,6 +381,7 @@ export function ProductContent({ product }: { product: Product }) {
                           : 'You are on the waitlist. We will notify you when the item is back in stock.');
                         setWaitlistName('');
                         setWaitlistEmail('');
+                        setWaitlistConsent(false);
                       } else {
                         setWaitlistError(data.error || (lang === 'ru' ? 'Не удалось добавить в список.' : 'Failed to join the waitlist.'));
                       }
@@ -366,8 +391,8 @@ export function ProductContent({ product }: { product: Product }) {
                     setWaitlistLoading(false);
                   }}
                   className="product-btn"
-                  style={{ width: '100%', opacity: waitlistLoading ? 0.7 : 1 }}
-                  disabled={waitlistLoading}
+                  style={{ width: '100%', opacity: waitlistLoading || !waitlistConsent ? 0.7 : 1 }}
+                  disabled={waitlistLoading || !waitlistConsent}
                 >
                   {waitlistLoading
                     ? (lang === 'ru' ? 'Отправка...' : 'Sending...')
@@ -396,7 +421,7 @@ export function ProductContent({ product }: { product: Product }) {
       {displayDesc && (
         <section className="description-section">
           <h2 className="description-heading">
-            {lang === 'ru' ? 'О колоде' : 'About the deck'}
+            {lang === 'ru' ? 'Описание' : 'Description'}
           </h2>
           <div className="description-content">
             {displayDesc.split('\n').filter(Boolean).map((p, i) => (

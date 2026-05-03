@@ -1,6 +1,18 @@
 import { Resend } from 'resend';
 import prisma from '@/lib/db';
 
+// Returns API key from env var first, then from DB settings (allows admin to set it without redeployment)
+async function getResendApiKey(): Promise<string | null> {
+  const envKey = process.env.RESEND_API_KEY;
+  if (envKey) return envKey;
+  try {
+    const setting = await prisma.siteSettings.findUnique({ where: { key: 'resend_api_key' } });
+    return setting?.value || null;
+  } catch {
+    return null;
+  }
+}
+
 export interface OrderEmailData {
   orderNumber: string;
   customerName: string;
@@ -27,9 +39,9 @@ const SHIPPING_LABELS: Record<string, string> = {
 };
 
 export async function sendOrderConfirmation(data: OrderEmailData) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = await getResendApiKey();
   if (!apiKey) {
-    console.warn('RESEND_API_KEY not set, skipping email');
+    console.warn('RESEND_API_KEY not set and not found in DB settings, skipping email');
     return;
   }
 
@@ -218,9 +230,9 @@ export async function sendStockAvailableEmail(data: {
   productName: string;
   productSlug: string;
 }) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = await getResendApiKey();
   if (!apiKey) {
-    console.warn('RESEND_API_KEY not set, skipping stock notification email');
+    console.warn('RESEND_API_KEY not set and not found in DB settings, skipping stock notification email');
     return;
   }
 
@@ -240,12 +252,11 @@ export async function sendStockAvailableEmail(data: {
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;background:#e8601c;font-size:0;line-height:0;">&nbsp;</td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:26px 28px 18px;">
             <p style="margin:0 0 6px;font-size:10px;font-weight:700;color:#e8601c;letter-spacing:0.14em;text-transform:uppercase;">errani</p>
-            <h1 style="margin:0;font-size:24px;font-weight:900;color:#1a1a1a;">${data.productName} снова в наличии</h1>
+            <h1 style="margin:0;font-size:24px;font-weight:900;color:#1a1a1a;">Товар снова в наличии</h1>
           </td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 24px;">
-            <p style="margin:0 0 18px;font-size:15px;color:#555;line-height:1.75;">Привет, ${data.recipientName}. Товар, на который вы подписались, снова доступен для заказа.</p>
-            <p style="margin:0 0 24px;font-size:15px;color:#555;line-height:1.75;">Нажмите на кнопку ниже, чтобы перейти на страницу товара и оформить покупку.</p>
-            <a href="${productUrl}" style="display:inline-block;padding:14px 22px;background:#e8601c;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:700;">Перейти к товару</a>
+            <p style="margin:0 0 24px;font-size:15px;color:#555;line-height:1.75;">Привет, ${data.recipientName}. ${data.productName} уже доступен для заказа.</p>
+            <a href="${productUrl}" style="display:inline-block;padding:14px 22px;background:#e8601c;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:700;">Перейти на страницу товара</a>
           </td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 28px;">
             <p style="margin:0;font-size:13px;color:#888;line-height:1.7;">Если у вас есть вопросы, ответьте на это письмо или напишите нам на mail@errani.ru.</p>
@@ -274,7 +285,7 @@ export async function sendStockAvailableEmail(data: {
           toAddr: data.recipientEmail,
           subject,
           body: html,
-          textBody: `Товар ${data.productName} снова в наличии.`,
+          textBody: `Привет, ${data.recipientName}. ${data.productName} уже доступен для заказа. ${productUrl}`,
           status: 'sent',
           isRead: true,
           resendId: result.data?.id || '',

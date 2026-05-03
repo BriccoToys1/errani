@@ -336,6 +336,129 @@ function ExportSection({ getToken, notify }: { getToken: () => string | null; no
   );
 }
 
+function ResendSettings({ notify, getToken }: { notify: (msg: string) => void; getToken: () => string | null }) {
+  const [apiKey, setApiKey] = useState('');
+  const [masked, setMasked] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [testTo, setTestTo] = useState('');
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    fetch('/api/admin/settings?key=resend_api_key', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.value) { setApiKey(d.value); setConfigured(true); }
+        else setConfigured(false);
+      })
+      .catch(() => setConfigured(false));
+  }, [getToken]);
+
+  const save = async () => {
+    const key = apiKey.trim();
+    if (!key) { notify('Введите API ключ'); return; }
+    setSaving(true);
+    const token = getToken();
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ key: 'resend_api_key', value: key }),
+    });
+    if (res.ok) { setConfigured(true); notify('Resend API Key сохранён'); }
+    else notify('Ошибка сохранения');
+    setSaving(false);
+  };
+
+  const sendTest = async () => {
+    if (!testTo.trim()) { notify('Укажите email для теста'); return; }
+    setTesting(true);
+    const token = getToken();
+    const res = await fetch('/api/admin/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        to: testTo.trim(),
+        subject: 'Тест почты errani',
+        body: '<p>Это тестовое письмо с сайта errani. Если вы его получили — почта работает!</p>',
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) notify('Тестовое письмо отправлено!');
+    else notify(`Ошибка: ${data.error || 'неизвестно'}`);
+    setTesting(false);
+  };
+
+  return (
+    <SettingSection title="Resend (отправка email)">
+      <div style={{ marginBottom: '14px', padding: '12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', background: configured === true ? 'rgba(34,197,94,0.1)' : configured === false ? 'rgba(239,68,68,0.1)' : 'var(--cms-surface)' }}>
+        {configured === true
+          ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          : configured === false
+            ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            : <div className="cms-spinner" style={{ width: 18, height: 18 }} />
+        }
+        <div>
+          <div style={{ fontWeight: 600, fontSize: '14px' }}>
+            {configured === true ? 'API Key настроен — почта работает' : configured === false ? 'API Key не задан — письма не отправляются' : 'Проверка...'}
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--cms-text-muted)' }}>
+            Отправка от имени mail@errani.ru через Resend
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: '12px' }}>
+        <div>
+          <label className="cms-label">Resend API Key</label>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <input
+              className="cms-input"
+              type={masked ? 'password' : 'text'}
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              style={{ flex: 1, fontFamily: 'monospace', fontSize: '13px' }}
+            />
+            <button type="button" className="cms-btn cms-btn-sm cms-btn-ghost" onClick={() => setMasked(m => !m)} title={masked ? 'Показать' : 'Скрыть'}>
+              {masked ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>}
+            </button>
+            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={save} disabled={saving}>
+              {saving ? 'Сохранение...' : 'Сохранить'}
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label className="cms-label">Тестовое письмо</label>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <input className="cms-input" type="email" value={testTo} onChange={e => setTestTo(e.target.value)} placeholder="your@email.com" style={{ flex: 1 }} />
+            <button className="cms-btn cms-btn-sm" onClick={sendTest} disabled={testing}>
+              {testing ? 'Отправка...' : 'Отправить тест'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: '14px', padding: '12px', background: 'var(--cms-surface)', borderRadius: '8px', fontSize: '12px', color: 'var(--cms-text-muted)', lineHeight: 1.8 }}>
+        <strong>Как восстановить почту:</strong>
+        <ol style={{ margin: '6px 0 0 16px', padding: 0 }}>
+          <li>Войдите в <a href="https://resend.com/api-keys" target="_blank" rel="noreferrer" style={{ color: 'var(--cms-accent)' }}>resend.com/api-keys</a></li>
+          <li>Создайте новый ключ с правами <strong>Sending access</strong></li>
+          <li>Вставьте его выше и нажмите «Сохранить»</li>
+          <li>Убедитесь что домен <strong>errani.ru</strong> верифицирован в Resend → Domains</li>
+        </ol>
+        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--cms-border)' }}>
+          <strong>Для входящих писем</strong> (Resend → Inbound):<br/>
+          MX-запись: <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 3 }}>errani.ru MX 10 inbound-smtp.resend.com</code><br/>
+          Webhook URL: <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 3 }}>https://errani.ru/api/admin/email/webhook</code>
+        </div>
+      </div>
+    </SettingSection>
+  );
+}
+
 function IntegrationsTab({ notify, getToken }: { notify: (msg: string) => void; getToken: () => string | null }) {
   const [avitoConfig, setAvitoConfig] = useState({ clientId: '', clientSecret: '', userId: '' });
   const [avitoStatus, setAvitoStatus] = useState<{ configured: boolean; products: number; lastSync: string | null }>({ configured: false, products: 0, lastSync: null });
@@ -401,6 +524,7 @@ function IntegrationsTab({ notify, getToken }: { notify: (msg: string) => void; 
 
   return (
     <div style={{ display: "grid", gap: "16px" }}>
+      <ResendSettings notify={notify} getToken={getToken} />
       <SettingSection title="Avito API">
         <div style={{ marginBottom: "16px", padding: "12px", background: avitoStatus.configured ? "rgba(34, 197, 94, 0.1)" : "rgba(245, 158, 11, 0.1)", borderRadius: "8px", display: "flex", alignItems: "center", gap: "12px" }}>
           <span style={{ display: "flex", alignItems: "center" }}>{avitoStatus.configured ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}</span>

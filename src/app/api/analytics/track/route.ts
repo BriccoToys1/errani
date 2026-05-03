@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
+const ANALYTICS_DB_ENABLED = process.env.ANALYTICS_DB_ENABLED === 'true';
+
 async function saveAnalytics(data: {
   sessionId: string;
   path: string;
@@ -13,32 +15,16 @@ async function saveAnalytics(data: {
 }) {
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const todayStart = new Date(`${today}T00:00:00Z`);
-    const todayEnd = new Date(`${today}T23:59:59Z`);
 
     if (data.duration === 0) {
-      // Arrival beacon — create new PageView and increment counter
+      // Arrival beacon: keep DB work minimal to avoid exhausting connection pool.
       await prisma.pageView.create({ data: { ...data, city: '' } });
 
-      const [existing, uniqueVisitors] = await Promise.all([
-        prisma.dailyStat.findUnique({ where: { date: today } }),
-        prisma.pageView.findMany({
-          where: { createdAt: { gte: todayStart, lt: todayEnd } },
-          distinct: ['sessionId'],
-          select: { sessionId: true },
-        }),
-      ]);
-
-      if (existing) {
-        await prisma.dailyStat.update({
-          where: { date: today },
-          data: { views: { increment: 1 }, visitors: uniqueVisitors.length },
-        });
-      } else {
-        await prisma.dailyStat.create({
-          data: { date: today, views: 1, visitors: 1 },
-        });
-      }
+      await prisma.dailyStat.upsert({
+        where: { date: today },
+        update: { views: { increment: 1 } },
+        create: { date: today, views: 1, visitors: 0, orders: 0, revenue: 0 },
+      });
     } else {
       // Departure beacon — just update duration on most recent matching record
       const recent = await prisma.pageView.findFirst({
@@ -63,6 +49,10 @@ async function saveAnalytics(data: {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!ANALYTICS_DB_ENABLED) {
+      return NextResponse.json({ ok: true });
+    }
+
     const body = await req.json();
     const { sessionId, path, referrer, lang, duration } = body;
 
@@ -96,4 +86,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true }); // Всегда 200 — не мешаем пользователю
   }
 }
-

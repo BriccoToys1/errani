@@ -70,14 +70,14 @@ export default function CartPage() {
           return;
         }
 
-        const byId = new Map<string, { id: string; inStock: boolean; isActive: boolean }>(
-          products.map((p: { id: string; inStock: boolean; isActive: boolean }) => [p.id, p])
+        const byId = new Map<string, { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean }>(
+          products.map((p: { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean }) => [p.id, p])
         );
 
         const blocked = new Set<string>();
         for (const item of cart) {
           const p = byId.get(item.productId);
-          if (!p || !p.isActive || !p.inStock) {
+          if (!p || !p.isActive || !p.inStock || p.isSaleDisabled || p.stock <= 0 || item.quantity > p.stock) {
             blocked.add(item.productId);
           }
         }

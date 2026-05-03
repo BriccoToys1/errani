@@ -1,12 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { adminGuard } from '@/lib/admin-auth';
 
 // GET all inquiries (admin only)
 export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
-    const inquiries = await prisma.inquiry.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    const { searchParams } = new URL(req.url);
+    const includeArchived = searchParams.get('includeArchived') === 'true';
+    const withTimeout = async <T,>(promise: Promise<T>, fallback: T, ms = 5000): Promise<T> => {
+      try {
+        return await Promise.race([
+          promise,
+          new Promise<T>((_, reject) => setTimeout(() => reject(new Error('inquiries timeout')), ms)),
+        ]);
+      } catch {
+        return fallback;
+      }
+    };
+
+    const inquiries = await withTimeout(
+      prisma.inquiry.findMany({
+        where: includeArchived ? {} : { status: { not: 'archived' } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      []
+    );
     return NextResponse.json(inquiries);
   } catch (error) {
     console.error('Error fetching inquiries:', error);
@@ -15,7 +36,10 @@ export async function GET(req: NextRequest) {
 }
 
 // PUT: mark all "new" inquiries as "read"
-export async function PUT() {
+export async function PUT(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const result = await prisma.inquiry.updateMany({
       where: { status: 'new' },

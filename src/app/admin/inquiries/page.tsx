@@ -24,9 +24,10 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   read: { label: "Прочитано", cls: "cms-badge-yellow" },
   replied: { label: "Отвечено", cls: "cms-badge-green" },
   closed: { label: "Закрыто", cls: "cms-badge" },
+  archived: { label: "Архив", cls: "cms-badge" },
 };
 
-const ALL_STATUSES = ["new", "read", "replied", "closed"];
+const ALL_STATUSES = ["new", "read", "replied", "closed", "archived"];
 
 export default function AdminInquiriesPage() {
   const router = useRouter();
@@ -47,7 +48,7 @@ export default function AdminInquiriesPage() {
   const fetchInquiries = useCallback(async () => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
-    const res = await fetch("/api/inquiries", { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch("/api/inquiries?includeArchived=true", { headers: { Authorization: `Bearer ${token}` } });
     if (res.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
     const data = await res.json();
     setInquiries(Array.isArray(data) ? data : []);
@@ -98,7 +99,7 @@ export default function AdminInquiriesPage() {
     for (const id of ids) {
       await fetch(`/api/inquiries/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
     }
-    notify(`${ids.length} заявок удалено`);
+    notify(`${ids.length} заявок обработано`);
     setDeleteConfirm(null);
     setCheckedIds(new Set());
     fetchInquiries();
@@ -180,7 +181,7 @@ export default function AdminInquiriesPage() {
             </select>
             {checkedIds.size > 0 && (
               <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={() => setDeleteConfirm(Array.from(checkedIds))}>
-                Удалить ({checkedIds.size})
+                {filterStatus === "archived" ? `Удалить навсегда (${checkedIds.size})` : `В архив (${checkedIds.size})`}
               </button>
             )}
           </div>
@@ -230,7 +231,7 @@ export default function AdminInquiriesPage() {
                       <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openInquiry(inquiry)} title="Просмотр">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                       </button>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([inquiry.id])} title="Удалить" style={{ color: "var(--cms-danger)" }}>
+                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([inquiry.id])} title="Архив / удалить" style={{ color: "var(--cms-danger)" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
                       </button>
                     </td>
@@ -320,16 +321,24 @@ export default function AdminInquiriesPage() {
           <div className="cms-modal-overlay" onClick={() => setDeleteConfirm(null)}>
             <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "400px" }}>
               <div className="cms-modal-header">
-                <h2 className="cms-modal-title">Подтверждение удаления</h2>
+                <h2 className="cms-modal-title">{filterStatus === "archived" ? "Удаление из архива" : "Архивация"}</h2>
                 <button className="cms-modal-close" onClick={() => setDeleteConfirm(null)}>×</button>
               </div>
               <div className="cms-modal-body">
-                <p>Вы уверены, что хотите удалить {deleteConfirm.length} заявок?</p>
-                <p style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>Это действие нельзя отменить.</p>
+                <p>
+                  {filterStatus === "archived"
+                    ? <>Вы уверены, что хотите удалить навсегда {deleteConfirm.length} заявок из архива?</>
+                    : <>Вы уверены, что хотите перенести в архив {deleteConfirm.length} заявок?</>}
+                </p>
+                <p style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>
+                  {filterStatus === "archived" ? "Это действие нельзя отменить." : "Полное удаление доступно только из архива."}
+                </p>
               </div>
               <div className="cms-modal-footer">
                 <button className="cms-btn" onClick={() => setDeleteConfirm(null)}>Отмена</button>
-                <button className="cms-btn cms-btn-danger" onClick={() => handleDelete(deleteConfirm)}>Удалить</button>
+                <button className="cms-btn cms-btn-danger" onClick={() => handleDelete(deleteConfirm)}>
+                  {filterStatus === "archived" ? "Удалить навсегда" : "В архив"}
+                </button>
               </div>
             </div>
           </div>

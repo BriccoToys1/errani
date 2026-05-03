@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { markOrderPaidAndDecrementStock } from '@/lib/stock';
 
 // Stripe webhook handler for international payments
 export async function POST(req: NextRequest) {
@@ -21,13 +22,7 @@ export async function POST(req: NextRequest) {
         const orderId = paymentIntent.metadata?.order_id;
         
         if (orderId) {
-          await prisma.order.update({
-            where: { id: orderId },
-            data: {
-              status: 'paid',
-              paymentId: paymentIntent.id,
-            },
-          });
+          await markOrderPaidAndDecrementStock(orderId, paymentIntent.id);
           console.log(`Order ${orderId} marked as paid via Stripe`);
         }
         break;

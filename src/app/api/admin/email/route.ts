@@ -3,6 +3,15 @@ import prisma from '@/lib/db';
 import { adminGuard, verifyAdminToken } from '@/lib/admin-auth';
 import { Resend } from 'resend';
 
+async function getApiKey(): Promise<string | null> {
+  const envKey = process.env.RESEND_API_KEY;
+  if (envKey) return envKey;
+  try {
+    const s = await prisma.siteSettings.findUnique({ where: { key: 'resend_api_key' } });
+    return s?.value || null;
+  } catch { return null; }
+}
+
 // GET: list all emails (inbox + sent)
 export async function GET(req: NextRequest) {
   const denied = adminGuard(req);
@@ -54,9 +63,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Заполните все поля' }, { status: 400 });
     }
 
-    const apiKey = process.env.RESEND_API_KEY;
+    const apiKey = await getApiKey();
     if (!apiKey) {
-      return NextResponse.json({ error: 'Email не настроен (RESEND_API_KEY)' }, { status: 500 });
+      return NextResponse.json({ error: 'Email не настроен: укажите Resend API Key в Настройках → Интеграции → Resend' }, { status: 500 });
     }
 
     const resend = new Resend(apiKey);

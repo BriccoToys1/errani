@@ -4,7 +4,6 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
-import { addToCart, getCart } from '@/lib/cart';
 import { useState, useEffect } from 'react';
 
 interface Product {
@@ -38,13 +37,6 @@ export function CatalogContent() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>('all');
   const [sort, setSort] = useState<SortType>('newest');
-  const [cartIds, setCartIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    // Init cart state
-    const cart = getCart();
-    setCartIds(new Set(cart.map(i => i.productId)));
-  }, []);
 
   useEffect(() => {
     fetchProducts();
@@ -58,6 +50,7 @@ export function CatalogContent() {
       if (filter === 'author') params.set('author', 'true');
       if (filter === 'preorder') params.set('preorder', 'true');
       
+      params.set('showAll', 'true');
       const res = await fetch(`/api/products?${params.toString()}`);
       const data = await res.json();
       setProducts(Array.isArray(data) ? data.filter((p: Product) => p.isActive) : []);
@@ -66,31 +59,6 @@ export function CatalogContent() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleAddToCart = (e: React.MouseEvent, product: Product) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!product.inStock || product.isSaleDisabled) {
-      return;
-    }
-
-    if (cartIds.has(product.id)) {
-      window.location.href = '/cart';
-      return;
-    }
-
-    const imgs: string[] = (() => { try { return JSON.parse(product.images) || []; } catch { return []; } })();
-    addToCart({
-      productId: product.id,
-      name: lang === 'ru' && product.nameRu ? product.nameRu : product.name,
-      price: product.price,
-      currency: 'RUB',
-      image: product.image || imgs[0] || '',
-      isPreorder: product.isPreorder,
-    });
-    setCartIds(prev => { const n = new Set(prev); n.add(product.id); return n; });
   };
 
   const filters: { key: FilterType; label: string }[] = [
@@ -117,9 +85,6 @@ export function CatalogContent() {
       default: return 0;
     }
   });
-
-  const formatPrice = (price: number) =>
-    `${price.toLocaleString('ru-RU')} ₽`;
 
   return (
     <main>
@@ -171,7 +136,6 @@ export function CatalogContent() {
               const imgs: string[] = (() => { try { return JSON.parse(product.images) || []; } catch { return []; } })();
               const heroImg = product.image || imgs[0] || '';
               const displayName = lang === 'ru' && product.nameRu ? product.nameRu : product.name;
-              const isInCart = cartIds.has(product.id);
               return (
                 <Link 
                   href={`/${product.slug}`} 
@@ -197,29 +161,6 @@ export function CatalogContent() {
                       {product.discount > 0 && <span className="badge badge-discount">-{product.discount}%</span>}
                       {product.isPreorder && <span className="badge badge-preorder">{lang === 'ru' ? 'Предзаказ' : 'Preorder'}</span>}
                     </div>
-                  </div>
-                  <div className="catalog-card-info">
-                    <h2 className="catalog-card-title">{displayName}</h2>
-                    <div className="catalog-card-price-row">
-                      <span className="catalog-card-price">{formatPrice(product.price)}</span>
-                      {product.oldPrice && (
-                        <span className="catalog-card-old-price">{formatPrice(product.oldPrice)}</span>
-                      )}
-                    </div>
-                    <button
-                      className="catalog-card-cart-btn"
-                      onClick={(e) => handleAddToCart(e, product)}
-                      disabled={!product.inStock || product.isSaleDisabled}
-                      style={(!product.inStock || product.isSaleDisabled) ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
-                    >
-                      {!product.inStock
-                        ? (lang === 'ru' ? 'Недоступно' : 'Unavailable')
-                        : product.isSaleDisabled
-                          ? (lang === 'ru' ? 'Скоро' : 'Coming soon')
-                          : isInCart
-                            ? (lang === 'ru' ? 'Перейти в корзину' : 'Go to cart')
-                            : t(lang, 'catalog.view')}
-                    </button>
                   </div>
                 </Link>
               );

@@ -8,28 +8,42 @@ export async function GET(req: NextRequest) {
 
   try {
     const paidFilter = { status: { in: ['paid', 'assembling', 'shipped', 'in_transit', 'delivered'] } };
-    
-    // Get orders viewed timestamp
-    const viewedSetting = await prisma.siteSettings.findUnique({ where: { key: 'ordersViewedAt' } });
+    const withTimeout = async <T,>(promise: Promise<T>, fallback: T, ms = 5000): Promise<T> => {
+      try {
+        return await Promise.race([
+          promise,
+          new Promise<T>((_, reject) => setTimeout(() => reject(new Error('dashboard query timeout')), ms)),
+        ]);
+      } catch {
+        return fallback;
+      }
+    };
+
+    const viewedSetting = await withTimeout(
+      prisma.siteSettings.findUnique({ where: { key: 'ordersViewedAt' } }),
+      null
+    );
     const ordersViewedAt = viewedSetting ? new Date(viewedSetting.value) : new Date(0);
-    
+
     const [orderCount, productCount, totalRevenue, pendingCount, recentOrders, inquiryCount, newInquiryCount, waitlistCount, newOrdersCount, newEmailsCount, expenseAgg] = await Promise.all([
-      prisma.order.count({ where: paidFilter }),
-      prisma.product.count(),
-      prisma.order.aggregate({ where: paidFilter, _sum: { totalAmount: true } }),
-      prisma.order.count({ where: { status: 'pending' } }),
-      prisma.order.findMany({
-        where: paidFilter,
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: { items: { include: { product: true } } },
-      }),
-      prisma.inquiry.count(),
-      prisma.inquiry.count({ where: { status: 'new' } }),
-      prisma.waitlistRequest.count({ where: { status: 'pending' } }),
-      prisma.order.count({ where: { status: { in: ['paid', 'assembling'] }, createdAt: { gt: ordersViewedAt } } }),
-      prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }),
-      prisma.expense.aggregate({ _sum: { amount: true } }),
+      withTimeout(prisma.order.count({ where: paidFilter }), 0),
+      withTimeout(prisma.product.count(), 0),
+      withTimeout(prisma.order.aggregate({ where: paidFilter, _sum: { totalAmount: true } }), { _sum: { totalAmount: 0 } }),
+      withTimeout(prisma.order.count({ where: { status: 'pending' } }), 0),
+      withTimeout(
+        prisma.order.findMany({
+          where: paidFilter,
+          take: 5,
+          orderBy: { createdAt: 'desc' },
+        }),
+        []
+      ),
+      withTimeout(prisma.inquiry.count({ where: { status: { not: 'archived' } } }), 0),
+      withTimeout(prisma.inquiry.count({ where: { status: 'new' } }), 0),
+      withTimeout(prisma.waitlistRequest.count({ where: { status: 'pending' } }), 0),
+      withTimeout(prisma.order.count({ where: { status: { in: ['paid', 'assembling'] }, createdAt: { gt: ordersViewedAt } } }), 0),
+      withTimeout(prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }), 0),
+      withTimeout(prisma.expense.aggregate({ _sum: { amount: true } }), { _sum: { amount: 0 } }),
     ]);
 
     const totalRevenueAmount = totalRevenue._sum.totalAmount || 0;

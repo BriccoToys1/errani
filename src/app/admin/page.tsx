@@ -200,32 +200,50 @@ export default function AdminDashboard() {
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
+  const fetchWithTimeout = useCallback(async (url: string, token: string, timeoutMs = 8000) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }, []);
+
   const fetchData = useCallback(async (isRefresh = false) => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
     if (isRefresh) setRefreshing(true);
 
     try {
-      const [dashRes, analyticsRes, serverRes] = await Promise.all([
-        fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`/api/admin/analytics?period=${period}`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/admin/server-stats", { headers: { Authorization: `Bearer ${token}` } }),
+      const [dashResult, serverResult] = await Promise.allSettled([
+        fetchWithTimeout("/api/admin/dashboard", token),
+        fetchWithTimeout("/api/admin/server-stats", token),
       ]);
 
-      if (dashRes.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
+      if (dashResult.status === "fulfilled" && dashResult.value.status === 401) {
+        localStorage.removeItem("admin_token");
+        router.push("/admin/login");
+        return;
+      }
 
-      const dashData = await dashRes.json();
-      const analyticsData = await analyticsRes.json();
-      const serverData = await serverRes.json();
+      if (dashResult.status === "fulfilled" && dashResult.value.ok) {
+        const dashData = await dashResult.value.json();
+        if (dashData) setData(dashData);
+      }
 
-      if (dashData) setData(dashData);
-      if (analyticsData && !analyticsData.error) setAnalytics(analyticsData);
-      if (serverData && !serverData.error) setServerStats(serverData);
+      if (serverResult.status === "fulfilled" && serverResult.value.ok) {
+        const serverData = await serverResult.value.json();
+        if (serverData && !serverData.error) setServerStats(serverData);
+      }
     } finally {
       setLoading(false);
       if (isRefresh) setRefreshing(false);
     }
-  }, [getToken, router, period]);
+  }, [fetchWithTimeout, getToken, router]);
 
   const [showExport, setShowExport] = useState(false);
   const [exportFrom, setExportFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); });
@@ -273,7 +291,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchData();
     fetchExpenses();
-    const interval = setInterval(() => fetchData(), 30000);
+    const interval = setInterval(() => fetchData(), 60000);
     return () => clearInterval(interval);
   }, [fetchData, fetchExpenses]);
 

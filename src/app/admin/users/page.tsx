@@ -4,14 +4,23 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { AdminSidebar } from "../AdminSidebar";
 
-interface UserOrder {
-  createdAt: string;
-  totalAmount: number;
-  currency: string;
-  status: string;
+interface OrderItem {
+  productName: string;
+  quantity: number;
+  price: number;
 }
 
-interface User {
+interface CustomerOrder {
+  id: string;
+  orderNumber: string;
+  createdAt: string;
+  status: string;
+  totalAmount: number;
+  currency: string;
+  items: OrderItem[];
+}
+
+interface CustomerProfile {
   id: string;
   email: string;
   name: string;
@@ -23,8 +32,14 @@ interface User {
   house: string;
   apartment: string;
   createdAt: string;
+  updatedAt: string;
+  badges: string[];
+  archived: boolean;
+  archivedAt: string | null;
+  totalSpent: number;
   _count: { orders: number };
-  orders: UserOrder[];
+  orders: CustomerOrder[];
+  cartItems: OrderItem[];
 }
 
 const COUNTRY_NAMES: Record<string, string> = {
@@ -32,6 +47,13 @@ const COUNTRY_NAMES: Record<string, string> = {
   ES: "Испания", TR: "Турция", GB: "Великобритания", KZ: "Казахстан",
   UA: "Украина", BY: "Беларусь", PL: "Польша", NL: "Нидерланды",
 };
+
+const QUICK_BADGES = [
+  "Постоянный покупатель",
+  "VIP",
+  "Collector",
+  "Priority",
+];
 
 function formatDate(s: string) {
   return new Date(s).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -42,85 +64,136 @@ function formatMoney(amount: number, currency = "RUB") {
 }
 
 function UserAvatar({ name }: { name: string }) {
-  const initials = name.split(" ").slice(0, 2).map(n => n[0]).join("").toUpperCase() || "?";
+  const initials = name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]).join("").toUpperCase() || "?";
   return (
     <div style={{
-      width: 40, height: 40, borderRadius: "50%",
-      background: "linear-gradient(135deg, var(--cms-accent) 0%, #c084fc 100%)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      color: "#fff", fontWeight: 700, fontSize: "14px", flexShrink: 0,
-    }}>{initials}</div>
+      width: 44,
+      height: 44,
+      borderRadius: "50%",
+      background: "linear-gradient(135deg, var(--cms-accent) 0%, #2d98da 100%)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "#fff",
+      fontWeight: 700,
+      fontSize: "14px",
+      flexShrink: 0,
+    }}>
+      {initials}
+    </div>
   );
 }
 
 export default function AdminUsersPage() {
   const router = useRouter();
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<CustomerProfile[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<User | null>(null);
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
-  const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
+  const [view, setView] = useState<"active" | "archived" | "all">("active");
   const [notification, setNotification] = useState("");
+  const [pending, setPending] = useState<string | null>(null);
+  const [badgeInputs, setBadgeInputs] = useState<Record<string, string>>({});
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
-  const fetchUsers = useCallback(async (q = "", p = 1) => {
+  const notify = (msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(""), 3500);
+  };
+
+  const fetchUsers = useCallback(async (q = "", p = 1, v: "active" | "archived" | "all" = view) => {
     const token = getToken();
-    if (!token) { router.push("/admin/login"); return; }
+    if (!token) {
+      router.push("/admin/login");
+      return;
+    }
+
     setLoading(true);
-    const res = await fetch(`/api/admin/users?search=${encodeURIComponent(q)}&page=${p}`, {
+    const res = await fetch(`/api/admin/users?search=${encodeURIComponent(q)}&page=${p}&view=${v}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (res.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
+
+    if (res.status === 401) {
+      localStorage.removeItem("admin_token");
+      router.push("/admin/login");
+      return;
+    }
+
     const data = await res.json();
     setUsers(data.users || []);
     setTotal(data.total || 0);
     setPage(data.page || 1);
     setPages(data.pages || 1);
     setLoading(false);
-  }, [getToken, router]);
+  }, [getToken, router, view]);
 
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  useEffect(() => {
+    fetchUsers("", 1, view);
+  }, [fetchUsers, view]);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const onSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchUsers(search, 1);
+    fetchUsers(search, 1, view);
   };
 
-  const toggleCheck = (id: string) => {
-    setCheckedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    if (checkedIds.size === users.length) setCheckedIds(new Set());
-    else setCheckedIds(new Set(users.map(u => u.id)));
-  };
-
-  const handleDelete = async (ids: string[]) => {
+  const patchProfile = async (email: string, payload: Record<string, unknown>, successMsg: string) => {
     const token = getToken();
     if (!token) return;
-    await fetch("/api/admin/users", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ids }),
-    });
-    setDeleteConfirm(null);
-    setCheckedIds(new Set());
-    if (selected && ids.includes(selected.id)) setSelected(null);
-    setNotification(`Удалено: ${ids.length} ${ids.length === 1 ? "пользователь" : "пользователей"}`);
-    setTimeout(() => setNotification(""), 3000);
-    fetchUsers(search, page);
+
+    setPending(email);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email, ...payload }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        notify(data.error || "Ошибка сохранения");
+        return;
+      }
+      notify(successMsg);
+      fetchUsers(search, page, view);
+    } finally {
+      setPending(null);
+    }
   };
 
-  const notify = (msg: string) => { setNotification(msg); setTimeout(() => setNotification(""), 3000); };
+  const addBadge = (profile: CustomerProfile, badge: string) => {
+    const clean = badge.trim();
+    if (!clean) return;
+    const badges = Array.from(new Set([...(profile.badges || []), clean]));
+    patchProfile(profile.email, { badges }, "Бейдж добавлен");
+    setBadgeInputs((prev) => ({ ...prev, [profile.email]: "" }));
+  };
+
+  const removeBadge = (profile: CustomerProfile, badge: string) => {
+    const badges = (profile.badges || []).filter((b) => b !== badge);
+    patchProfile(profile.email, { badges }, "Бейдж удалён");
+  };
+
+  const toggleArchive = (profile: CustomerProfile) => {
+    patchProfile(
+      profile.email,
+      { archived: !profile.archived },
+      profile.archived ? "Профиль восстановлен из архива" : "Профиль архивирован"
+    );
+  };
+
+  const purgeProfile = (profile: CustomerProfile) => {
+    if (!profile.archived) {
+      notify("Сначала перенесите профиль в архив");
+      return;
+    }
+    if (!confirm(`Удалить профиль ${profile.email} и связанные данные навсегда?`)) return;
+    patchProfile(profile.email, { purge: true }, "Профиль удалён навсегда");
+  };
 
   return (
     <div className="cms-root">
@@ -128,235 +201,178 @@ export default function AdminUsersPage() {
       <main className="cms-main">
         <div className="cms-header">
           <div>
-            <h1 className="cms-header-title">Пользователи</h1>
-            <p style={{ fontSize: "13px", color: "var(--cms-text-muted)", marginTop: "2px" }}>
-              {total} зарегистрированных
-            </p>
-          </div>
-          <div className="cms-header-actions">
-            {checkedIds.size > 0 && (
-              <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={() => setDeleteConfirm([...checkedIds])}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                Удалить ({checkedIds.size})
-              </button>
-            )}
+            <h1 className="cms-header-title">Клиенты</h1>
+            <p style={{ fontSize: "13px", color: "var(--cms-text-muted)", marginTop: "2px" }}>{total} профилей</p>
           </div>
         </div>
 
         {notification && <div className="cms-notification">{notification}</div>}
 
         <div className="cms-content">
-          {/* Search */}
-          <form onSubmit={handleSearch} style={{ marginBottom: "16px", display: "flex", gap: "8px" }}>
-            <div style={{ position: "relative", flex: 1, maxWidth: "380px" }}>
-              <svg style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cms-text-muted)" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-              <input
-                className="cms-input"
-                style={{ paddingLeft: "34px" }}
-                placeholder="Поиск по имени, email, городу..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-            </div>
+          <form onSubmit={onSearch} style={{ marginBottom: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <input
+              className="cms-input"
+              style={{ width: "320px" }}
+              placeholder="Поиск по имени, email, городу, бейджу..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select className="cms-select" value={view} onChange={(e) => setView(e.target.value as "active" | "archived" | "all")}>
+              <option value="active">Активные</option>
+              <option value="archived">Архив</option>
+              <option value="all">Все</option>
+            </select>
             <button type="submit" className="cms-btn cms-btn-sm cms-btn-secondary">Найти</button>
             {search && (
-              <button type="button" className="cms-btn cms-btn-sm cms-btn-ghost" onClick={() => { setSearch(""); fetchUsers("", 1); }}>
+              <button type="button" className="cms-btn cms-btn-sm cms-btn-ghost" onClick={() => { setSearch(""); fetchUsers("", 1, view); }}>
                 Сбросить
               </button>
             )}
           </form>
 
-          <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
-            {/* Table */}
-            <div className="cms-table-wrap" style={{ flex: 1, overflow: "auto" }}>
-              {loading ? (
-                <div style={{ padding: "48px", textAlign: "center", color: "var(--cms-text-muted)" }}>
-                  <div className="cms-spinner" style={{ margin: "0 auto 12px" }} />
-                  Загрузка...
-                </div>
-              ) : users.length === 0 ? (
-                <div style={{ padding: "64px", textAlign: "center", color: "var(--cms-text-muted)" }}>
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--cms-text-muted)" strokeWidth="1" style={{ marginBottom: "12px", opacity: 0.5 }}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  <div style={{ fontWeight: 600, marginBottom: "4px" }}>{search ? "Ничего не найдено" : "Нет пользователей"}</div>
-                  <div style={{ fontSize: "12px" }}>{search ? "Попробуйте другой запрос" : "Пользователи появятся после оформления первого заказа"}</div>
-                </div>
-              ) : (
-                <>
-                  <table className="cms-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: 36 }}>
-                          <input type="checkbox" checked={checkedIds.size === users.length && users.length > 0} onChange={toggleAll} />
-                        </th>
-                        <th>Пользователь</th>
-                        <th>Контакты</th>
-                        <th>Местоположение</th>
-                        <th style={{ textAlign: "center" }}>Заказы</th>
-                        <th>Последний заказ</th>
-                        <th>Joined</th>
-                        <th style={{ width: 40 }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map(user => (
-                        <tr key={user.id} className={selected?.id === user.id ? "cms-row-active" : ""} style={{ cursor: "pointer" }}>
-                          <td onClick={e => e.stopPropagation()}>
-                            <input type="checkbox" checked={checkedIds.has(user.id)} onChange={() => toggleCheck(user.id)} />
-                          </td>
-                          <td onClick={() => setSelected(user)}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                              <UserAvatar name={user.name} />
-                              <div>
-                                <div style={{ fontWeight: 600, fontSize: "13px" }}>{user.name}</div>
-                                <div style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{user.email}</div>
+          {loading ? (
+            <div style={{ padding: "48px", textAlign: "center", color: "var(--cms-text-muted)" }}>
+              <div className="cms-spinner" style={{ margin: "0 auto 12px" }} />
+              Загрузка...
+            </div>
+          ) : users.length === 0 ? (
+            <div className="cms-card" style={{ padding: "44px", textAlign: "center", color: "var(--cms-text-muted)" }}>
+              Профили не найдены
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))", gap: "14px" }}>
+              {users.map((profile) => {
+                const latest = profile.orders[0];
+                const canGetRegularBadge = profile._count.orders >= 10 && !profile.badges.includes("Постоянный покупатель");
+                return (
+                  <div key={profile.id} className="cms-card" style={{ border: "1px solid var(--cms-border)", padding: "14px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                      <UserAvatar name={profile.name || profile.email} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.name || "Без имени"}</div>
+                        <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.email}</div>
+                      </div>
+                      {profile.archived && <span className="cms-badge">Архив</span>}
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px", fontSize: "12px" }}>
+                      <div><strong>Заказы:</strong> {profile._count.orders}</div>
+                      <div><strong>Сумма:</strong> {formatMoney(profile.totalSpent || 0, latest?.currency || "RUB")}</div>
+                      <div><strong>Телефон:</strong> {profile.phone || "—"}</div>
+                      <div><strong>Город:</strong> {profile.city || "—"}</div>
+                      <div><strong>Страна:</strong> {COUNTRY_NAMES[profile.country] || profile.country || "—"}</div>
+                      <div><strong>Последний:</strong> {latest ? formatDate(latest.createdAt) : "—"}</div>
+                    </div>
+
+                    <div style={{ fontSize: "12px", marginBottom: "10px", color: "var(--cms-text-muted)" }}>
+                      Адрес: {[profile.street, profile.house && `д. ${profile.house}`, profile.apartment && `кв. ${profile.apartment}`, profile.zipCode].filter(Boolean).join(", ") || "—"}
+                    </div>
+
+                    <div style={{ marginBottom: "10px" }}>
+                      <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Бейджи</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
+                        {(profile.badges || []).length > 0 ? profile.badges.map((badge) => (
+                          <span key={badge} className="cms-badge cms-badge-blue" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            {badge}
+                            <button onClick={() => removeBadge(profile, badge)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", lineHeight: 1 }}>×</button>
+                          </span>
+                        )) : <span style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>нет бейджей</span>}
+                      </div>
+
+                      <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+                        <input
+                          className="cms-input cms-input-sm"
+                          placeholder="Новый бейдж"
+                          value={badgeInputs[profile.email] || ""}
+                          onChange={(e) => setBadgeInputs((prev) => ({ ...prev, [profile.email]: e.target.value }))}
+                        />
+                        <button
+                          className="cms-btn cms-btn-xs"
+                          disabled={pending === profile.email}
+                          onClick={() => addBadge(profile, badgeInputs[profile.email] || "")}
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                        {QUICK_BADGES.map((b) => (
+                          <button key={b} className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => addBadge(profile, b)} disabled={pending === profile.email}>
+                            {b}
+                          </button>
+                        ))}
+                        {canGetRegularBadge && (
+                          <button className="cms-btn cms-btn-xs" onClick={() => addBadge(profile, "Постоянный покупатель")} disabled={pending === profile.email}>
+                            + Постоянный покупатель (10+)
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: "10px" }}>
+                      <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Items on cart (последний заказ)</div>
+                      {profile.cartItems.length > 0 ? (
+                        <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "12px" }}>
+                          {profile.cartItems.slice(0, 6).map((item, idx) => (
+                            <li key={`${profile.id}-${idx}`}>{item.productName} × {item.quantity}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>нет данных</div>
+                      )}
+                    </div>
+
+                    <div style={{ marginBottom: "12px" }}>
+                      <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Заказы</div>
+                      {profile.orders.length > 0 ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "140px", overflow: "auto" }}>
+                          {profile.orders.slice(0, 4).map((order) => (
+                            <div key={order.id} style={{ border: "1px solid var(--cms-border)", borderRadius: "8px", padding: "8px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", fontSize: "12px" }}>
+                                <strong>#{order.orderNumber}</strong>
+                                <span>{formatMoney(order.totalAmount, order.currency)}</span>
+                              </div>
+                              <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", marginTop: "2px" }}>
+                                {formatDate(order.createdAt)} • {order.status}
+                              </div>
+                              <div style={{ fontSize: "11px", marginTop: "4px", color: "var(--cms-text-muted)" }}>
+                                {order.items.map((i) => `${i.productName} × ${i.quantity}`).join("; ")}
                               </div>
                             </div>
-                          </td>
-                          <td onClick={() => setSelected(user)} style={{ fontSize: "12px" }}>
-                            {user.phone ? <div style={{ color: "var(--cms-text)" }}>{user.phone}</div> : <span style={{ color: "var(--cms-text-muted)" }}>—</span>}
-                          </td>
-                          <td onClick={() => setSelected(user)} style={{ fontSize: "12px" }}>
-                            <div style={{ fontWeight: 500 }}>{COUNTRY_NAMES[user.country] || user.country || "—"}</div>
-                            <div style={{ color: "var(--cms-text-muted)" }}>{user.city || ""}</div>
-                          </td>
-                          <td onClick={() => setSelected(user)} style={{ textAlign: "center" }}>
-                            {user._count.orders > 0 ? (
-                              <span className="cms-badge cms-badge-green">{user._count.orders}</span>
-                            ) : (
-                              <span style={{ color: "var(--cms-text-muted)", fontSize: "12px" }}>0</span>
-                            )}
-                          </td>
-                          <td onClick={() => setSelected(user)} style={{ fontSize: "12px" }}>
-                            {user.orders[0] ? (
-                              <div>
-                                <div style={{ fontWeight: 500 }}>{formatMoney(user.orders[0].totalAmount, user.orders[0].currency)}</div>
-                                <div style={{ color: "var(--cms-text-muted)" }}>{formatDate(user.orders[0].createdAt)}</div>
-                              </div>
-                            ) : <span style={{ color: "var(--cms-text-muted)" }}>—</span>}
-                          </td>
-                          <td onClick={() => setSelected(user)} style={{ fontSize: "11px", color: "var(--cms-text-muted)", whiteSpace: "nowrap" }}>
-                            {formatDate(user.createdAt)}
-                          </td>
-                          <td onClick={e => e.stopPropagation()}>
-                            <button
-                              className="cms-btn-icon"
-                              title="Удалить"
-                              onClick={() => setDeleteConfirm([user.id])}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>заказов нет</div>
+                      )}
+                    </div>
 
-                  {/* Pagination */}
-                  {pages > 1 && (
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", padding: "14px 0", borderTop: "1px solid var(--cms-border)" }}>
-                      <button className="cms-btn cms-btn-sm cms-btn-ghost" disabled={page <= 1} onClick={() => fetchUsers(search, page - 1)}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <button className="cms-btn cms-btn-xs" onClick={() => toggleArchive(profile)} disabled={pending === profile.email}>
+                        {profile.archived ? "Восстановить" : "В архив"}
                       </button>
-                      <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>
-                        Стр. {page} из {pages}
-                      </span>
-                      <button className="cms-btn cms-btn-sm cms-btn-ghost" disabled={page >= pages} onClick={() => fetchUsers(search, page + 1)}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                      <button
+                        className="cms-btn cms-btn-xs cms-btn-danger"
+                        onClick={() => purgeProfile(profile)}
+                        disabled={pending === profile.email || !profile.archived}
+                        title="Полное удаление доступно только из архива"
+                      >
+                        Удалить навсегда
                       </button>
                     </div>
-                  )}
-                </>
-              )}
+                  </div>
+                );
+              })}
             </div>
+          )}
 
-            {/* Detail panel */}
-            {selected && (
-              <div className="cms-table-wrap" style={{ width: "300px", flexShrink: 0, alignSelf: "flex-start" }}>
-                {/* Profile header */}
-                <div style={{ padding: "20px", borderBottom: "1px solid var(--cms-border)", display: "flex", alignItems: "center", gap: "12px" }}>
-                  <UserAvatar name={selected.name} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selected.name}</div>
-                    <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selected.email}</div>
-                  </div>
-                  <button
-                    onClick={() => setSelected(null)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cms-text-muted)", padding: "4px", borderRadius: "6px", display: "flex" }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
-                </div>
-
-                {/* Stats row */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid var(--cms-border)" }}>
-                  <div style={{ padding: "14px 16px", borderRight: "1px solid var(--cms-border)", textAlign: "center" }}>
-                    <div style={{ fontSize: "22px", fontWeight: 700 }}>{selected._count.orders}</div>
-                    <div style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>заказов</div>
-                  </div>
-                  <div style={{ padding: "14px 16px", textAlign: "center" }}>
-                    <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--cms-accent)" }}>
-                      {selected.orders[0] ? formatMoney(selected.orders[0].totalAmount, selected.orders[0].currency) : "—"}
-                    </div>
-                    <div style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>посл. заказ</div>
-                  </div>
-                </div>
-
-                {/* Details */}
-                <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px", fontSize: "12px" }}>
-                  {[
-                    { label: "Телефон", value: selected.phone || "—" },
-                    { label: "Страна", value: COUNTRY_NAMES[selected.country] || selected.country || "—" },
-                    { label: "Город", value: selected.city || "—" },
-                    {
-                      label: "Адрес",
-                      value: [selected.street, selected.house && `д. ${selected.house}`, selected.apartment && `кв. ${selected.apartment}`, selected.zipCode].filter(Boolean).join(", ") || "—"
-                    },
-                    { label: "Зарегистрирован", value: formatDate(selected.createdAt) },
-                  ].map(row => (
-                    <div key={row.label}>
-                      <div style={{ color: "var(--cms-text-muted)", marginBottom: "2px", textTransform: "uppercase", fontSize: "10px", letterSpacing: "0.05em" }}>{row.label}</div>
-                      <div style={{ fontWeight: 500 }}>{row.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ padding: "0 16px 16px" }}>
-                  <button
-                    className="cms-btn cms-btn-sm cms-btn-danger"
-                    style={{ width: "100%", justifyContent: "center" }}
-                    onClick={() => setDeleteConfirm([selected.id])}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
-                    Удалить пользователя
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          {pages > 1 && (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "8px", marginTop: "16px" }}>
+              <button className="cms-btn cms-btn-sm cms-btn-ghost" disabled={page <= 1} onClick={() => fetchUsers(search, page - 1, view)}>←</button>
+              <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>Стр. {page} из {pages}</span>
+              <button className="cms-btn cms-btn-sm cms-btn-ghost" disabled={page >= pages} onClick={() => fetchUsers(search, page + 1, view)}>→</button>
+            </div>
+          )}
         </div>
-
-        {/* Delete confirm modal */}
-        {deleteConfirm && (
-          <div className="cms-modal-overlay" onClick={() => setDeleteConfirm(null)}>
-            <div className="cms-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
-              <div className="cms-modal-header">
-                <h3>Удалить {deleteConfirm.length === 1 ? "пользователя" : `${deleteConfirm.length} пользователей`}?</h3>
-                <button className="cms-modal-close" onClick={() => setDeleteConfirm(null)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-              </div>
-              <div className="cms-modal-body">
-                <p style={{ color: "var(--cms-text-muted)", fontSize: "13px" }}>
-                  Все данные о пользователе и связанные заказы будут удалены безвозвратно.
-                </p>
-              </div>
-              <div className="cms-modal-footer">
-                <button className="cms-btn cms-btn-ghost" onClick={() => setDeleteConfirm(null)}>Отмена</button>
-                <button className="cms-btn cms-btn-danger" onClick={() => handleDelete(deleteConfirm)}>Удалить</button>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );

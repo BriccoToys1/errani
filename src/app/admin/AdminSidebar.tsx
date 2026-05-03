@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { href: '/admin/orders', icon: 'orders', label: 'Заказы', countKey: 'newOrders' },
   { href: '/admin/products', icon: 'products', label: 'Товары' },
   { href: '/admin/inquiries', icon: 'inquiries', label: 'Заявки', countKey: 'newInquiries' },
-  { href: '/admin/waitlist', icon: 'inquiries', label: 'В ожидании', countKey: 'newWaitlist' },
+  { href: '/admin/waitlist', icon: 'waitlist', label: 'В ожидании', countKey: 'newWaitlist' },
   { href: '/admin/email', icon: 'email', label: 'Почта', countKey: 'newEmails' },
   { href: '/admin/users', icon: 'users', label: 'Клиенты' },
   { section: 'Техническое' },
@@ -42,6 +42,7 @@ const ICONS: Record<string, React.ReactNode> = {
   orders: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>,
   products: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>,
   inquiries: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
+  waitlist: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M4.9 4.9l2.8 2.8"/><path d="M16.3 16.3l2.8 2.8"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="M4.9 19.1l2.8-2.8"/><path d="M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="4"/></svg>,
   email: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>,
   content: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
   pages: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
@@ -78,42 +79,27 @@ export function AdminSidebar() {
     try {
       const token = localStorage.getItem('admin_token');
       if (!token) return;
-      const [dashRes, statsRes] = await Promise.all([
-        fetch('/api/admin/dashboard', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/server-stats', { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-      if (dashRes.ok) {
-        const data = await dashRes.json();
+      const countsRes = await fetch('/api/admin/counts', { headers: { Authorization: `Bearer ${token}` } });
+      if (countsRes.ok) {
+        const data = await countsRes.json();
         setCounts({
-          newOrders: data.newOrdersCount || 0,
-          newInquiries: data.newInquiriesCount || 0,
-          newWaitlist: data.waitlistCount || 0,
-          newEmails: data.newEmailsCount || 0,
+          newOrders: data.newOrders || 0,
+          newInquiries: data.newInquiries || 0,
+          newWaitlist: data.newWaitlist || 0,
+          newEmails: data.newEmails || 0,
         });
-      }
-      if (statsRes.ok) {
-        const s = await statsRes.json();
-        const issues: string[] = [];
-        if (s.dbConnected === false) issues.push('БД недоступна');
-        if (s.cpu?.usage > 85) issues.push(`CPU ${s.cpu.usage}%`);
-        if (s.memory?.usage > 85) issues.push(`RAM ${s.memory.usage}%`);
-        if (s.disk?.usage > 90) issues.push(`Disk ${s.disk.usage}%`);
-        if (s.dbConnected === false) {
-          setHealth({ level: 'red', message: issues.join(', ') });
-        } else if (issues.length > 0) {
-          setHealth({ level: 'yellow', message: issues.join(', ') });
-        } else {
-          setHealth({ level: 'green', message: 'Всё в порядке' });
-        }
+        setHealth({ level: 'green', message: 'Всё в порядке' });
+      } else {
+        setHealth({ level: 'yellow', message: 'Проблема загрузки счётчиков' });
       }
     } catch {
-      // ignore
+      setHealth({ level: 'yellow', message: 'Проблема загрузки счётчиков' });
     }
   }, []);
 
   useEffect(() => {
     fetchCounts();
-    const interval = setInterval(fetchCounts, 30000);
+    const interval = setInterval(fetchCounts, 90000);
     return () => clearInterval(interval);
   }, [fetchCounts]);
 

@@ -4,11 +4,11 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'errani.ru',
+        hostname: '**',
       },
       {
-        protocol: 'https',
-        hostname: '*.public.blob.vercel-storage.com',
+        protocol: 'http',
+        hostname: 'localhost',
       },
     ],
     unoptimized: false,

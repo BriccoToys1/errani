@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import { sendOrderConfirmation } from '@/lib/email';
 import { buildReceiptHtml } from '@/lib/receipt-builder';
 import { htmlToPdf } from '@/lib/pdf';
+import { markOrderPaidAndDecrementStock } from '@/lib/stock';
 
 // YuKassa webhook handler
 export async function POST(req: NextRequest) {
@@ -21,11 +22,11 @@ export async function POST(req: NextRequest) {
 
     switch (event) {
       case 'payment.succeeded': {
-        const order = await prisma.order.update({
-          where: { id: orderId },
-          data: { status: 'paid', paymentId: object.id },
-          include: { items: { include: { product: true } } },
-        });
+        const { order, alreadyPaid } = await markOrderPaidAndDecrementStock(orderId, object.id);
+        if (alreadyPaid) {
+          console.log(`Order ${orderId} is already paid, skipping duplicate webhook`);
+          break;
+        }
         console.log(`Order ${orderId} marked as paid`);
 
         // Compute shipping cost

@@ -29,8 +29,21 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
   try {
     const { id } = await params;
+    const existing = await prisma.waitlistRequest.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Waitlist request not found' }, { status: 404 });
+    }
+
+    if (existing.status !== 'archived') {
+      await prisma.waitlistRequest.update({
+        where: { id },
+        data: { status: 'archived' },
+      });
+      return NextResponse.json({ success: true, archived: true });
+    }
+
     await prisma.waitlistRequest.delete({ where: { id } });
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, deleted: true });
   } catch (error) {
     console.error('Error deleting waitlist request:', error);
     return NextResponse.json({ error: 'Failed to delete waitlist request' }, { status: 500 });
