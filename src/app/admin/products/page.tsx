@@ -4,18 +4,17 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AdminSidebar } from "../AdminSidebar";
 
-const SUPPORTED_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".svg", ".heic", ".webp", ".avif"];
+const SUPPORTED_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"];
 const SUPPORTED_IMAGE_MIME_TYPES = [
   "image/png",
   "image/jpeg",
   "image/jpg",
-  "image/svg+xml",
-  "image/heic",
-  "image/heif",
   "image/webp",
-  "image/avif",
 ];
 const IMAGE_ACCEPT = SUPPORTED_IMAGE_EXTENSIONS.join(",");
+const MAX_IMAGES = 20;
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_SIZE_MB = 10;
 
 function isSupportedImageFile(file: File): boolean {
   const lowerName = (file.name || "").toLowerCase();
@@ -24,37 +23,101 @@ function isSupportedImageFile(file: File): boolean {
   return hasAllowedExt || hasAllowedMime;
 }
 
-// Image uploader component with drag & drop
+function parseImageList(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function toImageListJson(images: string[]): string {
+  return JSON.stringify(images);
+}
+
+async function uploadProductImage(file: File, token: string): Promise<{ url: string; filename: string }> {
+  if (!isSupportedImageFile(file)) {
+    throw new Error("Допустимы только JPG, JPEG, PNG, WEBP");
+  }
+
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error(`Размер файла больше ${MAX_FILE_SIZE_MB} MB`);
+  }
+
+  const formData = new FormData();
+  formData.append("image", file);
+
+  const response = await fetch("/api/admin/upload/image", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data?.success || !data?.url) {
+    throw new Error(data?.message || "Ошибка загрузки изображения");
+  }
+
+  return {
+    url: String(data.url),
+    filename: String(data.filename || ""),
+  };
+}
+
+async function copyText(value: string): Promise<boolean> {
+  if (!value) return false;
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function ImageUploader({
   value,
   onChange,
+  onUploaded,
+  token,
   label,
   placeholder,
 }: {
   value: string;
   onChange: (url: string) => void;
+  onUploaded?: (url: string) => void;
+  token: string;
   label: string;
   placeholder?: string;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [tab, setTab] = useState<"file" | "url">("file");
-  const [urlInput, setUrlInput] = useState("");
+  const [statusText, setStatusText] = useState("");
+  const [lastUploadedUrl, setLastUploadedUrl] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadFile = async (file: File) => {
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
-      if (data.url) onChange(data.url);
-      else alert(data.error || "Ошибка загрузки");
-    } catch {
-      alert("Ошибка загрузки файла");
+    if (!token) {
+      alert("Сессия истекла. Войдите заново.");
+      return;
     }
-    setUploading(false);
+
+    setUploading(true);
+    setStatusText("");
+    try {
+      const uploaded = await uploadProductImage(file, token);
+      setLastUploadedUrl(uploaded.url);
+      setStatusText("Файл загружен и конвертирован в WEBP");
+      onChange(uploaded.url);
+      onUploaded?.(uploaded.url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ошибка загрузки файла";
+      setStatusText(message);
+      alert(message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -62,22 +125,6 @@ function ImageUploader({
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
     if (file && isSupportedImageFile(file)) uploadFile(file);
-  };
-
-  const handlePaste = (e: React.ClipboardEvent) => {
-    const items = e.clipboardData.items;
-    for (const item of items) {
-      if (item.type.startsWith("image/")) {
-        const file = item.getAsFile();
-        if (file && isSupportedImageFile(file)) uploadFile(file);
-        break;
-      }
-    }
-  };
-
-  const applyUrl = () => {
-    const url = urlInput.trim();
-    if (url) { onChange(url); setUrlInput(""); }
   };
 
   return (
@@ -93,58 +140,70 @@ function ImageUploader({
         </div>
       )}
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: "2px", marginBottom: "8px" }}>
-        <button type="button" onClick={() => setTab("file")} style={{ padding: "4px 12px", fontSize: "12px", borderRadius: "4px 4px 0 0", border: "1px solid #444", borderBottom: tab === "file" ? "1px solid #1a1a1a" : "1px solid #444", background: tab === "file" ? "#2a2a2a" : "transparent", color: tab === "file" ? "#fff" : "#888", cursor: "pointer" }}>Файл</button>
-        <button type="button" onClick={() => setTab("url")} style={{ padding: "4px 12px", fontSize: "12px", borderRadius: "4px 4px 0 0", border: "1px solid #444", borderBottom: tab === "url" ? "1px solid #1a1a1a" : "1px solid #444", background: tab === "url" ? "#2a2a2a" : "transparent", color: tab === "url" ? "#fff" : "#888", cursor: "pointer" }}>Ссылка (postimg.cc)</button>
+      <div
+        className={`cms-uploader-zone ${isDragging ? "dragging" : ""}`}
+        onDrop={handleDrop}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={() => setIsDragging(false)}
+        onClick={() => fileInputRef.current?.click()}
+        style={{ padding: "20px" }}
+      >
+        {uploading ? (
+          <span style={{ color: "#9b87f5" }}>Загрузка...</span>
+        ) : (
+          <span style={{ color: "#888" }}>{placeholder || "Перетащите фото или нажмите для выбора"}</span>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={IMAGE_ACCEPT}
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) uploadFile(file);
+          }}
+        />
       </div>
 
-      {tab === "file" ? (
-        <div
-          onDrop={handleDrop}
-          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-          onDragLeave={() => setIsDragging(false)}
-          onPaste={handlePaste}
-          onClick={() => fileInputRef.current?.click()}
-          style={{
-            border: isDragging ? "2px dashed #9b87f5" : "2px dashed #444",
-            borderRadius: "0 8px 8px 8px",
-            padding: "20px",
-            textAlign: "center",
-            cursor: "pointer",
-            backgroundColor: isDragging ? "rgba(155,135,245,0.1)" : "transparent",
-            transition: "all 0.2s",
-          }}
-        >
-          {uploading ? (
-            <span style={{ color: "#9b87f5" }}>Загрузка...</span>
-          ) : (
-            <span style={{ color: "#888" }}>{placeholder || "Перетащите фото или нажмите для выбора"}</span>
-          )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={IMAGE_ACCEPT}
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file && isSupportedImageFile(file)) uploadFile(file);
-            }}
-          />
-        </div>
-      ) : (
-        <div style={{ border: "1px solid #444", borderRadius: "0 8px 8px 8px", padding: "12px" }}>
-          <p style={{ fontSize: "12px", color: "#888", marginBottom: "8px" }}>Вставьте прямую ссылку на изображение (i.postimg.cc или любой другой хостинг)</p>
-          <div style={{ display: "flex", gap: "6px" }}>
-            <input
-              className="cms-input"
-              style={{ flex: 1 }}
-              placeholder="https://i.postimg.cc/..."
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyUrl(); } }}
-            />
-            <button type="button" className="cms-btn cms-btn-sm cms-btn-primary" onClick={applyUrl} disabled={!urlInput.trim()}>Применить</button>
+      {statusText && (
+        <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--cms-text-muted)" }}>{statusText}</div>
+      )}
+
+      {(lastUploadedUrl || value) && (
+        <div className="cms-uploader-url-card" style={{ marginTop: "8px" }}>
+          <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Прямая ссылка</div>
+          <div style={{ fontSize: "12px", color: "#ddd", wordBreak: "break-all", marginBottom: "8px" }}>{lastUploadedUrl || value}</div>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="cms-btn cms-btn-xs"
+              onClick={async () => {
+                const ok = await copyText(lastUploadedUrl || value);
+                if (!ok) alert("Не удалось скопировать ссылку");
+              }}
+            >
+              Скопировать URL
+            </button>
+            <button
+              type="button"
+              className="cms-btn cms-btn-xs cms-btn-primary"
+              onClick={() => {
+                const url = lastUploadedUrl || value;
+                if (!url) return;
+                onChange(url);
+                onUploaded?.(url);
+              }}
+            >
+              Вставить в товар
+            </button>
+            <a
+              className="cms-btn cms-btn-xs cms-btn-ghost"
+              href={lastUploadedUrl || value}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Открыть изображение
+            </a>
           </div>
         </div>
       )}
@@ -152,64 +211,97 @@ function ImageUploader({
   );
 }
 
-const MAX_IMAGES = 20;
-
-// Multi-image uploader for additional photos
 function MultiImageUploader({
   value,
   onChange,
+  mainImage,
+  onMainImageChange,
+  token,
   label,
 }: {
   value: string;
   onChange: (json: string) => void;
+  mainImage: string;
+  onMainImageChange: (url: string) => void;
+  token: string;
   label: string;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [urlInput, setUrlInput] = useState("");
+  const [lastUploadedUrl, setLastUploadedUrl] = useState("");
+  const [statusText, setStatusText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const images: string[] = (() => {
-    try { return JSON.parse(value) || []; } catch { return []; }
-  })();
+  const images = parseImageList(value);
+
+  const setImages = (next: string[]) => {
+    onChange(toImageListJson(next));
+  };
+
+  const addImage = (url: string) => {
+    const cleanUrl = url.trim();
+    if (!cleanUrl) return;
+    if (images.length >= MAX_IMAGES) {
+      alert(`Максимум ${MAX_IMAGES} фотографий`);
+      return;
+    }
+
+    if (!images.includes(cleanUrl)) {
+      setImages([...images, cleanUrl]);
+    }
+
+    if (!mainImage) {
+      onMainImageChange(cleanUrl);
+    }
+  };
 
   const uploadFile = async (file: File) => {
     if (images.length >= MAX_IMAGES) { alert(`Максимум ${MAX_IMAGES} фотографий`); return; }
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
-      const data = await res.json();
-      if (data.url) {
-        onChange(JSON.stringify([...images, data.url]));
-      } else {
-        alert(data.error || "Ошибка загрузки");
-      }
-    } catch {
-      alert("Ошибка загрузки файла");
+    if (!token) {
+      alert("Сессия истекла. Войдите заново.");
+      return;
     }
-    setUploading(false);
-  };
 
-  const addUrl = () => {
-    const url = urlInput.trim();
-    if (!url) return;
-    if (images.length >= MAX_IMAGES) { alert(`Максимум ${MAX_IMAGES} фотографий`); return; }
-    if (images.includes(url)) { alert("Этот URL уже добавлен"); return; }
-    onChange(JSON.stringify([...images, url]));
-    setUrlInput("");
+    setUploading(true);
+    setStatusText("");
+    try {
+      const uploaded = await uploadProductImage(file, token);
+      setLastUploadedUrl(uploaded.url);
+      setStatusText("Файл загружен и добавлен в галерею");
+      addImage(uploaded.url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ошибка загрузки файла";
+      setStatusText(message);
+      alert(message);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const removeImage = (index: number) => {
-    onChange(JSON.stringify(images.filter((_, i) => i !== index)));
+    const next = images.filter((_, i) => i !== index);
+    const removed = images[index];
+    setImages(next);
+
+    if (removed && removed === mainImage) {
+      onMainImageChange(next[0] || "");
+    }
+  };
+
+  const moveImage = (index: number, shift: -1 | 1) => {
+    const targetIndex = index + shift;
+    if (targetIndex < 0 || targetIndex >= images.length) return;
+
+    const next = [...images];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    setImages(next);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
-    files.filter(isSupportedImageFile).forEach(uploadFile);
+    files.forEach(uploadFile);
   };
 
   return (
@@ -219,57 +311,42 @@ function MultiImageUploader({
         <span style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{images.length} / {MAX_IMAGES}</span>
       </div>
       {images.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+        <div style={{ display: "grid", gap: "8px", marginBottom: "8px" }}>
           {images.map((img, i) => (
-            <div key={i} style={{ position: "relative" }}>
-              <img src={img} alt="" style={{ height: "60px", borderRadius: "4px", objectFit: "cover" }} />
-              <button
-                type="button"
-                onClick={() => removeImage(i)}
-                style={{
-                  position: "absolute", top: "-6px", right: "-6px",
-                  width: "20px", height: "20px", borderRadius: "50%",
-                  background: "#e74c3c", color: "#fff", border: "none",
-                  cursor: "pointer", fontSize: "14px", lineHeight: "1"
-                }}
-              >×</button>
+            <div key={`${img}-${i}`} style={{ display: "grid", gridTemplateColumns: "60px 1fr auto", gap: "8px", alignItems: "center", border: "1px solid var(--cms-border)", borderRadius: "8px", padding: "8px" }}>
+              <img src={img} alt="" style={{ width: "60px", height: "60px", borderRadius: "6px", objectFit: "cover" }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: "11px", color: "#ddd", wordBreak: "break-all", marginBottom: "5px" }}>{img}</div>
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className={`cms-btn cms-btn-xs ${mainImage === img ? "cms-btn-primary" : ""}`}
+                    onClick={() => onMainImageChange(img)}
+                  >
+                    {mainImage === img ? "Главное фото" : "Сделать главным"}
+                  </button>
+                  <a className="cms-btn cms-btn-xs cms-btn-ghost" href={img} target="_blank" rel="noreferrer">Открыть</a>
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: "4px" }}>
+                <button type="button" className="cms-btn cms-btn-xs" onClick={() => moveImage(i, -1)} disabled={i === 0}>↑</button>
+                <button type="button" className="cms-btn cms-btn-xs" onClick={() => moveImage(i, 1)} disabled={i === images.length - 1}>↓</button>
+                <button type="button" className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => removeImage(i)}>Удалить</button>
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* URL input */}
-      <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
-        <input
-          className="cms-input"
-          style={{ flex: 1, fontSize: "12px" }}
-          placeholder="https://i.postimg.cc/... (вставьте ссылку на фото)"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }}
-        />
-        <button
-          type="button"
-          className="cms-btn cms-btn-sm cms-btn-secondary"
-          onClick={addUrl}
-          disabled={!urlInput.trim() || images.length >= MAX_IMAGES}
-        >
-          + URL
-        </button>
-      </div>
-
       {/* File upload drop zone */}
       {images.length < MAX_IMAGES && (
         <div
+          className={`cms-uploader-zone ${isDragging ? "dragging" : ""}`}
           onDrop={handleDrop}
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
           onDragLeave={() => setIsDragging(false)}
           onClick={() => fileInputRef.current?.click()}
-          style={{
-            border: isDragging ? "2px dashed #9b87f5" : "2px dashed #444",
-            borderRadius: "8px", padding: "10px", textAlign: "center",
-            cursor: "pointer", backgroundColor: isDragging ? "rgba(155,135,245,0.1)" : "transparent",
-          }}
+          style={{ padding: "10px" }}
         >
           {uploading ? (
             <span style={{ color: "#9b87f5", fontSize: "12px" }}>Загрузка...</span>
@@ -283,9 +360,40 @@ function MultiImageUploader({
             multiple
             style={{ display: "none" }}
             onChange={(e) => {
-              Array.from(e.target.files || []).filter(isSupportedImageFile).forEach(uploadFile);
+              Array.from(e.target.files || []).forEach(uploadFile);
             }}
           />
+        </div>
+      )}
+
+      {statusText && (
+        <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--cms-text-muted)" }}>{statusText}</div>
+      )}
+
+      {lastUploadedUrl && (
+        <div className="cms-uploader-url-card" style={{ marginTop: "8px" }}>
+          <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Последняя загруженная ссылка</div>
+          <div style={{ fontSize: "12px", color: "#ddd", wordBreak: "break-all", marginBottom: "8px" }}>{lastUploadedUrl}</div>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="cms-btn cms-btn-xs"
+              onClick={async () => {
+                const ok = await copyText(lastUploadedUrl);
+                if (!ok) alert("Не удалось скопировать ссылку");
+              }}
+            >
+              Скопировать URL
+            </button>
+            <button
+              type="button"
+              className="cms-btn cms-btn-xs cms-btn-primary"
+              onClick={() => addImage(lastUploadedUrl)}
+            >
+              Вставить в товар
+            </button>
+            <a className="cms-btn cms-btn-xs cms-btn-ghost" href={lastUploadedUrl} target="_blank" rel="noreferrer">Открыть изображение</a>
+          </div>
         </div>
       )}
     </div>
@@ -683,6 +791,22 @@ export default function AdminProductsPage() {
   const formatPrice = (n: number) =>
     new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(n);
 
+  const addImageToProductForm = useCallback((url: string) => {
+    const cleanUrl = url.trim();
+    if (!cleanUrl) return;
+
+    setForm((prev) => {
+      const images = parseImageList(prev.images);
+      const nextImages = images.includes(cleanUrl) ? images : [...images, cleanUrl];
+
+      return {
+        ...prev,
+        image: prev.image || cleanUrl,
+        images: toImageListJson(nextImages),
+      };
+    });
+  }, []);
+
   const filtered = products.filter((p) => {
     if (archiveView === "active" && !p.isActive) return false;
     if (archiveView === "archived" && p.isActive) return false;
@@ -704,6 +828,8 @@ export default function AdminProductsPage() {
     if (checkedIds.size === filtered.length) setCheckedIds(new Set());
     else setCheckedIds(new Set(filtered.map((p) => p.id)));
   };
+
+  const adminToken = getToken() || "";
 
   if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Loading...</div>;
 
@@ -911,12 +1037,17 @@ export default function AdminProductsPage() {
                 label="Основное фото"
                 value={form.image}
                 onChange={(url) => setForm({ ...form, image: url })}
+                onUploaded={addImageToProductForm}
+                token={adminToken}
                 placeholder="Перетащите фото или нажмите для выбора"
               />
               <MultiImageUploader
                 label="Дополнительные фото"
                 value={form.images}
                 onChange={(json) => setForm({ ...form, images: json })}
+                mainImage={form.image}
+                onMainImageChange={(url) => setForm((prev) => ({ ...prev, image: url }))}
+                token={adminToken}
               />
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
                 {(["isActive", "inStock", "isPreorder", "isAuthor", "isLimited"] as const).map((key) => (

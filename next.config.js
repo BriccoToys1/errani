@@ -36,6 +36,12 @@ const nextConfig = {
       },
       // Кэш картинок на 30 дней
       {
+        source: '/uploads/(.*)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=2592000' },
+        ],
+      },
+      {
         source: '/media/(.*)',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=2592000' },

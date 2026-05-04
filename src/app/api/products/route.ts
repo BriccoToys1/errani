@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { adminGuard } from '@/lib/admin-auth';
 
 const PRODUCTS_CACHE_TTL_MS = 15000;
 const QUERY_TIMEOUT_MS = 5000;
@@ -74,6 +75,9 @@ export async function GET(req: NextRequest) {
 
 // POST create product (admin only)
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const stock = Number(body.stock ?? 0);
