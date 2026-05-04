@@ -8,6 +8,7 @@ export interface CartItem {
   image: string;
   quantity: number;
   isPreorder: boolean;
+  selectedColor?: string;
 }
 
 const CART_KEY = 'errani_cart';
@@ -30,7 +31,7 @@ export function saveCart(items: CartItem[]): void {
 
 export function addToCart(item: Omit<CartItem, 'quantity'>, quantity = 1): CartItem[] {
   const cart = getCart();
-  const existing = cart.find((i) => i.productId === item.productId);
+  const existing = cart.find((i) => i.productId === item.productId && i.selectedColor === item.selectedColor);
   if (existing) {
     existing.quantity += quantity;
   } else {

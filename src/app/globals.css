@@ -1635,6 +1635,15 @@ select.form-field {
   font-size: 1.1rem;
 }
 
+/* Catalog card name/price below image */
+.catalog-card-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+  line-height: 1.3;
+}
+
 /* ============================================================
    CART
    ============================================================ */

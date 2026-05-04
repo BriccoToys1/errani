@@ -59,6 +59,7 @@ model Product {
   isSaleDisabled     Boolean        @default(false) // "Скоро" — товар в каталоге, кнопка "Скоро"
   isSoldOut          Boolean        @default(false) // Плашка "Sold Out" на фото
   characteristics    String         @default("") // JSON array of {key, value} pairs
+  colors            String         @default("[]") // JSON array of {name, hex} color options
   avitoUrl      String         @default("") // link to avito listing if parsed
   sortOrder     Int            @default(0)
   createdAt     DateTime       @default(now())

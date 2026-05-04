@@ -27,6 +27,7 @@ interface Product {
   limitedEditionText: string;
   isAuthor: boolean;
   characteristics: string;
+  colors?: string;
 }
 
 export function ProductContent({ product }: { product: Product }) {
@@ -34,6 +35,7 @@ export function ProductContent({ product }: { product: Product }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [inCart, setInCart] = useState(false);
+  const [selectedColor, setSelectedColor] = useState<string>('');
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [waitlistName, setWaitlistName] = useState('');
   const [waitlistEmail, setWaitlistEmail] = useState('');
@@ -42,14 +44,16 @@ export function ProductContent({ product }: { product: Product }) {
   const [waitlistSuccess, setWaitlistSuccess] = useState('');
   const [waitlistError, setWaitlistError] = useState('');
 
-  // Check if product is already in cart on mount
+  // Check if product is already in cart on mount / when selectedColor changes
   useEffect(() => {
     const cart = getCart();
-    if (cart.some(item => item.productId === product.id)) {
+    if (cart.some(item => item.productId === product.id && (item.selectedColor || '') === (selectedColor || ''))) {
       setInCart(true);
+    } else {
+      setInCart(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product.id]);
+  }, [product.id, selectedColor]);
 
   const galleryImages: string[] = (() => {
     try { return JSON.parse(product.images) || []; } catch { return []; }
@@ -103,6 +107,10 @@ export function ProductContent({ product }: { product: Product }) {
     try { return JSON.parse(product.characteristics || '[]'); } catch { return []; }
   })();
 
+  const colorOptions: Array<{name: string, hex: string}> = (() => {
+    try { return JSON.parse(product.colors || '[]'); } catch { return []; }
+  })();
+
   const handleAddOrGoToCart = () => {
     if (inCart) {
       window.location.href = '/cart';
@@ -115,6 +123,7 @@ export function ProductContent({ product }: { product: Product }) {
       currency: 'RUB',
       image: heroImage,
       isPreorder: product.isPreorder,
+      selectedColor: selectedColor || undefined,
     });
     setInCart(true);
   };
@@ -195,6 +204,31 @@ export function ProductContent({ product }: { product: Product }) {
               <span className="product-discount-badge">-{product.discount}%</span>
             )}
           </div>
+
+          {/* Color selector */}
+          {colorOptions.length > 0 && (
+            <div className="product-colors anim-fade-up anim-fade-up-d3" style={{ margin: '16px 0' }}>
+              <p style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                {lang === 'ru' ? 'Цвет' : 'Color'}{selectedColor ? `: ${colorOptions.find(c => c.name === selectedColor)?.name}` : ''}
+              </p>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {colorOptions.map((c) => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    title={c.name}
+                    onClick={() => setSelectedColor(selectedColor === c.name ? '' : c.name)}
+                    style={{
+                      width: '32px', height: '32px', borderRadius: '50%',
+                      background: c.hex, border: selectedColor === c.name ? '3px solid #fff' : '3px solid transparent',
+                      outline: selectedColor === c.name ? '2px solid rgba(255,255,255,0.5)' : '2px solid transparent',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Delivery disclaimer */}
           <div className="anim-fade-up anim-fade-up-d3" style={{

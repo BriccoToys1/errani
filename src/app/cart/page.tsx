@@ -210,7 +210,7 @@ export default function CartPage() {
         body: JSON.stringify({
           ...formData,
           name: [formData.lastName, formData.firstName, formData.noMiddleName ? '' : formData.middleName].filter(Boolean).join(' '),
-          items: cart.map(item => ({ productId: item.productId, quantity: item.quantity })),
+          items: cart.map(item => ({ productId: item.productId, quantity: item.quantity, selectedColor: item.selectedColor })),
           shippingCost,
           totalAmount: grandTotal,
         }),
@@ -336,6 +336,11 @@ export default function CartPage() {
               </div>
               <div className="cart-item-info">
                 <div className="cart-item-name">{item.name}</div>
+                {item.selectedColor && (
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                    {lang === 'ru' ? 'Цвет' : 'Color'}: {item.selectedColor}
+                  </div>
+                )}
                 {item.isPreorder && <span className="cart-item-tag">{t(lang, 'cart.preorder')}</span>}
                 {unavailableProductIds.has(item.productId) && (
                   <span className="cart-item-tag" style={{ background: 'rgba(239,68,68,0.18)', color: '#fda4af' }}>

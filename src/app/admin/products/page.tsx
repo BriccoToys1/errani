@@ -318,6 +318,7 @@ interface Product {
   isSoldOut: boolean;
   sortOrder: number;
   characteristics: string;
+  colors: string;
   createdAt: string;
 }
 
@@ -329,10 +330,64 @@ const emptyProduct = {
   isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true,
   isSaleDisabled: false, isSoldOut: false, sortOrder: 0,
   characteristics: "[]",
+  colors: "[]",
 };
 
 function slugify(text: string): string {
   return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+function ColorsEditor({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+  let colors: Array<{ name: string; hex: string }> = [];
+  try { colors = JSON.parse(value || '[]'); } catch { colors = []; }
+
+  const update = (newColors: typeof colors) => onChange(JSON.stringify(newColors));
+
+  return (
+    <div style={{ marginTop: '16px' }}>
+      <label className="cms-label" style={{ display: 'block', marginBottom: '8px' }}>Цвета товара</label>
+      {colors.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+          {colors.map((c, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#2a2a2a', borderRadius: '6px', padding: '4px 8px' }}>
+              <span style={{ width: '16px', height: '16px', borderRadius: '50%', background: c.hex, display: 'inline-block', border: '1px solid rgba(255,255,255,0.2)' }} />
+              <span style={{ fontSize: '12px', color: '#ddd' }}>{c.name}</span>
+              <button type="button" onClick={() => update(colors.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: 0 }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px auto', gap: '6px', alignItems: 'center' }}>
+        <input
+          className="cms-input"
+          placeholder="Название цвета (напр. Красный)"
+          id="color-name-input"
+          style={{ fontSize: '12px' }}
+        />
+        <input
+          type="color"
+          id="color-hex-input"
+          defaultValue="#ffffff"
+          style={{ width: '100%', height: '36px', borderRadius: '6px', border: '1px solid #444', cursor: 'pointer', background: 'none', padding: '2px' }}
+        />
+        <button
+          type="button"
+          className="cms-btn cms-btn-sm"
+          onClick={() => {
+            const nameInput = document.getElementById('color-name-input') as HTMLInputElement;
+            const hexInput = document.getElementById('color-hex-input') as HTMLInputElement;
+            const name = nameInput?.value.trim();
+            const hex = hexInput?.value || '#ffffff';
+            if (!name) return;
+            update([...colors, { name, hex }]);
+            if (nameInput) nameInput.value = '';
+          }}
+        >
+          + Добавить
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function CharacteristicsEditor({ value, onChange }: { value: string; onChange: (val: string) => void }) {
@@ -431,6 +486,7 @@ export default function AdminProductsPage() {
       isSoldOut: product.isSoldOut || false,
       sortOrder: product.sortOrder,
       characteristics: product.characteristics || "[]",
+      colors: product.colors || "[]",
     });
   };
 
@@ -464,6 +520,7 @@ export default function AdminProductsPage() {
       isSaleDisabled: product.isSaleDisabled || false,
       isSoldOut: product.isSoldOut || false,
       characteristics: product.characteristics || "[]",
+      colors: product.colors || "[]",
       sortOrder: product.sortOrder,
     });
   };
@@ -499,6 +556,7 @@ export default function AdminProductsPage() {
         isSaleDisabled: product.isSaleDisabled || false,
         isSoldOut: product.isSoldOut || false,
         characteristics: product.characteristics || "[]",
+        colors: product.colors || "[]",
         sortOrder: product.sortOrder,
       }),
     });
@@ -522,7 +580,7 @@ export default function AdminProductsPage() {
         limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
         isActive: product.isActive, isSaleDisabled: product.isSaleDisabled || false,
         isSoldOut: product.isSoldOut || false,
-        characteristics: product.characteristics || "[]", sortOrder: product.sortOrder,
+        characteristics: product.characteristics || "[]", colors: product.colors || "[]", sortOrder: product.sortOrder,
       }),
     });
     fetchProducts();
@@ -545,7 +603,7 @@ export default function AdminProductsPage() {
         limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
         isActive: product.isActive, isSaleDisabled: !product.isSaleDisabled,
         isSoldOut: product.isSoldOut || false,
-        characteristics: product.characteristics || "[]", sortOrder: product.sortOrder,
+        characteristics: product.characteristics || "[]", colors: product.colors || "[]", sortOrder: product.sortOrder,
       }),
     });
     fetchProducts();
@@ -568,7 +626,7 @@ export default function AdminProductsPage() {
         limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
         isActive: product.isActive, isSaleDisabled: product.isSaleDisabled || false,
         isSoldOut: !product.isSoldOut,
-        characteristics: product.characteristics || "[]", sortOrder: product.sortOrder,
+        characteristics: product.characteristics || "[]", colors: product.colors || "[]", sortOrder: product.sortOrder,
       }),
     });
     fetchProducts();
@@ -907,6 +965,12 @@ export default function AdminProductsPage() {
                   />
                 </div>
               )}
+
+              {/* Colors editor */}
+              <ColorsEditor
+                value={form.colors}
+                onChange={(val) => setForm(prev => ({ ...prev, colors: val }))}
+              />
 
               {/* Characteristics editor */}
               <CharacteristicsEditor

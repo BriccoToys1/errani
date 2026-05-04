@@ -11,7 +11,7 @@ const nextConfig = {
         hostname: 'localhost',
       },
     ],
-    unoptimized: false,
+    unoptimized: true,
   },
   // Сжатие
   compress: true,

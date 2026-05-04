@@ -5,6 +5,7 @@ import { generateOrderNumber } from '@/lib/utils';
 interface OrderItemInput {
   productId: string;
   quantity: number;
+  selectedColor?: string;
 }
 
 // DELETE unpaid (pending) orders
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
       .map((item) => ({
         productId: String(item.productId || ''),
         quantity: Number(item.quantity || 0),
+        selectedColor: item.selectedColor || '',
       }))
       .filter((item) => item.productId && item.quantity > 0);
 
@@ -146,6 +148,15 @@ export async function POST(req: NextRequest) {
     // Add shipping cost if provided (Russia only)
     totalAmount += Number(shippingCostInput) || 0;
 
+    // Build notes from color selections
+    const colorNotes = normalizedItems
+      .filter(item => item.selectedColor)
+      .map(item => {
+        const product = products.find(p => p.id === item.productId)!;
+        return `${product.nameRu || product.name}: ${item.selectedColor}`;
+      });
+    const notes = colorNotes.length > 0 ? `Цвета: ${colorNotes.join(', ')}` : '';
+
     // Create order
     const order = await prisma.order.create({
       data: {
@@ -165,6 +176,7 @@ export async function POST(req: NextRequest) {
         totalAmount,
         currency: 'RUB',
         status: 'pending',
+        notes,
         items: {
           create: orderItems,
         },

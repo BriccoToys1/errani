@@ -136,6 +136,7 @@ export function CatalogContent() {
               const imgs: string[] = (() => { try { return JSON.parse(product.images) || []; } catch { return []; } })();
               const heroImg = product.image || imgs[0] || '';
               const displayName = lang === 'ru' && product.nameRu ? product.nameRu : product.name;
+              const price = product.price;
               return (
                 <Link 
                   href={`/${product.slug}`} 
@@ -161,6 +162,10 @@ export function CatalogContent() {
                       {product.discount > 0 && <span className="badge badge-discount">-{product.discount}%</span>}
                       {product.isPreorder && <span className="badge badge-preorder">{lang === 'ru' ? 'Предзаказ' : 'Preorder'}</span>}
                     </div>
+                  </div>
+                  <div className="catalog-card-info">
+                    <p className="catalog-card-name">{displayName}</p>
+                    <p className="catalog-card-price">{product.isSaleDisabled ? 'Скоро' : `${price.toLocaleString('ru-RU')} ₽`}</p>
                   </div>
                 </Link>
               );
