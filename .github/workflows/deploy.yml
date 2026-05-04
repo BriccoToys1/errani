@@ -8,15 +8,30 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Sync files to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 168.222.143.43
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "."
+          target: /var/www/errani-new
+          overwrite: true
+          rm: false
+
+      - name: Build and restart
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 168.222.143.43
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 15m
           script: |
+            export PATH=/root/.nvm/versions/node/v20.20.2/bin:$PATH
             cd /var/www/errani-new
-            git pull origin main
             npm install
             npx prisma generate
             npm run build
