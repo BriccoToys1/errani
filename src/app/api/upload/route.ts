@@ -1,73 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs/promises';
+import path from 'path';
+import sharp from 'sharp';
+import { v4 as uuidv4 } from 'uuid';
 
-const allowedTypes = [
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/webp',
-  'image/avif',
-  'image/heic',
-  'image/heif',
-  'image/svg+xml',
-];
-const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'svg', 'heic', 'heif'];
-const maxSize = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_SHARP_FORMAT = new Set(['jpeg', 'png', 'webp']);
+const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
-const extToMime: Record<string, string> = {
-  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
-  webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml',
-  heic: 'image/heic', heif: 'image/heif',
-};
+function getYearMonth() {
+  const now = new Date();
+  return {
+    year: String(now.getUTCFullYear()),
+    month: String(now.getUTCMonth() + 1).padStart(2, '0'),
+  };
+}
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const file = formData.get('file') as File | null;
+    const filePart = formData.get('file') || formData.get('image');
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    if (!(filePart instanceof File)) {
+      return NextResponse.json({ success: false, error: 'No file provided' }, { status: 400 });
     }
 
-    const originalExt = file.name.split('.').pop()?.toLowerCase() || '';
-    const mimeType = (file.type || '').toLowerCase();
-    const isAllowedByMime = allowedTypes.includes(mimeType);
-    const isAllowedByExt = allowedExts.includes(originalExt);
+    if (filePart.size <= 0) {
+      return NextResponse.json({ success: false, error: 'Empty file' }, { status: 400 });
+    }
 
-    if (!isAllowedByMime && !isAllowedByExt) {
+    if (filePart.size > MAX_SIZE_BYTES) {
+      return NextResponse.json({ success: false, error: 'File too large. Max size: 10MB' }, { status: 400 });
+    }
+
+    const mimeType = (filePart.type || '').toLowerCase();
+    if (!ALLOWED_MIME.has(mimeType)) {
       return NextResponse.json(
-        { error: `Invalid file type: ${file.type || originalExt}. Allowed: PNG, JPG, JPEG, SVG, HEIC, WEBP, AVIF` },
+        { success: false, error: 'Invalid file type. Allowed: JPEG, PNG, WEBP' },
         { status: 400 }
       );
     }
 
-    if (file.size > maxSize) {
-      return NextResponse.json({ error: 'File too large. Max size: 10MB' }, { status: 400 });
+    const sourceBuffer = Buffer.from(await filePart.arrayBuffer());
+
+    let metadata: sharp.Metadata;
+    try {
+      metadata = await sharp(sourceBuffer, { failOn: 'error' }).metadata();
+    } catch {
+      return NextResponse.json({ success: false, error: 'Invalid image file' }, { status: 400 });
     }
 
-    const fs = await import('fs');
-    const path = await import('path');
-    const uploadDir = path.join(process.cwd(), 'public', 'media');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const detectedFormat = (metadata.format || '').toLowerCase();
+    if (!ALLOWED_SHARP_FORMAT.has(detectedFormat)) {
+      return NextResponse.json({ success: false, error: 'Unsupported image format' }, { status: 400 });
+    }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const sourceBuffer = Buffer.from(arrayBuffer);
+    const { year, month } = getYearMonth();
+    const filename = `${uuidv4()}.webp`;
+    const relativeDir = `/media/${year}/${month}`;
+    const uploadDir = path.join(process.cwd(), 'public', 'media', year, month);
+    const outputPath = path.join(uploadDir, filename);
 
-    const ext = originalExt || 'jpg';
-    const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
-    const finalType = mimeType || extToMime[ext] || 'image/jpeg';
+    await fs.mkdir(uploadDir, { recursive: true });
 
-    fs.writeFileSync(path.join(uploadDir, filename), sourceBuffer);
+    const { data: outputBuffer, info } = await sharp(sourceBuffer, { failOn: 'error' })
+      .rotate()
+      .resize({ width: 1600, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: 84, effort: 5 })
+      .toBuffer({ resolveWithObject: true });
+
+    await fs.writeFile(outputPath, outputBuffer);
 
     return NextResponse.json({
       success: true,
-      url: `/media/${filename}`,
+      url: `${relativeDir}/${filename}`,
       filename,
-      size: sourceBuffer.byteLength,
-      type: finalType,
+      size: info.size,
+      type: 'image/webp',
+      width: info.width,
+      height: info.height,
     });
   } catch (error) {
     console.error('Upload error:', error);
-    const msg = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: `Upload failed: ${msg}` }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Upload failed' }, { status: 500 });
   }
 }

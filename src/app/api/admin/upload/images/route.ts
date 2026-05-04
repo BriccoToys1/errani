@@ -13,7 +13,7 @@ interface MediaItem {
   updatedAt: string;
 }
 
-const ROOT_UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads', 'products');
+const ROOT_MEDIA_DIR = path.join(process.cwd(), 'public', 'media', 'products');
 
 function getPublicBaseUrl(req: NextRequest): string {
   const configured = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
@@ -47,12 +47,12 @@ async function ensureAdmin(req: NextRequest): Promise<NextResponse | null> {
 
 function safeResolveFromRelative(relativePath: string): string | null {
   const normalized = relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
-  if (!normalized.startsWith('uploads/products/')) {
+  if (!normalized.startsWith('media/products/')) {
     return null;
   }
 
   const absolute = path.resolve(process.cwd(), 'public', normalized);
-  const root = path.resolve(ROOT_UPLOADS_DIR);
+  const root = path.resolve(ROOT_MEDIA_DIR);
 
   if (!absolute.startsWith(root)) {
     return null;
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
     const denied = await ensureAdmin(req);
     if (denied) return denied;
 
-    const items = await collectMediaFiles(ROOT_UPLOADS_DIR, getPublicBaseUrl(req));
+    const items = await collectMediaFiles(ROOT_MEDIA_DIR, getPublicBaseUrl(req));
 
     return NextResponse.json({
       success: true,

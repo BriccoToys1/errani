@@ -110,7 +110,7 @@ export default function AdminMediaPage() {
       const formData = new FormData();
       formData.append("image", file);
 
-      const response = await fetch("/api/admin/upload/image", {
+      const response = await fetch("/api/admin/media/upload", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,

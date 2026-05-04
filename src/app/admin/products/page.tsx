@@ -37,7 +37,7 @@ function toImageListJson(images: string[]): string {
   return JSON.stringify(images);
 }
 
-async function uploadProductImage(file: File, token: string): Promise<{ url: string; filename: string }> {
+async function uploadProductImage(file: File, token: string): Promise<{ url: string; filename: string; fullUrl?: string }> {
   if (!isSupportedImageFile(file)) {
     throw new Error("Допустимы только JPG, JPEG, PNG, WEBP");
   }
@@ -49,7 +49,7 @@ async function uploadProductImage(file: File, token: string): Promise<{ url: str
   const formData = new FormData();
   formData.append("image", file);
 
-  const response = await fetch("/api/admin/upload/image", {
+  const response = await fetch("/api/admin/media/upload", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
@@ -63,6 +63,7 @@ async function uploadProductImage(file: File, token: string): Promise<{ url: str
   return {
     url: String(data.url),
     filename: String(data.filename || ""),
+    fullUrl: data.fullUrl ? String(data.fullUrl) : undefined,
   };
 }
 
@@ -78,15 +79,15 @@ async function copyText(value: string): Promise<boolean> {
 
 function ImageUploader({
   value,
-  onChange,
-  onUploaded,
+  onSetMain,
+  onAddToGallery,
   token,
   label,
   placeholder,
 }: {
   value: string;
-  onChange: (url: string) => void;
-  onUploaded?: (url: string) => void;
+  onSetMain: (url: string) => void;
+  onAddToGallery: (url: string) => void;
   token: string;
   label: string;
   placeholder?: string;
@@ -95,7 +96,24 @@ function ImageUploader({
   const [uploading, setUploading] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [lastUploadedUrl, setLastUploadedUrl] = useState("");
+  const [errorText, setErrorText] = useState("");
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pendingPreviewUrl) {
+        URL.revokeObjectURL(pendingPreviewUrl);
+      }
+    };
+  }, [pendingPreviewUrl]);
+
+  const setPendingPreview = (file: File) => {
+    if (pendingPreviewUrl) {
+      URL.revokeObjectURL(pendingPreviewUrl);
+    }
+    setPendingPreviewUrl(URL.createObjectURL(file));
+  };
 
   const uploadFile = async (file: File) => {
     if (!token) {
@@ -103,17 +121,21 @@ function ImageUploader({
       return;
     }
 
+    setPendingPreview(file);
     setUploading(true);
     setStatusText("");
+    setErrorText("");
     try {
       const uploaded = await uploadProductImage(file, token);
       setLastUploadedUrl(uploaded.url);
       setStatusText("Файл загружен и конвертирован в WEBP");
-      onChange(uploaded.url);
-      onUploaded?.(uploaded.url);
+      if (!value) {
+        onSetMain(uploaded.url);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Ошибка загрузки файла";
       setStatusText(message);
+      setErrorText(message);
       alert(message);
     } finally {
       setUploading(false);
@@ -136,7 +158,14 @@ function ImageUploader({
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", padding: "8px", background: "rgba(155,135,245,0.08)", borderRadius: "6px" }}>
           <img src={value} alt="" style={{ maxHeight: "50px", borderRadius: "4px" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
           <span style={{ color: "#aaa", fontSize: "12px", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</span>
-          <button type="button" onClick={() => onChange("")} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "16px" }}>×</button>
+          <button type="button" onClick={() => onSetMain("")} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "16px" }}>×</button>
+        </div>
+      )}
+
+      {pendingPreviewUrl && (
+        <div style={{ marginBottom: "8px", border: "1px solid var(--cms-border)", borderRadius: "8px", padding: "8px" }}>
+          <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Превью перед загрузкой</div>
+          <img src={pendingPreviewUrl} alt="preview" style={{ width: "100%", maxHeight: "220px", objectFit: "contain", borderRadius: "6px", background: "#0e1017" }} />
         </div>
       )}
 
@@ -165,8 +194,12 @@ function ImageUploader({
         />
       </div>
 
-      {statusText && (
+      {statusText && !errorText && (
         <div style={{ marginTop: "6px", fontSize: "12px", color: "var(--cms-text-muted)" }}>{statusText}</div>
+      )}
+
+      {errorText && (
+        <div style={{ marginTop: "6px", fontSize: "12px", color: "#ff7d7d" }}>{errorText}</div>
       )}
 
       {(lastUploadedUrl || value) && (
@@ -190,11 +223,21 @@ function ImageUploader({
               onClick={() => {
                 const url = lastUploadedUrl || value;
                 if (!url) return;
-                onChange(url);
-                onUploaded?.(url);
+                onSetMain(url);
               }}
             >
-              Вставить в товар
+              Вставить как главное фото
+            </button>
+            <button
+              type="button"
+              className="cms-btn cms-btn-xs"
+              onClick={() => {
+                const url = lastUploadedUrl || value;
+                if (!url) return;
+                onAddToGallery(url);
+              }}
+            >
+              Добавить в галерею
             </button>
             <a
               className="cms-btn cms-btn-xs cms-btn-ghost"
@@ -1036,8 +1079,8 @@ export default function AdminProductsPage() {
               <ImageUploader
                 label="Основное фото"
                 value={form.image}
-                onChange={(url) => setForm({ ...form, image: url })}
-                onUploaded={addImageToProductForm}
+                onSetMain={(url) => setForm({ ...form, image: url })}
+                onAddToGallery={addImageToProductForm}
                 token={adminToken}
                 placeholder="Перетащите фото или нажмите для выбора"
               />
