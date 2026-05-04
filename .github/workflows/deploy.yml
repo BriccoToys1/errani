@@ -15,11 +15,10 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /var/www/errani
+            cd /var/www/errani-new
             git pull origin main
-            npm ci --omit=dev
+            npm install
             npx prisma generate
-            npx prisma db push --accept-data-loss
             npm run build
-            pm2 reload errani-site --update-env
+            pm2 restart errani-site
             echo "✅ Деплой завершён"
