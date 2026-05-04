@@ -38,6 +38,8 @@ function ImageUploader({
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [tab, setTab] = useState<"file" | "url">("file");
+  const [urlInput, setUrlInput] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadFile = async (file: File) => {
@@ -62,11 +64,6 @@ function ImageUploader({
     if (file && isSupportedImageFile(file)) uploadFile(file);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
     for (const item of items) {
@@ -78,53 +75,79 @@ function ImageUploader({
     }
   };
 
+  const applyUrl = () => {
+    const url = urlInput.trim();
+    if (url) { onChange(url); setUrlInput(""); }
+  };
+
   return (
     <div style={{ marginBottom: "12px" }}>
       <span className="cms-label" style={{ display: "block", marginBottom: "6px" }}>{label}</span>
-      <div
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={() => setIsDragging(false)}
-        onPaste={handlePaste}
-        onClick={() => fileInputRef.current?.click()}
-        style={{
-          border: isDragging ? "2px dashed #9b87f5" : "2px dashed #444",
-          borderRadius: "8px",
-          padding: "16px",
-          textAlign: "center",
-          cursor: "pointer",
-          backgroundColor: isDragging ? "rgba(155,135,245,0.1)" : "transparent",
-          transition: "all 0.2s",
-        }}
-      >
-        {uploading ? (
-          <span style={{ color: "#9b87f5" }}>Загрузка...</span>
-        ) : value ? (
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", justifyContent: "center" }}>
-            <img src={value} alt="" style={{ maxHeight: "60px", borderRadius: "4px" }} />
-            <span style={{ color: "#aaa", fontSize: "13px" }}>{value}</span>
-          </div>
-        ) : (
-          <span style={{ color: "#888" }}>{placeholder || "Перетащите фото или нажмите для выбора"}</span>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={IMAGE_ACCEPT}
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file && isSupportedImageFile(file)) uploadFile(file);
-          }}
-        />
+
+      {/* Preview */}
+      {value && (
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px", padding: "8px", background: "rgba(155,135,245,0.08)", borderRadius: "6px" }}>
+          <img src={value} alt="" style={{ maxHeight: "50px", borderRadius: "4px" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          <span style={{ color: "#aaa", fontSize: "12px", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</span>
+          <button type="button" onClick={() => onChange("")} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "16px" }}>×</button>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: "2px", marginBottom: "8px" }}>
+        <button type="button" onClick={() => setTab("file")} style={{ padding: "4px 12px", fontSize: "12px", borderRadius: "4px 4px 0 0", border: "1px solid #444", borderBottom: tab === "file" ? "1px solid #1a1a1a" : "1px solid #444", background: tab === "file" ? "#2a2a2a" : "transparent", color: tab === "file" ? "#fff" : "#888", cursor: "pointer" }}>Файл</button>
+        <button type="button" onClick={() => setTab("url")} style={{ padding: "4px 12px", fontSize: "12px", borderRadius: "4px 4px 0 0", border: "1px solid #444", borderBottom: tab === "url" ? "1px solid #1a1a1a" : "1px solid #444", background: tab === "url" ? "#2a2a2a" : "transparent", color: tab === "url" ? "#fff" : "#888", cursor: "pointer" }}>Ссылка (postimg.cc)</button>
       </div>
-      <input
-        className="cms-input"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder || "https://i.postimg.cc/... или /media/photo.jpeg"}
-        style={{ marginTop: "6px" }}
-      />
+
+      {tab === "file" ? (
+        <div
+          onDrop={handleDrop}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onPaste={handlePaste}
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            border: isDragging ? "2px dashed #9b87f5" : "2px dashed #444",
+            borderRadius: "0 8px 8px 8px",
+            padding: "20px",
+            textAlign: "center",
+            cursor: "pointer",
+            backgroundColor: isDragging ? "rgba(155,135,245,0.1)" : "transparent",
+            transition: "all 0.2s",
+          }}
+        >
+          {uploading ? (
+            <span style={{ color: "#9b87f5" }}>Загрузка...</span>
+          ) : (
+            <span style={{ color: "#888" }}>{placeholder || "Перетащите фото или нажмите для выбора"}</span>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={IMAGE_ACCEPT}
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && isSupportedImageFile(file)) uploadFile(file);
+            }}
+          />
+        </div>
+      ) : (
+        <div style={{ border: "1px solid #444", borderRadius: "0 8px 8px 8px", padding: "12px" }}>
+          <p style={{ fontSize: "12px", color: "#888", marginBottom: "8px" }}>Вставьте прямую ссылку на изображение (i.postimg.cc или любой другой хостинг)</p>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <input
+              className="cms-input"
+              style={{ flex: 1 }}
+              placeholder="https://i.postimg.cc/..."
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyUrl(); } }}
+            />
+            <button type="button" className="cms-btn cms-btn-sm cms-btn-primary" onClick={applyUrl} disabled={!urlInput.trim()}>Применить</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

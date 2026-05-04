@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import sharp from 'sharp';
 
 const allowedTypes = [
   'image/jpeg',
@@ -14,6 +13,12 @@ const allowedTypes = [
 const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'svg', 'heic', 'heif'];
 const maxSize = 10 * 1024 * 1024; // 10 MB
 
+const extToMime: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+  webp: 'image/webp', avif: 'image/avif', svg: 'image/svg+xml',
+  heic: 'image/heic', heif: 'image/heif',
+};
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -25,7 +30,6 @@ export async function POST(req: NextRequest) {
 
     const originalExt = file.name.split('.').pop()?.toLowerCase() || '';
     const mimeType = (file.type || '').toLowerCase();
-    const isSvg = mimeType === 'image/svg+xml' || originalExt === 'svg';
     const isAllowedByMime = allowedTypes.includes(mimeType);
     const isAllowedByExt = allowedExts.includes(originalExt);
 
@@ -40,49 +44,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File too large. Max size: 10MB' }, { status: 400 });
     }
 
-    // ── VPS filesystem upload ───────────────────────────────────────────────
     const fs = await import('fs');
     const path = await import('path');
-    // Use absolute path based on CWD (works on VPS)
     const uploadDir = path.join(process.cwd(), 'public', 'media');
     if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
     const arrayBuffer = await file.arrayBuffer();
     const sourceBuffer = Buffer.from(arrayBuffer);
 
-    let filename: string;
-    let finalBuffer: Buffer;
-    let finalType: string;
+    const ext = originalExt || 'jpg';
+    const filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+    const finalType = mimeType || extToMime[ext] || 'image/jpeg';
 
-    if (isSvg) {
-      filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.svg`;
-      finalBuffer = sourceBuffer;
-      finalType = 'image/svg+xml';
-    } else {
-      try {
-        // Decode and normalize all raster formats into WebP for stable rendering on site.
-        finalBuffer = await sharp(sourceBuffer, { animated: true })
-          .rotate()
-          .webp({ quality: 90 })
-          .toBuffer();
-        filename = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.webp`;
-        finalType = 'image/webp';
-      } catch (decodeError) {
-        console.error('Image decode error:', decodeError);
-        return NextResponse.json(
-          { error: 'Failed to decode image. Please upload a valid PNG, JPG, JPEG, SVG, HEIC, WEBP or AVIF file.' },
-          { status: 400 }
-        );
-      }
-    }
-
-    fs.writeFileSync(path.join(uploadDir, filename), finalBuffer);
+    fs.writeFileSync(path.join(uploadDir, filename), sourceBuffer);
 
     return NextResponse.json({
       success: true,
       url: `/media/${filename}`,
       filename,
-      size: finalBuffer.byteLength,
+      size: sourceBuffer.byteLength,
       type: finalType,
     });
   } catch (error) {
