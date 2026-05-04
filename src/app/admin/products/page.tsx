@@ -829,7 +829,7 @@ export default function AdminProductsPage() {
     else setCheckedIds(new Set(filtered.map((p) => p.id)));
   };
 
-  const adminToken = getToken() || "";
+  const adminToken = typeof window !== "undefined" ? (getToken() || "") : "";
 
   if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Loading...</div>;
 
