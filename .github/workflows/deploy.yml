@@ -18,7 +18,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "."
-          target: /var/www/errani
+          target: /var/www/errani-new
           overwrite: true
           rm: false
 
@@ -31,7 +31,7 @@ jobs:
           command_timeout: 15m
           script: |
             export PATH=/root/.nvm/versions/node/v20.20.2/bin:$PATH
-            cd /var/www/errani
+            cd /var/www/errani-new
             npm ci --omit=dev
             npx prisma generate
             npm run build
