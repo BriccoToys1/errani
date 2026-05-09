@@ -107,8 +107,20 @@ export function ProductContent({ product }: { product: Product }) {
     try { return JSON.parse(product.characteristics || '[]'); } catch { return []; }
   })();
 
-  const colorOptions: Array<{name: string, hex: string}> = (() => {
-    try { return JSON.parse(product.colors || '[]'); } catch { return []; }
+  const colorOptions: Array<{name: string; nameEn?: string; hex: string}> = (() => {
+    try {
+      const parsed = JSON.parse(product.colors || '[]');
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((item) => ({
+          name: String(item?.name || '').trim(),
+          nameEn: String(item?.nameEn || '').trim() || undefined,
+          hex: String(item?.hex || '#ffffff'),
+        }))
+        .filter((item) => item.name && item.hex);
+    } catch {
+      return [];
+    }
   })();
 
   const handleAddOrGoToCart = () => {
@@ -209,7 +221,14 @@ export function ProductContent({ product }: { product: Product }) {
           {colorOptions.length > 0 && (
             <div className="product-colors anim-fade-up anim-fade-up-d3" style={{ margin: '16px 0' }}>
               <p style={{ fontSize: '0.8rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                {lang === 'ru' ? 'Цвет' : 'Color'}{selectedColor ? `: ${colorOptions.find(c => c.name === selectedColor)?.name}` : ''}
+                {lang === 'ru' ? 'Цвет' : 'Color'}
+                {selectedColor
+                  ? `: ${(() => {
+                      const selected = colorOptions.find((c) => c.name === selectedColor);
+                      if (!selected) return selectedColor;
+                      return lang === 'ru' ? selected.name : (selected.nameEn || selected.name);
+                    })()}`
+                  : ''}
               </p>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {colorOptions.map((c) => (

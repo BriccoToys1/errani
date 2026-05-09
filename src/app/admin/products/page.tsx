@@ -49,22 +49,27 @@ async function uploadProductImage(file: File, token: string): Promise<{ url: str
   const formData = new FormData();
   formData.append("image", file);
 
-  const response = await fetch("/api/admin/media/upload", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData,
-  });
-
-  const data = await response.json();
-  if (!response.ok || !data?.success || !data?.url) {
-    throw new Error(data?.message || "Ошибка загрузки изображения");
+  let lastMessage = "Ошибка загрузки изображения";
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const response = await fetch("/api/admin/media/upload", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data?.success && data?.url) {
+      return {
+        url: String(data.url),
+        filename: String(data.filename || ""),
+        fullUrl: data.fullUrl ? String(data.fullUrl) : undefined,
+      };
+    }
+    lastMessage = data?.message || lastMessage;
+    if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 3) break;
+    await new Promise((resolve) => setTimeout(resolve, 180 * attempt));
   }
 
-  return {
-    url: String(data.url),
-    filename: String(data.filename || ""),
-    fullUrl: data.fullUrl ? String(data.fullUrl) : undefined,
-  };
+  throw new Error(lastMessage);
 }
 
 async function copyText(value: string): Promise<boolean> {
@@ -473,6 +478,14 @@ interface Product {
   createdAt: string;
 }
 
+interface MediaLibraryItem {
+  filename: string;
+  relativePath: string;
+  url: string;
+  size: number;
+  updatedAt: string;
+}
+
 const emptyProduct = {
   name: "", nameRu: "", slug: "", description: "", descriptionRu: "",
   price: 0, oldPrice: null as number | null, discount: 0, stock: 0,
@@ -485,12 +498,39 @@ const emptyProduct = {
 };
 
 function slugify(text: string): string {
-  return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const map: Record<string, string> = {
+    а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "y",
+    к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u", ф: "f",
+    х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sch", ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
+  };
+  const transliterated = text
+    .toLowerCase()
+    .split("")
+    .map((ch) => map[ch] ?? ch)
+    .join("");
+  return transliterated.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
 function ColorsEditor({ value, onChange }: { value: string; onChange: (val: string) => void }) {
-  let colors: Array<{ name: string; hex: string }> = [];
-  try { colors = JSON.parse(value || '[]'); } catch { colors = []; }
+  const [colorNameRu, setColorNameRu] = useState("");
+  const [colorNameEn, setColorNameEn] = useState("");
+  const [colorHex, setColorHex] = useState("#ffffff");
+
+  let colors: Array<{ name: string; nameEn?: string; hex: string }> = [];
+  try {
+    const parsed = JSON.parse(value || '[]');
+    if (Array.isArray(parsed)) {
+      colors = parsed
+        .map((item) => ({
+          name: String(item?.name || '').trim(),
+          nameEn: String(item?.nameEn || '').trim(),
+          hex: String(item?.hex || '#ffffff').trim(),
+        }))
+        .filter((item) => item.name && item.hex);
+    }
+  } catch {
+    colors = [];
+  }
 
   const update = (newColors: typeof colors) => onChange(JSON.stringify(newColors));
 
@@ -502,36 +542,46 @@ function ColorsEditor({ value, onChange }: { value: string; onChange: (val: stri
           {colors.map((c, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#2a2a2a', borderRadius: '6px', padding: '4px 8px' }}>
               <span style={{ width: '16px', height: '16px', borderRadius: '50%', background: c.hex, display: 'inline-block', border: '1px solid rgba(255,255,255,0.2)' }} />
-              <span style={{ fontSize: '12px', color: '#ddd' }}>{c.name}</span>
+              <span style={{ fontSize: '12px', color: '#ddd' }}>
+                {c.name}
+                {c.nameEn ? ` / ${c.nameEn}` : ''}
+              </span>
               <button type="button" onClick={() => update(colors.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: 0 }}>×</button>
             </div>
           ))}
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px auto', gap: '6px', alignItems: 'center' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px auto', gap: '6px', alignItems: 'center' }}>
         <input
           className="cms-input"
-          placeholder="Название цвета (напр. Красный)"
-          id="color-name-input"
+          placeholder="Название цвета (RU)"
+          value={colorNameRu}
+          onChange={(e) => setColorNameRu(e.target.value)}
+          style={{ fontSize: '12px' }}
+        />
+        <input
+          className="cms-input"
+          placeholder="Color name (EN)"
+          value={colorNameEn}
+          onChange={(e) => setColorNameEn(e.target.value)}
           style={{ fontSize: '12px' }}
         />
         <input
           type="color"
-          id="color-hex-input"
-          defaultValue="#ffffff"
+          value={colorHex}
+          onChange={(e) => setColorHex(e.target.value)}
           style={{ width: '100%', height: '36px', borderRadius: '6px', border: '1px solid #444', cursor: 'pointer', background: 'none', padding: '2px' }}
         />
         <button
           type="button"
           className="cms-btn cms-btn-sm"
           onClick={() => {
-            const nameInput = document.getElementById('color-name-input') as HTMLInputElement;
-            const hexInput = document.getElementById('color-hex-input') as HTMLInputElement;
-            const name = nameInput?.value.trim();
-            const hex = hexInput?.value || '#ffffff';
+            const name = colorNameRu.trim();
+            const nameEn = colorNameEn.trim();
             if (!name) return;
-            update([...colors, { name, hex }]);
-            if (nameInput) nameInput.value = '';
+            update([...colors, { name, nameEn: nameEn || undefined, hex: colorHex }]);
+            setColorNameRu('');
+            setColorNameEn('');
           }}
         >
           + Добавить
@@ -603,17 +653,139 @@ export default function AdminProductsPage() {
   const [filterStock, setFilterStock] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [archiveView, setArchiveView] = useState<"active" | "archived" | "all">("active");
+  const [mediaPickerTarget, setMediaPickerTarget] = useState<"main" | "gallery" | null>(null);
+  const [mediaItems, setMediaItems] = useState<MediaLibraryItem[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaSearch, setMediaSearch] = useState("");
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
+  const notify = useCallback((msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(""), 3000);
+  }, []);
+
+  const requestJson = useCallback(async (
+    url: string,
+    init: RequestInit = {},
+    attempts = 3
+  ): Promise<{ ok: boolean; status: number; data: unknown }> => {
+    const retriableStatus = new Set([429, 500, 502, 503, 504]);
+    let lastStatus = 0;
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const response = await fetch(url, { cache: "no-store", ...init });
+        lastStatus = response.status;
+        const data = await response.json().catch(() => ({}));
+        if (response.ok) return { ok: true, status: response.status, data };
+
+        if (!retriableStatus.has(response.status) || attempt === attempts) {
+          return { ok: false, status: response.status, data };
+        }
+      } catch {
+        if (attempt === attempts) {
+          return { ok: false, status: lastStatus || 0, data: { error: "Network error" } };
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 180 * attempt));
+    }
+
+    return { ok: false, status: lastStatus || 0, data: { error: "Request failed" } };
+  }, []);
 
   const fetchProducts = useCallback(async () => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
-    const res = await fetch("/api/products?showAll=true&includeArchived=true");
-    const data = await res.json();
-    setProducts(Array.isArray(data) ? data : []);
+    const result = await requestJson("/api/products?showAll=true&includeArchived=true");
+    if (result.ok && Array.isArray(result.data)) {
+      const next = result.data as Product[];
+      setProducts((prev) => {
+        if (next.length === 0 && prev.length > 0) {
+          notify("Временный сбой чтения. Показаны последние сохранённые данные.");
+          return prev;
+        }
+        return next;
+      });
+    } else {
+      notify("Не удалось загрузить товары. Повторите ещё раз.");
+    }
     setLoading(false);
-  }, [getToken, router]);
+  }, [getToken, notify, requestJson, router]);
+
+  const fetchMediaItems = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+    setMediaLoading(true);
+    try {
+      const result = await requestJson("/api/admin/upload/images", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = result.data as { success?: boolean; items?: unknown[] };
+      if (result.ok && data?.success && Array.isArray(data.items)) {
+        const normalized: MediaLibraryItem[] = data.items
+          .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+          .map((item) => ({
+            filename: String(item.filename || ""),
+            relativePath: String(item.relativePath || ""),
+            url: String(item.url || ""),
+            size: Number(item.size || 0),
+            updatedAt: String(item.updatedAt || new Date().toISOString()),
+          }));
+        setMediaItems(normalized);
+      }
+    } catch {
+      // no-op
+    } finally {
+      setMediaLoading(false);
+    }
+  }, [getToken, requestJson]);
+
+  const buildProductPayload = useCallback((product: Product, overrides: Record<string, unknown> = {}) => ({
+    name: product.name,
+    nameRu: product.nameRu || "",
+    slug: product.slug,
+    description: product.description,
+    descriptionRu: product.descriptionRu || "",
+    price: product.price,
+    oldPrice: product.oldPrice,
+    discount: product.discount,
+    stock: product.stock,
+    currency: product.currency,
+    image: product.image,
+    images: product.images,
+    inStock: product.inStock,
+    isPreorder: product.isPreorder,
+    preorderClosed: product.preorderClosed || false,
+    preorderAvailableDate: product.preorderAvailableDate || null,
+    isAuthor: product.isAuthor,
+    isLimited: product.isLimited || false,
+    limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
+    isActive: product.isActive,
+    isSaleDisabled: product.isSaleDisabled || false,
+    isSoldOut: product.isSoldOut || false,
+    characteristics: product.characteristics || "[]",
+    colors: product.colors || "[]",
+    sortOrder: product.sortOrder,
+    ...overrides,
+  }), []);
+
+  const updateProductById = useCallback(async (product: Product, overrides: Record<string, unknown>) => {
+    const token = getToken();
+    if (!token) return false;
+
+    const result = await requestJson(`/api/products/${product.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(buildProductPayload(product, overrides)),
+    });
+
+    if (!result.ok) {
+      const err = result.data as { error?: string };
+      notify(err?.error || "Не удалось сохранить изменения");
+      return false;
+    }
+    return true;
+  }, [buildProductPayload, getToken, notify, requestJson]);
 
   useEffect(() => {
     const token = getToken();
@@ -677,110 +849,28 @@ export default function AdminProductsPage() {
   };
 
   const toggleActive = async (product: Product) => {
-    const token = getToken();
-    if (!token) return;
-    // Send full product data to avoid overwriting nameRu/descriptionRu with null
-    await fetch(`/api/products/${product.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        name: product.name,
-        nameRu: product.nameRu || "",
-        slug: product.slug,
-        description: product.description,
-        descriptionRu: product.descriptionRu || "",
-        price: product.price,
-        oldPrice: product.oldPrice,
-        discount: product.discount,
-        stock: product.stock,
-        currency: product.currency,
-        image: product.image,
-        images: product.images,
-        inStock: product.inStock,
-        isPreorder: product.isPreorder,
-        preorderClosed: product.preorderClosed || false,
-        preorderAvailableDate: product.preorderAvailableDate || null,
-        isAuthor: product.isAuthor,
-        isLimited: product.isLimited,
-        limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
-        isActive: !product.isActive,
-        isSaleDisabled: product.isSaleDisabled || false,
-        isSoldOut: product.isSoldOut || false,
-        characteristics: product.characteristics || "[]",
-        colors: product.colors || "[]",
-        sortOrder: product.sortOrder,
-      }),
-    });
-    fetchProducts();
+    const ok = await updateProductById(product, { isActive: !product.isActive });
+    if (ok) fetchProducts();
   };
 
   const toggleOrderAvailability = async (product: Product) => {
-    const token = getToken();
-    if (!token) return;
-    await fetch(`/api/products/${product.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        name: product.name, nameRu: product.nameRu || "", slug: product.slug,
-        description: product.description, descriptionRu: product.descriptionRu || "",
-        price: product.price, oldPrice: product.oldPrice, discount: product.discount,
-        stock: product.stock, currency: product.currency, image: product.image,
-        images: product.images, inStock: !product.inStock, isPreorder: product.isPreorder,
-        preorderClosed: product.preorderClosed || false, preorderAvailableDate: product.preorderAvailableDate || null,
-        isAuthor: product.isAuthor, isLimited: product.isLimited,
-        limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
-        isActive: product.isActive, isSaleDisabled: product.isSaleDisabled || false,
-        isSoldOut: product.isSoldOut || false,
-        characteristics: product.characteristics || "[]", colors: product.colors || "[]", sortOrder: product.sortOrder,
-      }),
-    });
-    fetchProducts();
+    const ok = await updateProductById(product, { inStock: !product.inStock });
+    if (ok) fetchProducts();
   };
 
   const toggleSaleDisabled = async (product: Product) => {
-    const token = getToken();
-    if (!token) return;
-    await fetch(`/api/products/${product.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        name: product.name, nameRu: product.nameRu || "", slug: product.slug,
-        description: product.description, descriptionRu: product.descriptionRu || "",
-        price: product.price, oldPrice: product.oldPrice, discount: product.discount,
-        stock: product.stock, currency: product.currency, image: product.image,
-        images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
-        preorderClosed: product.preorderClosed || false, preorderAvailableDate: product.preorderAvailableDate || null,
-        isAuthor: product.isAuthor, isLimited: product.isLimited,
-        limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
-        isActive: product.isActive, isSaleDisabled: !product.isSaleDisabled,
-        isSoldOut: product.isSoldOut || false,
-        characteristics: product.characteristics || "[]", colors: product.colors || "[]", sortOrder: product.sortOrder,
-      }),
-    });
-    fetchProducts();
+    const ok = await updateProductById(product, { isSaleDisabled: !product.isSaleDisabled });
+    if (ok) fetchProducts();
   };
 
   const toggleSoldOut = async (product: Product) => {
-    const token = getToken();
-    if (!token) return;
-    await fetch(`/api/products/${product.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        name: product.name, nameRu: product.nameRu || "", slug: product.slug,
-        description: product.description, descriptionRu: product.descriptionRu || "",
-        price: product.price, oldPrice: product.oldPrice, discount: product.discount,
-        stock: product.stock, currency: product.currency, image: product.image,
-        images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
-        preorderClosed: product.preorderClosed || false, preorderAvailableDate: product.preorderAvailableDate || null,
-        isAuthor: product.isAuthor, isLimited: product.isLimited,
-        limitedEditionText: (product as unknown as { limitedEditionText?: string }).limitedEditionText || "",
-        isActive: product.isActive, isSaleDisabled: product.isSaleDisabled || false,
-        isSoldOut: !product.isSoldOut,
-        characteristics: product.characteristics || "[]", colors: product.colors || "[]", sortOrder: product.sortOrder,
-      }),
-    });
-    fetchProducts();
+    const ok = await updateProductById(product, { isSoldOut: !product.isSoldOut });
+    if (ok) fetchProducts();
+  };
+
+  const restoreFromArchive = async (product: Product) => {
+    const ok = await updateProductById(product, { isActive: true });
+    if (ok) fetchProducts();
   };
 
   const handleSave = async () => {
@@ -788,27 +878,35 @@ export default function AdminProductsPage() {
     const token = getToken();
     const url = isNew ? "/api/products" : `/api/products/${selected!.id}`;
     const method = isNew ? "POST" : "PUT";
-    const res = await fetch(url, {
+    const result = await requestJson(url, {
       method,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         ...form,
         price: Number(form.price),
-        oldPrice: form.oldPrice ? Number(form.oldPrice) : null,
+        oldPrice: form.oldPrice !== null && form.oldPrice !== undefined
+          ? Number(form.oldPrice)
+          : null,
         discount: Number(form.discount),
         stock: Number(form.stock),
         sortOrder: Number(form.sortOrder),
         limitedEditionText: form.limitedEditionText,
         characteristics: form.characteristics,
+        colors: form.colors,
         preorderAvailableDate: form.preorderAvailableDate ? new Date(form.preorderAvailableDate).toISOString() : null,
       }),
     });
-    if (res.ok) {
+    if (result.ok) {
+      const saved = result.data as Product;
+      setProducts((prev) => {
+        if (isNew) return [saved, ...prev];
+        return prev.map((p) => (p.id === selected?.id ? saved : p));
+      });
       notify(isNew ? "Product created" : "Product updated");
       closeDialog();
       fetchProducts();
     } else {
-      const err = await res.json();
+      const err = result.data as { error?: string };
       notify(`Error: ${err.error || "Unknown error"}`);
     }
     setSaving(false);
@@ -816,16 +914,23 @@ export default function AdminProductsPage() {
 
   const handleDelete = async (ids: string[]) => {
     const token = getToken();
+    const hardDelete = archiveView === "archived";
+    let failed = 0;
     for (const id of ids) {
-      await fetch(`/api/products/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      const result = await requestJson(`/api/products/${id}${hardDelete ? "?hard=true" : ""}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!result.ok) failed += 1;
     }
-    notify(`${ids.length} товар(ов) обработано`);
+    notify(failed > 0 ? `Обработано: ${ids.length - failed}, ошибок: ${failed}` : `${ids.length} товар(ов) обработано`);
+    if (failed < ids.length) {
+      setProducts((prev) => prev.filter((p) => !ids.includes(p.id)));
+    }
     setDeleteConfirm(null);
     setCheckedIds(new Set());
     fetchProducts();
   };
-
-  const notify = (msg: string) => { setNotification(msg); setTimeout(() => setNotification(""), 3000); };
 
   const toggleCheck = (id: string) => {
     setCheckedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -849,6 +954,33 @@ export default function AdminProductsPage() {
       };
     });
   }, []);
+
+  const openMediaPicker = useCallback(async (target: "main" | "gallery") => {
+    setMediaPickerTarget(target);
+    setMediaSearch("");
+    await fetchMediaItems();
+  }, [fetchMediaItems]);
+
+  const closeMediaPicker = useCallback(() => {
+    setMediaPickerTarget(null);
+    setMediaSearch("");
+  }, []);
+
+  const selectMediaImage = useCallback((url: string) => {
+    if (!url) return;
+    if (mediaPickerTarget === "main") {
+      setForm((prev) => ({ ...prev, image: url }));
+    } else {
+      addImageToProductForm(url);
+    }
+    closeMediaPicker();
+  }, [addImageToProductForm, closeMediaPicker, mediaPickerTarget]);
+
+  const filteredMediaItems = mediaItems.filter((item) => {
+    const q = mediaSearch.trim().toLowerCase();
+    if (!q) return true;
+    return item.filename.toLowerCase().includes(q) || item.relativePath.toLowerCase().includes(q);
+  });
 
   const filtered = products.filter((p) => {
     if (archiveView === "active" && !p.isActive) return false;
@@ -988,12 +1120,25 @@ export default function AdminProductsPage() {
                     </td>
                     <td>{p.isAuthor ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#9b59b6"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> : "\u2014"}</td>
                     <td>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Редактировать">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                      </button>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([p.id])} title="Архив / удалить" style={{ color: "var(--cms-danger)" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                      </button>
+                      {archiveView === "archived" ? (
+                        <div style={{ display: "flex", gap: "6px" }}>
+                          <button className="cms-btn cms-btn-xs" onClick={() => restoreFromArchive(p)} title="Вернуть товар из архива">
+                            Вернуть
+                          </button>
+                          <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => setDeleteConfirm([p.id])} title="Удалить навсегда">
+                            Удалить
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Редактировать">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                          </button>
+                          <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([p.id])} title="Архив / удалить" style={{ color: "var(--cms-danger)" }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1084,6 +1229,11 @@ export default function AdminProductsPage() {
                 token={adminToken}
                 placeholder="Перетащите фото или нажмите для выбора"
               />
+              <div style={{ marginTop: "-4px", marginBottom: "10px" }}>
+                <button type="button" className="cms-btn cms-btn-xs" onClick={() => openMediaPicker("main")}>
+                  Выбрать из медиа
+                </button>
+              </div>
               <MultiImageUploader
                 label="Дополнительные фото"
                 value={form.images}
@@ -1092,6 +1242,11 @@ export default function AdminProductsPage() {
                 onMainImageChange={(url) => setForm((prev) => ({ ...prev, image: url }))}
                 token={adminToken}
               />
+              <div style={{ marginTop: "-4px", marginBottom: "10px" }}>
+                <button type="button" className="cms-btn cms-btn-xs" onClick={() => openMediaPicker("gallery")}>
+                  Добавить из медиа
+                </button>
+              </div>
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
                 {(["isActive", "inStock", "isPreorder", "isAuthor", "isLimited"] as const).map((key) => (
                   <label key={key} className="cms-checkbox-label">
@@ -1155,6 +1310,65 @@ export default function AdminProductsPage() {
             <div className="cms-modal-actions">
               <button className="cms-btn cms-btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Сохранение..." : "Сохранить"}</button>
               <button className="cms-btn" onClick={closeDialog}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mediaPickerTarget && (
+        <div className="cms-modal-overlay" onClick={closeMediaPicker}>
+          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760 }}>
+            <div className="cms-modal-header">
+              <h3>{mediaPickerTarget === "main" ? "Выбрать главное фото" : "Добавить фото в галерею"}</h3>
+              <button className="cms-modal-close" onClick={closeMediaPicker}>&times;</button>
+            </div>
+            <div className="cms-modal-body" style={{ maxHeight: "68vh", overflow: "auto" }}>
+              <input
+                className="cms-input"
+                placeholder="Поиск по имени файла"
+                value={mediaSearch}
+                onChange={(e) => setMediaSearch(e.target.value)}
+                style={{ marginBottom: "12px" }}
+              />
+              {mediaLoading ? (
+                <div style={{ padding: "18px 0", color: "var(--cms-text-muted)" }}>Загрузка медиа...</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px" }}>
+                  {filteredMediaItems.map((item) => (
+                    <button
+                      key={`${item.relativePath}-${item.updatedAt}`}
+                      type="button"
+                      onClick={() => selectMediaImage(item.relativePath)}
+                      style={{
+                        border: "1px solid var(--cms-border)",
+                        borderRadius: "10px",
+                        background: "var(--cms-surface)",
+                        padding: "8px",
+                        textAlign: "left",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <img
+                        src={item.url}
+                        alt={item.filename}
+                        style={{
+                          width: "100%",
+                          height: "140px",
+                          objectFit: "contain",
+                          borderRadius: "8px",
+                          background: "#0e1017",
+                        }}
+                      />
+                      <div style={{ marginTop: "6px", fontSize: "11px", color: "var(--cms-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {item.filename}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!mediaLoading && filteredMediaItems.length === 0 && (
+                <div style={{ padding: "18px 0", color: "var(--cms-text-muted)" }}>Нет изображений</div>
+              )}
             </div>
           </div>
         </div>

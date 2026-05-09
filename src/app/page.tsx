@@ -33,10 +33,6 @@ export default function HomePage() {
 
         <div className="preorder-content">
           <div className="preorder-text">
-            <div className="preorder-eyebrow anim-fade-up">
-              {lang === 'ru' ? 'Новая авторская колода Таро' : 'New Original Tarot Deck'}
-            </div>
-
             <h1 className="preorder-title anim-fade-up anim-fade-up-d2">
               <em><span style={{ color: '#ff6eb4' }}>Gothic</span></em><br />
               <span style={{ color: '#ff6eb4' }}>Vibe</span>
@@ -47,7 +43,7 @@ export default function HomePage() {
             </p>
 
             <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255,110,180,0.1)', color: '#ff6eb4', borderColor: 'rgba(255,110,180,0.3)' }}>
-              {lang === 'ru' ? 'Скоро в продаже' : 'Coming soon'}
+              {lang === 'ru' ? 'Скоро в предзаказе' : 'Pre-order soon'}
             </div>
 
             <p className="preorder-desc anim-fade-up anim-fade-up-d3">
@@ -61,18 +57,12 @@ export default function HomePage() {
                 {formatPrice(pgvtPrice)}
               </div>
             )}
-
-            <div className="preorder-actions anim-fade-up anim-fade-up-d4">
-              <Link href="/pgvt" className="preorder-btn-ghost">
-                {lang === 'ru' ? 'Подробнее' : 'Learn more'}
-              </Link>
-            </div>
           </div>
 
           <div className="preorder-visual anim-fade-up anim-fade-up-d2">
             <div className="preorder-img-wrap">
               <Image
-                src="/pgvt/7.svg"
+                src="/media/PRIESTESS.jpg"
                 alt="Pink Gothic Vibe Tarot"
                 fill
                 className="preorder-img"

@@ -30,6 +30,7 @@ interface Product {
 
 type FilterType = 'all' | 'author' | 'preorder';
 type SortType = 'newest' | 'oldest' | 'cheap' | 'expensive';
+const CATALOG_CACHE_KEY = 'catalog_products_cache_v1';
 
 export function CatalogContent() {
   const { lang } = useLanguage();
@@ -39,21 +40,53 @@ export function CatalogContent() {
   const [sort, setSort] = useState<SortType>('newest');
 
   useEffect(() => {
+    if (filter !== 'all') return;
+    try {
+      const raw = localStorage.getItem(CATALOG_CACHE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { ts?: number; data?: Product[] };
+      if (Array.isArray(parsed?.data) && parsed.data.length > 0) {
+        setProducts(parsed.data.filter((p) => p.isActive));
+        setLoading(false);
+      }
+    } catch {
+      // ignore cache parse errors
+    }
+  }, [filter]);
+
+  useEffect(() => {
     fetchProducts();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
   const fetchProducts = async () => {
-    setLoading(true);
+    setLoading((prev) => products.length === 0 && prev);
     try {
       const params = new URLSearchParams();
       if (filter === 'author') params.set('author', 'true');
       if (filter === 'preorder') params.set('preorder', 'true');
       
       params.set('showAll', 'true');
-      const res = await fetch(`/api/products?${params.toString()}`);
-      const data = await res.json();
-      setProducts(Array.isArray(data) ? data.filter((p: Product) => p.isActive) : []);
+      let data: unknown = [];
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const res = await fetch(`/api/products?${params.toString()}`, { cache: 'no-store' });
+        const parsed = await res.json().catch(() => []);
+        if (res.ok && Array.isArray(parsed)) {
+          data = parsed;
+          break;
+        }
+        if (![429, 500, 502, 503, 504].includes(res.status) || attempt === 3) {
+          data = Array.isArray(parsed) ? parsed : [];
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 180 * attempt));
+      }
+
+      const active = Array.isArray(data) ? data.filter((p: Product) => p.isActive) : [];
+      setProducts(active);
+      if (filter === 'all' && active.length > 0) {
+        localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: active }));
+      }
     } catch (error) {
       console.error('Failed to fetch products:', error);
     } finally {

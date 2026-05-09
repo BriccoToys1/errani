@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import { cache } from 'react';
 import prisma from '@/lib/db';
+import { withPrismaRetry } from '@/lib/prisma-retry';
 import { ProductContent } from './ProductContent';
 
 export const dynamic = 'force-dynamic';
@@ -13,12 +14,7 @@ interface Props {
 const SAFE_SLUG_PATTERN = /^[a-z0-9_-]+$/i;
 
 const getProductBySlug = cache(async (slug: string) => {
-  return Promise.race([
-    prisma.product.findUnique({ where: { slug } }),
-    new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error(`DB timeout in product page for slug: ${slug}`)), 1500)
-    ),
-  ]);
+  return withPrismaRetry(() => prisma.product.findUnique({ where: { slug } }), 2, 80);
 });
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -64,6 +60,7 @@ export default async function ProductPage({ params }: Props) {
         limitedEditionText: product.limitedEditionText,
         isAuthor: product.isAuthor,
         characteristics: product.characteristics,
+        colors: product.colors,
       }}
     />
   );

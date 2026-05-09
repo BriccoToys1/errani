@@ -36,4 +36,4 @@ jobs:
             npx prisma generate
             npm run build
             pm2 reload ecosystem.config.js --update-env
-            echo "✅ Деплой завершён"
+            echo "Деплой завершён"

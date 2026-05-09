@@ -56,6 +56,30 @@ export default function AdminMediaPage() {
     setTimeout(() => setMessage(""), 3000);
   };
 
+  const requestJson = useCallback(async (
+    url: string,
+    init: RequestInit = {},
+    attempts = 3
+  ): Promise<{ ok: boolean; status: number; data: unknown }> => {
+    const retriable = new Set([429, 500, 502, 503, 504]);
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const response = await fetch(url, { cache: "no-store", ...init });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok) return { ok: true, status: response.status, data };
+        if (!retriable.has(response.status) || attempt === attempts) {
+          return { ok: false, status: response.status, data };
+        }
+      } catch {
+        if (attempt === attempts) {
+          return { ok: false, status: 0, data: { message: "Network error" } };
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 180 * attempt));
+    }
+    return { ok: false, status: 0, data: { message: "Request failed" } };
+  }, []);
+
   const fetchMedia = useCallback(async () => {
     const token = getToken();
     if (!token) {
@@ -65,24 +89,35 @@ export default function AdminMediaPage() {
 
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/upload/images", {
+      const result = await requestJson("/api/admin/upload/images", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (response.status === 401) {
+      if (result.status === 401) {
         localStorage.removeItem("admin_token");
         router.push("/admin/login");
         return;
       }
 
-      const data = await response.json();
-      setItems(Array.isArray(data?.items) ? data.items : []);
+      const data = result.data as { items?: unknown[] };
+      const normalized = Array.isArray(data?.items)
+        ? data.items
+            .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+            .map((item) => ({
+              filename: String(item.filename || ""),
+              relativePath: String(item.relativePath || ""),
+              url: String(item.url || ""),
+              size: Number(item.size || 0),
+              updatedAt: String(item.updatedAt || new Date().toISOString()),
+            }))
+        : [];
+      setItems(normalized);
     } catch {
       showMessage("Не удалось загрузить медиатеку");
     } finally {
       setLoading(false);
     }
-  }, [getToken, router]);
+  }, [getToken, requestJson, router]);
 
   useEffect(() => {
     fetchMedia();
@@ -110,18 +145,28 @@ export default function AdminMediaPage() {
       const formData = new FormData();
       formData.append("image", file);
 
-      const response = await fetch("/api/admin/media/upload", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (!response.ok || !data?.success || !data?.url) {
-        throw new Error(data?.message || "Ошибка загрузки");
+      let successData: { url?: string } | null = null;
+      let lastMessage = "Ошибка загрузки";
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const response = await fetch("/api/admin/media/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data?.success && data?.url) {
+          successData = data;
+          break;
+        }
+        lastMessage = data?.message || lastMessage;
+        if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 3) {
+          throw new Error(lastMessage);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 180 * attempt));
       }
+      if (!successData?.url) throw new Error(lastMessage);
 
-      setLastUploaded(String(data.url));
+      setLastUploaded(String(successData.url));
       showMessage("Изображение загружено");
       await fetchMedia();
     } catch (error) {
@@ -148,7 +193,7 @@ export default function AdminMediaPage() {
     return items.filter((item) => item.filename.toLowerCase().includes(query) || item.url.toLowerCase().includes(query));
   }, [items, search]);
 
-  const deleteImage = async (relativePath: string) => {
+  const deleteImage = useCallback(async (relativePath: string) => {
     const token = getToken();
     if (!token) return;
 
@@ -156,7 +201,7 @@ export default function AdminMediaPage() {
     if (!confirmed) return;
 
     try {
-      const response = await fetch("/api/admin/upload/images", {
+      const result = await requestJson("/api/admin/upload/images", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
@@ -165,8 +210,8 @@ export default function AdminMediaPage() {
         body: JSON.stringify({ path: relativePath }),
       });
 
-      const data = await response.json();
-      if (!response.ok || !data?.success) {
+      const data = result.data as { success?: boolean; message?: string };
+      if (!result.ok || !data?.success) {
         throw new Error(data?.message || "Не удалось удалить файл");
       }
 
@@ -176,7 +221,7 @@ export default function AdminMediaPage() {
       const msg = error instanceof Error ? error.message : "Не удалось удалить файл";
       showMessage(msg);
     }
-  };
+  }, [fetchMedia, getToken, requestJson]);
 
   if (loading) {
     return <div className="cms-loading"><div className="cms-spinner" /> Загрузка медиатеки...</div>;
@@ -225,7 +270,9 @@ export default function AdminMediaPage() {
           {lastUploaded && (
             <div className="cms-uploader-url-card" style={{ marginBottom: "12px" }}>
               <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Последняя загруженная ссылка</div>
-              <div style={{ fontSize: "12px", color: "var(--cms-text)", wordBreak: "break-all", marginBottom: "8px" }}>{lastUploaded}</div>
+              <div style={{ fontSize: "12px", color: "var(--cms-text)", marginBottom: "8px" }}>
+                {lastUploaded.split("/").pop() || lastUploaded}
+              </div>
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <button
                   className="cms-btn cms-btn-xs"
@@ -255,10 +302,22 @@ export default function AdminMediaPage() {
             {filtered.map((item) => (
               <div key={item.relativePath} style={{ border: "1px solid var(--cms-border)", borderRadius: "10px", padding: "8px", background: "var(--cms-surface)" }}>
                 <a href={item.url} target="_blank" rel="noreferrer">
-                  <img src={item.url} alt={item.filename} style={{ width: "100%", height: "140px", objectFit: "cover", borderRadius: "8px", background: "#0c0e14" }} />
+                  <img
+                    src={item.url}
+                    alt={item.filename}
+                    style={{
+                      width: "100%",
+                      height: "220px",
+                      objectFit: "contain",
+                      borderRadius: "8px",
+                      background: "#0c0e14",
+                    }}
+                  />
                 </a>
                 <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", marginTop: "8px" }}>{formatSize(item.size)} · {new Date(item.updatedAt).toLocaleString("ru-RU")}</div>
-                <div style={{ fontSize: "12px", color: "var(--cms-text)", wordBreak: "break-all", marginTop: "4px" }}>{item.url}</div>
+                <div style={{ fontSize: "12px", color: "var(--cms-text)", marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.url}>
+                  {item.filename}
+                </div>
                 <div style={{ display: "flex", gap: "6px", marginTop: "8px", flexWrap: "wrap" }}>
                   <button
                     className="cms-btn cms-btn-xs"

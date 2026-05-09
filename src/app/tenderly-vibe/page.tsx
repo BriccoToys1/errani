@@ -1,46 +1,67 @@
 import type { Metadata } from 'next';
 import { cache } from 'react';
-import { notFound } from 'next/navigation';
 import prisma from '@/lib/db';
+import { withPrismaRetry } from '@/lib/prisma-retry';
 import { ProductContent } from '../[slug]/ProductContent';
 
 export const dynamic = 'force-dynamic';
 
-const getTenderlyProduct = cache(async () =>
-  Promise.race([
-    (async () => {
-      const bySlug = await prisma.product.findUnique({ where: { slug: 'tenderly-vibe' } });
-      if (bySlug) return bySlug;
+const TENDERLY_FALLBACK_PRODUCT = {
+  id: 'tenderly-vibe-fallback',
+  slug: 'tenderly-vibe',
+  name: 'Tenderly Vibe',
+  nameRu: 'Tenderly Vibe',
+  description:
+    'When I created this deck, I wanted to preserve warmth, softness, and tenderness in every card.',
+  descriptionRu:
+    'Создавая эту колоду, я хотела передать тёплую, добрую атмосферу и искреннюю нежность, которые живут в каждом из нас.',
+  price: 5690,
+  oldPrice: null,
+  discount: 0,
+  image: '/media/photo-11.jpeg',
+  images: '["/media/photo-1.jpeg","/media/photo-2.jpeg","/media/photo-3.jpeg","/media/photo-9.jpeg","/media/photo-10.jpeg","/media/photo-8.jpeg"]',
+  inStock: false,
+  isPreorder: false,
+  preorderClosed: false,
+  preorderAvailableDate: null,
+  isLimited: true,
+  limitedEditionText: '',
+  isAuthor: true,
+  characteristics: '[]',
+  colors: '[]',
+};
 
-      // Keep `/tenderly-vibe` resilient if slug was edited in admin.
-      return prisma.product.findFirst({
-        where: {
-          OR: [
-            { slug: { startsWith: 'tenderly-vibe' } },
-            { slug: { contains: 'tenderly' } },
-            { name: { contains: 'Tenderly', mode: 'insensitive' } },
-            { nameRu: { contains: 'Tenderly', mode: 'insensitive' } },
-          ],
-        },
-        orderBy: { updatedAt: 'desc' },
-      });
-    })(),
-    new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error('DB timeout in tenderly page')), 1200)
-    ),
-  ])
-);
+type TenderlyProduct = Awaited<ReturnType<typeof prisma.product.findUnique>>;
+
+const getTenderlyProduct = cache(async (): Promise<TenderlyProduct> => {
+  const bySlug = await withPrismaRetry(() =>
+    prisma.product.findUnique({ where: { slug: 'tenderly-vibe' } })
+  , 2, 80);
+  if (bySlug) return bySlug;
+
+  return withPrismaRetry(() =>
+    prisma.product.findFirst({
+      where: {
+        OR: [
+          { slug: { startsWith: 'tenderly-vibe' } },
+          { slug: { contains: 'tenderly' } },
+          { name: { contains: 'Tenderly', mode: 'insensitive' } },
+          { nameRu: { contains: 'Tenderly', mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { updatedAt: 'desc' },
+    })
+  , 2, 80);
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   let product = null;
   try { product = await getTenderlyProduct(); } catch { /* ignore */ }
 
-  if (!product) {
-    return { title: 'Tenderly Vibe — errani', robots: { index: false, follow: false } };
-  }
+  const effective = product || TENDERLY_FALLBACK_PRODUCT;
 
-  const name = product.nameRu || product.name;
-  const desc = product.descriptionRu || product.description || '';
+  const name = effective.nameRu || effective.name;
+  const desc = effective.descriptionRu || effective.description || '';
   return {
     title: `${name} — errani`,
     description: desc.slice(0, 160) || undefined,
@@ -56,33 +77,34 @@ export default async function TenderlyVibePage() {
     console.error('Tenderly page DB error:', error);
   }
 
-  if (!product) {
-    notFound();
-    return null;
-  }
+  const effectiveProduct = product || TENDERLY_FALLBACK_PRODUCT;
+  const preorderAvailableDate = product?.preorderAvailableDate?.toISOString() ?? null;
 
   return (
     <ProductContent
       product={{
-        id: product.id,
-        slug: product.slug,
-        name: product.name,
-        nameRu: product.nameRu,
-        description: product.description,
-        descriptionRu: product.descriptionRu,
-        price: product.price,
-        oldPrice: product.oldPrice,
-        discount: product.discount,
-        image: product.image,
-        images: product.images,
-        inStock: product.inStock && !product.isSaleDisabled && product.stock > 0,
-        isPreorder: product.isPreorder,
-        preorderClosed: product.preorderClosed,
-        preorderAvailableDate: product.preorderAvailableDate?.toISOString() ?? null,
-        isLimited: product.isLimited,
-        limitedEditionText: product.limitedEditionText,
-        isAuthor: product.isAuthor,
-        characteristics: product.characteristics,
+        id: effectiveProduct.id,
+        slug: effectiveProduct.slug,
+        name: effectiveProduct.name,
+        nameRu: effectiveProduct.nameRu,
+        description: effectiveProduct.description,
+        descriptionRu: effectiveProduct.descriptionRu,
+        price: effectiveProduct.price,
+        oldPrice: effectiveProduct.oldPrice,
+        discount: effectiveProduct.discount,
+        image: effectiveProduct.image,
+        images: effectiveProduct.images,
+        inStock: product
+          ? product.inStock && !product.isSaleDisabled && product.stock > 0
+          : effectiveProduct.inStock,
+        isPreorder: effectiveProduct.isPreorder,
+        preorderClosed: effectiveProduct.preorderClosed,
+        preorderAvailableDate,
+        isLimited: effectiveProduct.isLimited,
+        limitedEditionText: effectiveProduct.limitedEditionText,
+        isAuthor: effectiveProduct.isAuthor,
+        characteristics: effectiveProduct.characteristics,
+        colors: effectiveProduct.colors,
       }}
     />
   );

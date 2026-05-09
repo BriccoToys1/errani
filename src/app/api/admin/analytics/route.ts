@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
+import { withPrismaRetry } from '@/lib/prisma-retry';
+
+// Server-side cache keyed by period (ms)
+const cache = new Map<number, { data: unknown; at: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function GET(req: NextRequest) {
   const denied = adminGuard(req);
@@ -9,47 +14,94 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const period = Math.min(Math.max(parseInt(searchParams.get('period') || '30', 10), 7), 90);
-    
+
+    // Return cached response if fresh
+    const cached = cache.get(period);
+    if (cached && Date.now() - cached.at < CACHE_TTL) {
+      return NextResponse.json(cached.data);
+    }
+
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
     const todayStart = new Date(`${today}T00:00:00Z`);
     const todayEnd = new Date(`${today}T23:59:59Z`);
-
-    // --- Real-time: online in last 5 minutes ---
     const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);
-    const recentViews = await prisma.pageView.findMany({
-      where: { createdAt: { gte: fiveMinAgo } },
-      distinct: ['sessionId'],
-      select: { sessionId: true },
-    });
-    const onlineNow = recentViews.length;
 
-    // --- Today stats ---
-    const todayViews = await prisma.pageView.count({
-      where: { createdAt: { gte: todayStart, lte: todayEnd } },
-    });
-    const todayVisitors = await prisma.pageView.findMany({
-      where: { createdAt: { gte: todayStart, lte: todayEnd } },
-      distinct: ['sessionId'],
-      select: { sessionId: true },
-    });
-    const todayOrderCount = await prisma.order.count({
-      where: { createdAt: { gte: todayStart, lte: todayEnd } },
-    });
+    // Run independent queries in parallel with retry on connection errors
+    const [
+      recentViews,
+      todayViews,
+      todayVisitors,
+      todayOrderCount,
+      avgDurationRaw,
+      countriesRaw,
+      uniqueIPsRaw,
+      dailyStats,
+      totalViews,
+      totalOrdersRaw,
+      totalRevenueRaw,
+      totalProducts,
+    ] = await withPrismaRetry(() => Promise.all([
+      // Realtime: distinct sessions in last 5 min
+      prisma.pageView.findMany({
+        where: { createdAt: { gte: fiveMinAgo } },
+        distinct: ['sessionId'],
+        select: { sessionId: true },
+      }),
+      // Today views
+      prisma.pageView.count({ where: { createdAt: { gte: todayStart, lte: todayEnd } } }),
+      // Today visitors (distinct sessions)
+      prisma.pageView.findMany({
+        where: { createdAt: { gte: todayStart, lte: todayEnd } },
+        distinct: ['sessionId'],
+        select: { sessionId: true },
+      }),
+      // Today orders
+      prisma.order.count({ where: { createdAt: { gte: todayStart, lte: todayEnd } } }),
+      // Avg session duration today
+      prisma.pageView.aggregate({
+        where: { createdAt: { gte: todayStart, lte: todayEnd }, duration: { gt: 0 } },
+        _avg: { duration: true },
+      }),
+      // Countries today
+      prisma.pageView.groupBy({
+        by: ['country'],
+        where: { createdAt: { gte: todayStart, lte: todayEnd }, country: { not: '' } },
+        _count: { country: true },
+        orderBy: { _count: { country: 'desc' } },
+        take: 8,
+      }),
+      // Unique IPs via raw SQL (avoids loading all rows)
+      prisma.$queryRaw<[{ count: bigint }]>`SELECT COUNT(DISTINCT ip)::int AS count FROM "PageView" WHERE ip != ''`,
+      // Chart data: pull from DailyStat (pre-aggregated, fast)
+      prisma.dailyStat.findMany({
+        where: {
+          date: {
+            gte: (() => { const d = new Date(now); d.setDate(d.getDate() - (period - 1)); return d.toISOString().slice(0, 10); })(),
+            lte: today,
+          },
+        },
+        orderBy: { date: 'asc' },
+      }),
+      // Total views (fast with index)
+      prisma.pageView.count(),
+      // Total paid orders
+      prisma.order.count({ where: { status: 'paid' } }),
+      // Total revenue
+      prisma.order.aggregate({ where: { status: 'paid' }, _sum: { totalAmount: true } }),
+      // Product count
+      prisma.product.count(),
+    ]));
 
-    // --- Chart data for selected period ---
-    const days = [];
+    // Build chart: fill gaps with 0
+    const days: string[] = [];
     for (let i = period - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       days.push(d.toISOString().slice(0, 10));
     }
-    const dailyStats = await prisma.dailyStat.findMany({
-      where: { date: { in: days } },
-      orderBy: { date: 'asc' },
-    });
     const dailyMap = new Map(dailyStats.map((s) => [s.date, s]));
-    const chartData = days.map((date) => ({
+    const chart = days.map((date) => ({
       date,
       views: dailyMap.get(date)?.views ?? 0,
       visitors: dailyMap.get(date)?.visitors ?? 0,
@@ -57,138 +109,28 @@ export async function GET(req: NextRequest) {
       revenue: dailyMap.get(date)?.revenue ?? 0,
     }));
 
-    // --- Top pages today ---
-    const topPagesRaw = await prisma.pageView.groupBy({
-      by: ['path'],
-      where: { createdAt: { gte: todayStart, lte: todayEnd } },
-      _count: { path: true },
-      orderBy: { _count: { path: 'desc' } },
-      take: 10,
-    });
-    const topPages = topPagesRaw.map((p) => ({
-      path: p.path,
-      views: p._count.path,
-    }));
-
-    // --- Countries ---
-    const countriesRaw = await prisma.pageView.groupBy({
-      by: ['country'],
-      where: {
-        createdAt: { gte: todayStart, lte: todayEnd },
-        country: { not: '' },
-      },
-      _count: { country: true },
-      orderBy: { _count: { country: 'desc' } },
-      take: 10,
-    });
-    const countries = countriesRaw.map((c) => ({
-      country: c.country,
-      count: c._count.country,
-    }));
-
-    // --- Languages ---
-    const langsRaw = await prisma.pageView.groupBy({
-      by: ['lang'],
-      where: {
-        createdAt: { gte: todayStart, lte: todayEnd },
-        lang: { not: '' },
-      },
-      _count: { lang: true },
-      orderBy: { _count: { lang: 'desc' } },
-      take: 10,
-    });
-    const languages = langsRaw.map((l) => ({
-      lang: l.lang,
-      count: l._count.lang,
-    }));
-
-    // --- Average session duration ---
-    const avgDuration = await prisma.pageView.aggregate({
-      where: {
-        createdAt: { gte: todayStart, lte: todayEnd },
-        duration: { gt: 0 },
-      },
-      _avg: { duration: true },
-    });
-
-    // --- Referrers ---
-    const referrersRaw = await prisma.pageView.groupBy({
-      by: ['referrer'],
-      where: {
-        createdAt: { gte: todayStart, lte: todayEnd },
-        referrer: { not: '' },
-      },
-      _count: { referrer: true },
-      orderBy: { _count: { referrer: 'desc' } },
-      take: 10,
-    });
-    const referrers = referrersRaw.map((r) => ({
-      referrer: r.referrer,
-      count: r._count.referrer,
-    }));
-
-    // --- Unique IPs (all time) ---
-    const uniqueIPsRaw = await prisma.pageView.findMany({
-      distinct: ['ip'],
-      where: { ip: { not: '' } },
-      select: { ip: true },
-    });
-    const uniqueIPs = uniqueIPsRaw.length;
-
-    // --- Device detection (mobile vs desktop) from userAgent ---
-    const userAgentsRaw = await prisma.pageView.findMany({
-      where: {
-        createdAt: { gte: todayStart, lte: todayEnd },
-        userAgent: { not: '' },
-      },
-      select: { userAgent: true },
-    });
-    
-    let mobileCount = 0;
-    let desktopCount = 0;
-    const mobileRegex = /mobile|android|iphone|ipad|ipod|blackberry|opera mini|iemobile/i;
-    
-    for (const row of userAgentsRaw) {
-      if (mobileRegex.test(row.userAgent)) {
-        mobileCount++;
-      } else {
-        desktopCount++;
-      }
-    }
-    
-    const devices = [
-      { device: 'desktop', count: desktopCount },
-      { device: 'mobile', count: mobileCount },
-    ].filter(d => d.count > 0);
-
-    // --- Total stats ---
-    const totalViews = await prisma.pageView.count();
-    const totalOrders = await prisma.order.count();
-    const totalRevenue = await prisma.order.aggregate({ _sum: { totalAmount: true } });
-    const totalProducts = await prisma.product.count();
-
-    return NextResponse.json({
-      realtime: { onlineNow },
+    const result = {
+      realtime: { onlineNow: recentViews.length },
       today: {
         views: todayViews,
         visitors: todayVisitors.length,
         orders: todayOrderCount,
-        avgDuration: Math.round(avgDuration._avg.duration ?? 0),
+        avgDuration: Math.round(avgDurationRaw._avg.duration ?? 0),
       },
-      chart: chartData,
-      topPages,
-      countries,
-      languages,
-      referrers,
-      devices,
+      chart,
+      countries: countriesRaw.map((c) => ({ country: c.country, count: c._count.country })),
       totals: {
         views: totalViews,
-        orders: totalOrders,
-        revenue: totalRevenue._sum.totalAmount ?? 0,
+        orders: totalOrdersRaw,
+        revenue: totalRevenueRaw._sum.totalAmount ?? 0,
         products: totalProducts,
-        uniqueIPs,
+        uniqueIPs: Number(uniqueIPsRaw[0]?.count ?? 0),
       },
-    });
+    };
+
+    cache.set(period, { data: result, at: Date.now() });
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Analytics error:', error);
     return NextResponse.json({ error: 'Failed to load analytics' }, { status: 500 });

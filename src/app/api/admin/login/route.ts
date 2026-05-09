@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import { withPrismaRetry } from '@/lib/prisma-retry';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'errani-admin-secret-key-change-me';
 
@@ -120,7 +121,11 @@ export async function POST(req: NextRequest) {
     challenges.delete(challengeId); // One-time use
 
     // Constant-time-ish lookup: always do bcrypt compare even if user not found
-    const admin = await prisma.admin.findUnique({ where: { email } });
+    const admin = await withPrismaRetry(
+      () => prisma.admin.findUnique({ where: { email } }),
+      2,
+      80
+    );
 
     // Use a dummy hash if admin not found to prevent timing attacks
     const hashToCompare = admin?.password || '$2a$10$dummyHashThatWillNeverMatchAnything00000000000';

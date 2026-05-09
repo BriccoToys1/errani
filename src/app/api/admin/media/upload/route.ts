@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 
 import { adminGuard } from '@/lib/admin-auth';
+import { upsertMediaItem } from '@/lib/admin-media-library';
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_INPUT_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -106,6 +107,23 @@ export async function POST(req: NextRequest) {
 
     const url = `${relativeDir}/${filename}`;
     const fullUrl = `${getBaseUrl(req)}${url}`;
+    const nowIso = new Date().toISOString();
+
+    await upsertMediaItem({
+      id: uuidv4(),
+      filename,
+      relativePath: url,
+      url: fullUrl,
+      size: info.size,
+      width: info.width,
+      height: info.height,
+      mimeType: OUTPUT_MIME,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      deletedAt: null,
+    }).catch((error) => {
+      console.error('Media DB sync warning:', error);
+    });
 
     return NextResponse.json({
       success: true,
