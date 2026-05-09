@@ -14,6 +14,7 @@ interface MediaItem {
 
 const ACCEPT = ".jpg,.jpeg,.png,.webp";
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_BULK = 10;
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -44,6 +45,7 @@ export default function AdminMediaPage() {
   const [items, setItems] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [dragging, setDragging] = useState(false);
   const [search, setSearch] = useState("");
   const [message, setMessage] = useState("");
@@ -53,7 +55,7 @@ export default function AdminMediaPage() {
 
   const showMessage = (text: string) => {
     setMessage(text);
-    setTimeout(() => setMessage(""), 3000);
+    setTimeout(() => setMessage(""), 4000);
   };
 
   const requestJson = useCallback(async (
@@ -80,14 +82,15 @@ export default function AdminMediaPage() {
     return { ok: false, status: 0, data: { message: "Request failed" } };
   }, []);
 
-  const fetchMedia = useCallback(async () => {
+  const loadMediaList = useCallback(async (showFullLoader = false) => {
     const token = getToken();
     if (!token) {
       router.push("/admin/login");
       return;
     }
 
-    setLoading(true);
+    if (showFullLoader) setLoading(true);
+
     try {
       const result = await requestJson("/api/admin/upload/images", {
         headers: { Authorization: `Bearer ${token}` },
@@ -113,41 +116,40 @@ export default function AdminMediaPage() {
         : [];
       setItems(normalized);
     } catch {
-      showMessage("Не удалось загрузить медиатеку");
+      if (showFullLoader) showMessage("Не удалось загрузить медиатеку");
     } finally {
-      setLoading(false);
+      if (showFullLoader) setLoading(false);
     }
   }, [getToken, requestJson, router]);
 
   useEffect(() => {
-    fetchMedia();
-  }, [fetchMedia]);
+    loadMediaList(true);
+  }, [loadMediaList]);
 
-  const uploadOne = async (file: File) => {
+  const uploadOne = async (file: File): Promise<string | null> => {
     if (!isAllowed(file)) {
-      showMessage("Допустимы только JPG, JPEG, PNG, WEBP");
-      return;
+      showMessage(`Файл «${file.name}» пропущен — допустимы только JPG, PNG, WEBP`);
+      return null;
     }
-
     if (file.size > MAX_SIZE_BYTES) {
-      showMessage("Размер файла больше 10 MB");
-      return;
+      showMessage(`Файл «${file.name}» слишком большой (макс. 10 MB)`);
+      return null;
     }
 
     const token = getToken();
     if (!token) {
       router.push("/admin/login");
-      return;
+      return null;
     }
 
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
+    const formData = new FormData();
+    formData.append("image", file);
 
-      let successData: { url?: string } | null = null;
-      let lastMessage = "Ошибка загрузки";
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
+    let successUrl: string | null = null;
+    let lastMessage = "Ошибка загрузки";
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
         const response = await fetch("/api/admin/media/upload", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
@@ -155,36 +157,76 @@ export default function AdminMediaPage() {
         });
         const data = await response.json().catch(() => ({}));
         if (response.ok && data?.success && data?.url) {
-          successData = data;
+          successUrl = String(data.url);
           break;
         }
         lastMessage = data?.message || lastMessage;
         if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 3) {
-          throw new Error(lastMessage);
+          break;
         }
         await new Promise((resolve) => setTimeout(resolve, 180 * attempt));
+      } catch {
+        if (attempt === 3) break;
+        await new Promise((resolve) => setTimeout(resolve, 180 * attempt));
       }
-      if (!successData?.url) throw new Error(lastMessage);
+    }
 
-      setLastUploaded(String(successData.url));
-      showMessage("Изображение загружено");
-      await fetchMedia();
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Ошибка загрузки";
+    if (!successUrl) {
+      showMessage(`Ошибка загрузки «${file.name}»: ${lastMessage}`);
+      return null;
+    }
+
+    return successUrl;
+  };
+
+  const uploadFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+
+    const limited = files.slice(0, MAX_BULK);
+    if (files.length > MAX_BULK) {
+      showMessage(`Максимум ${MAX_BULK} файлов за раз. Загружаются первые ${MAX_BULK}.`);
+    }
+
+    setUploading(true);
+    setUploadProgress({ current: 0, total: limited.length });
+
+    let lastUrl: string | null = null;
+    let successCount = 0;
+
+    for (let i = 0; i < limited.length; i++) {
+      setUploadProgress({ current: i + 1, total: limited.length });
+      const url = await uploadOne(limited[i]);
+      if (url) {
+        lastUrl = url;
+        successCount++;
+      }
+    }
+
+    setUploadProgress({ current: 0, total: 0 });
+    setUploading(false);
+
+    if (lastUrl) setLastUploaded(lastUrl);
+
+    if (successCount > 0) {
+      const msg = limited.length === 1
+        ? "Изображение загружено"
+        : `Загружено ${successCount} из ${limited.length} изображений`;
       showMessage(msg);
-    } finally {
-      setUploading(false);
+      await loadMediaList(false);
     }
   };
 
   const onDrop = async (event: React.DragEvent) => {
     event.preventDefault();
     setDragging(false);
-
     const files = Array.from(event.dataTransfer.files);
-    for (const file of files) {
-      await uploadOne(file);
-    }
+    await uploadFiles(files);
+  };
+
+  const onFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    await uploadFiles(files);
   };
 
   const filtered = useMemo(() => {
@@ -216,12 +258,18 @@ export default function AdminMediaPage() {
       }
 
       showMessage("Изображение удалено");
-      await fetchMedia();
+      await loadMediaList(false);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Не удалось удалить файл";
       showMessage(msg);
     }
-  }, [fetchMedia, getToken, requestJson]);
+  }, [loadMediaList, getToken, requestJson]);
+
+  const uploadLabel = uploading
+    ? uploadProgress.total > 1
+      ? `Загрузка ${uploadProgress.current} / ${uploadProgress.total}...`
+      : "Загрузка..."
+    : `Загрузить фото (до ${MAX_BULK} шт.)`;
 
   if (loading) {
     return <div className="cms-loading"><div className="cms-spinner" /> Загрузка медиатеки...</div>;
@@ -236,7 +284,7 @@ export default function AdminMediaPage() {
           <div className="cms-header-actions">
             <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>{items.length} файлов</span>
             <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-              {uploading ? "Загрузка..." : "Загрузить фото"}
+              {uploadLabel}
             </button>
           </div>
         </div>
@@ -247,23 +295,37 @@ export default function AdminMediaPage() {
             onDrop={onDrop}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
-            onClick={() => fileInputRef.current?.click()}
-            style={{ padding: "22px", marginBottom: "12px" }}
+            onClick={() => !uploading && fileInputRef.current?.click()}
+            style={{ padding: "22px", marginBottom: "12px", cursor: uploading ? "default" : "pointer" }}
           >
-            <div style={{ fontSize: "14px", color: "var(--cms-text)" }}>Перетащите фото сюда или нажмите для выбора</div>
-            <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "6px" }}>JPG, JPEG, PNG, WEBP · до 10 MB · авто-конвертация в WEBP</div>
+            {uploading ? (
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "14px", color: "#9b87f5", marginBottom: "4px" }}>
+                  {uploadProgress.total > 1
+                    ? `Загрузка ${uploadProgress.current} из ${uploadProgress.total}...`
+                    : "Загрузка..."}
+                </div>
+                {uploadProgress.total > 1 && (
+                  <div style={{ width: "200px", height: "4px", background: "#2a2a3e", borderRadius: "2px", margin: "0 auto" }}>
+                    <div style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%`, height: "100%", background: "#9b87f5", borderRadius: "2px", transition: "width 0.3s" }} />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: "14px", color: "var(--cms-text)" }}>Перетащите фото сюда или нажмите для выбора</div>
+                <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "6px" }}>
+                  JPG, JPEG, PNG, WEBP · до 10 MB · авто-конвертация в WEBP · до {MAX_BULK} файлов за раз
+                </div>
+              </>
+            )}
             <input
               ref={fileInputRef}
               type="file"
               accept={ACCEPT}
               multiple
               style={{ display: "none" }}
-              onChange={async (e) => {
-                const files = Array.from(e.target.files || []);
-                for (const file of files) {
-                  await uploadOne(file);
-                }
-              }}
+              onChange={onFileInputChange}
             />
           </div>
 

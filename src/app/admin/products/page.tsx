@@ -276,9 +276,12 @@ function MultiImageUploader({
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [lastUploadedUrl, setLastUploadedUrl] = useState("");
   const [statusText, setStatusText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const pendingReplaceIndex = useRef<number | null>(null);
 
   const images = parseImageList(value);
 
@@ -293,22 +296,16 @@ function MultiImageUploader({
       alert(`Максимум ${MAX_IMAGES} фотографий`);
       return;
     }
-
-    if (!images.includes(cleanUrl)) {
-      setImages([...images, cleanUrl]);
-    }
-
+    const next = images.includes(cleanUrl) ? images : [...images, cleanUrl];
+    setImages(next);
     if (!mainImage) {
-      onMainImageChange(cleanUrl);
+      onMainImageChange(next[0] || cleanUrl);
     }
   };
 
   const uploadFile = async (file: File) => {
     if (images.length >= MAX_IMAGES) { alert(`Максимум ${MAX_IMAGES} фотографий`); return; }
-    if (!token) {
-      alert("Сессия истекла. Войдите заново.");
-      return;
-    }
+    if (!token) { alert("Сессия истекла. Войдите заново."); return; }
 
     setUploading(true);
     setStatusText("");
@@ -326,11 +323,32 @@ function MultiImageUploader({
     }
   };
 
+  const replaceImage = async (index: number, file: File) => {
+    if (!token) { alert("Сессия истекла. Войдите заново."); return; }
+
+    setUploadingIndex(index);
+    try {
+      const uploaded = await uploadProductImage(file, token);
+      const next = [...images];
+      const oldUrl = next[index];
+      next[index] = uploaded.url;
+      setImages(next);
+      if (mainImage === oldUrl) {
+        onMainImageChange(uploaded.url);
+      }
+      setStatusText("Фото заменено");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ошибка загрузки файла";
+      alert(message);
+    } finally {
+      setUploadingIndex(null);
+    }
+  };
+
   const removeImage = (index: number) => {
     const next = images.filter((_, i) => i !== index);
     const removed = images[index];
     setImages(next);
-
     if (removed && removed === mainImage) {
       onMainImageChange(next[0] || "");
     }
@@ -343,6 +361,11 @@ function MultiImageUploader({
     const next = [...images];
     [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
     setImages(next);
+
+    // Auto-sync primary to first image when first position changes
+    if (index === 0 || targetIndex === 0) {
+      onMainImageChange(next[0]);
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -352,8 +375,28 @@ function MultiImageUploader({
     files.forEach(uploadFile);
   };
 
+  const openReplace = (index: number) => {
+    pendingReplaceIndex.current = index;
+    replaceInputRef.current?.click();
+  };
+
   return (
     <div style={{ marginBottom: "12px" }}>
+      {/* Hidden input for replacing a specific image */}
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept={IMAGE_ACCEPT}
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          const idx = pendingReplaceIndex.current;
+          if (file && idx !== null) replaceImage(idx, file);
+          pendingReplaceIndex.current = null;
+        }}
+      />
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
         <span className="cms-label">{label}</span>
         <span style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{images.length} / {MAX_IMAGES}</span>
@@ -361,8 +404,32 @@ function MultiImageUploader({
       {images.length > 0 && (
         <div style={{ display: "grid", gap: "8px", marginBottom: "8px" }}>
           {images.map((img, i) => (
-            <div key={`${img}-${i}`} style={{ display: "grid", gridTemplateColumns: "60px 1fr auto", gap: "8px", alignItems: "center", border: "1px solid var(--cms-border)", borderRadius: "8px", padding: "8px" }}>
-              <img src={img} alt="" style={{ width: "60px", height: "60px", borderRadius: "6px", objectFit: "cover" }} />
+            <div key={`${img}-${i}`} style={{ display: "grid", gridTemplateColumns: "70px 1fr auto", gap: "8px", alignItems: "center", border: `1px solid ${i === 0 ? "rgba(155,135,245,0.4)" : "var(--cms-border)"}`, borderRadius: "8px", padding: "8px", background: i === 0 ? "rgba(155,135,245,0.05)" : "transparent" }}>
+              <div style={{ position: "relative", cursor: "pointer" }} onClick={() => openReplace(i)} title="Нажмите для замены фото">
+                <img
+                  src={img}
+                  alt=""
+                  style={{ width: "70px", height: "70px", borderRadius: "6px", objectFit: "cover", display: "block" }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }}
+                />
+                {uploadingIndex === i ? (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "6px" }}>
+                    <span style={{ color: "#9b87f5", fontSize: "11px" }}>...</span>
+                  </div>
+                ) : (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "6px", opacity: 0, transition: "opacity 0.15s" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "0")}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  </div>
+                )}
+                {i === 0 && (
+                  <div style={{ position: "absolute", bottom: "-2px", left: 0, right: 0, textAlign: "center", fontSize: "9px", background: "rgba(155,135,245,0.85)", color: "#fff", borderRadius: "0 0 4px 4px", padding: "1px 0" }}>
+                    ПЕРВАЯ
+                  </div>
+                )}
+              </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: "11px", color: "#ddd", wordBreak: "break-all", marginBottom: "5px" }}>{img}</div>
                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -371,22 +438,31 @@ function MultiImageUploader({
                     className={`cms-btn cms-btn-xs ${mainImage === img ? "cms-btn-primary" : ""}`}
                     onClick={() => onMainImageChange(img)}
                   >
-                    {mainImage === img ? "Главное фото" : "Сделать главным"}
+                    {mainImage === img ? "✓ Главное" : "Сделать главным"}
+                  </button>
+                  <button type="button" className="cms-btn cms-btn-xs" onClick={() => openReplace(i)} disabled={uploadingIndex === i}>
+                    {uploadingIndex === i ? "Загрузка..." : "Заменить"}
                   </button>
                   <a className="cms-btn cms-btn-xs cms-btn-ghost" href={img} target="_blank" rel="noreferrer">Открыть</a>
                 </div>
               </div>
               <div style={{ display: "grid", gap: "4px" }}>
-                <button type="button" className="cms-btn cms-btn-xs" onClick={() => moveImage(i, -1)} disabled={i === 0}>↑</button>
-                <button type="button" className="cms-btn cms-btn-xs" onClick={() => moveImage(i, 1)} disabled={i === images.length - 1}>↓</button>
-                <button type="button" className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => removeImage(i)}>Удалить</button>
+                <button type="button" className="cms-btn cms-btn-xs" onClick={() => moveImage(i, -1)} disabled={i === 0} title="Вверх">↑</button>
+                <button type="button" className="cms-btn cms-btn-xs" onClick={() => moveImage(i, 1)} disabled={i === images.length - 1} title="Вниз">↓</button>
+                <button type="button" className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => removeImage(i)}>×</button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* File upload drop zone */}
+      {images.length > 0 && (
+        <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", marginBottom: "8px", padding: "5px 8px", background: "rgba(155,135,245,0.06)", borderRadius: "6px", border: "1px solid rgba(155,135,245,0.15)" }}>
+          Первое фото в списке — это то, что отображается в каталоге и корзине. Используйте ↑↓ для сортировки.
+        </div>
+      )}
+
+      {/* Add new photos drop zone */}
       {images.length < MAX_IMAGES && (
         <div
           className={`cms-uploader-zone ${isDragging ? "dragging" : ""}`}
@@ -399,7 +475,7 @@ function MultiImageUploader({
           {uploading ? (
             <span style={{ color: "#9b87f5", fontSize: "12px" }}>Загрузка...</span>
           ) : (
-            <span style={{ color: "#888", fontSize: "12px" }}>или перетащите / выберите файл</span>
+            <span style={{ color: "#888", fontSize: "12px" }}>+ Добавить фото (перетащите или нажмите)</span>
           )}
           <input
             ref={fileInputRef}
@@ -408,7 +484,9 @@ function MultiImageUploader({
             multiple
             style={{ display: "none" }}
             onChange={(e) => {
-              Array.from(e.target.files || []).forEach(uploadFile);
+              const files = Array.from(e.target.files || []);
+              e.target.value = "";
+              files.forEach(uploadFile);
             }}
           />
         </div>
@@ -438,7 +516,7 @@ function MultiImageUploader({
               className="cms-btn cms-btn-xs cms-btn-primary"
               onClick={() => addImage(lastUploadedUrl)}
             >
-              Вставить в товар
+              Добавить в галерею
             </button>
             <a className="cms-btn cms-btn-xs cms-btn-ghost" href={lastUploadedUrl} target="_blank" rel="noreferrer">Открыть изображение</a>
           </div>
@@ -511,20 +589,24 @@ function slugify(text: string): string {
   return transliterated.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+type ColorEntry = { name: string; nameEn?: string; hex: string; stock?: number };
+
 function ColorsEditor({ value, onChange }: { value: string; onChange: (val: string) => void }) {
   const [colorNameRu, setColorNameRu] = useState("");
   const [colorNameEn, setColorNameEn] = useState("");
   const [colorHex, setColorHex] = useState("#ffffff");
+  const [colorStock, setColorStock] = useState<number | "">("");
 
-  let colors: Array<{ name: string; nameEn?: string; hex: string }> = [];
+  let colors: ColorEntry[] = [];
   try {
     const parsed = JSON.parse(value || '[]');
     if (Array.isArray(parsed)) {
       colors = parsed
         .map((item) => ({
           name: String(item?.name || '').trim(),
-          nameEn: String(item?.nameEn || '').trim(),
+          nameEn: String(item?.nameEn || '').trim() || undefined,
           hex: String(item?.hex || '#ffffff').trim(),
+          stock: typeof item?.stock === 'number' ? item.stock : undefined,
         }))
         .filter((item) => item.name && item.hex);
     }
@@ -532,36 +614,66 @@ function ColorsEditor({ value, onChange }: { value: string; onChange: (val: stri
     colors = [];
   }
 
-  const update = (newColors: typeof colors) => onChange(JSON.stringify(newColors));
+  const update = (newColors: ColorEntry[]) => onChange(JSON.stringify(newColors));
+
+  const updateColorStock = (index: number, stock: number | "") => {
+    const newColors = [...colors];
+    newColors[index] = {
+      ...newColors[index],
+      stock: stock === "" ? undefined : Math.max(0, stock),
+    };
+    update(newColors);
+  };
+
+  const hasColorStock = colors.some(c => typeof c.stock === 'number');
 
   return (
     <div style={{ marginTop: '16px' }}>
-      <label className="cms-label" style={{ display: 'block', marginBottom: '8px' }}>Цвета товара</label>
+      <label className="cms-label" style={{ display: 'block', marginBottom: '8px' }}>
+        Цвета товара
+        {hasColorStock && (
+          <span style={{ marginLeft: '8px', fontSize: '11px', color: 'var(--cms-text-muted)', fontWeight: 400 }}>
+            — остатки по цветам
+          </span>
+        )}
+      </label>
       {colors.length > 0 && (
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+        <div style={{ marginBottom: '10px', border: '1px solid var(--cms-border)', borderRadius: '8px', overflow: 'hidden' }}>
           {colors.map((c, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#2a2a2a', borderRadius: '6px', padding: '4px 8px' }}>
-              <span style={{ width: '16px', height: '16px', borderRadius: '50%', background: c.hex, display: 'inline-block', border: '1px solid rgba(255,255,255,0.2)' }} />
-              <span style={{ fontSize: '12px', color: '#ddd' }}>
-                {c.name}
-                {c.nameEn ? ` / ${c.nameEn}` : ''}
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '24px 1fr 1fr 110px 28px', gap: '6px', alignItems: 'center', padding: '7px 10px', borderBottom: i < colors.length - 1 ? '1px solid var(--cms-border)' : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+              <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: c.hex, display: 'inline-block', border: '1px solid rgba(255,255,255,0.2)', flexShrink: 0 }} />
+              <span style={{ fontSize: '12px', color: '#ddd', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {c.name}{c.nameEn ? ` / ${c.nameEn}` : ''}
               </span>
-              <button type="button" onClick={() => update(colors.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: 0 }}>×</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--cms-text-muted)', whiteSpace: 'nowrap' }}>Остаток:</span>
+                <input
+                  type="number"
+                  min="0"
+                  className="cms-input"
+                  value={c.stock ?? ""}
+                  placeholder="—"
+                  onChange={(e) => updateColorStock(i, e.target.value === "" ? "" : Number(e.target.value))}
+                  style={{ width: '60px', fontSize: '12px', padding: '2px 6px', height: '28px' }}
+                />
+              </div>
+              <div />
+              <button type="button" onClick={() => update(colors.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: 0 }}>×</button>
             </div>
           ))}
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px auto', gap: '6px', alignItems: 'center' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 70px 80px auto', gap: '6px', alignItems: 'center' }}>
         <input
           className="cms-input"
-          placeholder="Название цвета (RU)"
+          placeholder="Название (RU)"
           value={colorNameRu}
           onChange={(e) => setColorNameRu(e.target.value)}
           style={{ fontSize: '12px' }}
         />
         <input
           className="cms-input"
-          placeholder="Color name (EN)"
+          placeholder="Name (EN)"
           value={colorNameEn}
           onChange={(e) => setColorNameEn(e.target.value)}
           style={{ fontSize: '12px' }}
@@ -572,6 +684,15 @@ function ColorsEditor({ value, onChange }: { value: string; onChange: (val: stri
           onChange={(e) => setColorHex(e.target.value)}
           style={{ width: '100%', height: '36px', borderRadius: '6px', border: '1px solid #444', cursor: 'pointer', background: 'none', padding: '2px' }}
         />
+        <input
+          type="number"
+          min="0"
+          className="cms-input"
+          placeholder="Остаток"
+          value={colorStock}
+          onChange={(e) => setColorStock(e.target.value === "" ? "" : Number(e.target.value))}
+          style={{ fontSize: '12px' }}
+        />
         <button
           type="button"
           className="cms-btn cms-btn-sm"
@@ -579,9 +700,15 @@ function ColorsEditor({ value, onChange }: { value: string; onChange: (val: stri
             const name = colorNameRu.trim();
             const nameEn = colorNameEn.trim();
             if (!name) return;
-            update([...colors, { name, nameEn: nameEn || undefined, hex: colorHex }]);
+            update([...colors, {
+              name,
+              nameEn: nameEn || undefined,
+              hex: colorHex,
+              stock: colorStock === "" ? undefined : Number(colorStock),
+            }]);
             setColorNameRu('');
             setColorNameEn('');
+            setColorStock("");
           }}
         >
           + Добавить
@@ -657,6 +784,8 @@ export default function AdminProductsPage() {
   const [mediaItems, setMediaItems] = useState<MediaLibraryItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaSearch, setMediaSearch] = useState("");
+  const [editingStockId, setEditingStockId] = useState<string | null>(null);
+  const [editingStockValue, setEditingStockValue] = useState<number>(0);
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
   const notify = useCallback((msg: string) => {
@@ -792,6 +921,15 @@ export default function AdminProductsPage() {
     if (!token) { router.push("/admin/login"); return; }
     fetchProducts();
   }, [fetchProducts, getToken, router]);
+
+  const saveStockInline = async (product: Product, newStock: number) => {
+    const ok = await updateProductById(product, { stock: newStock });
+    if (ok) {
+      setProducts((prev) => prev.map((p) => p.id === product.id ? { ...p, stock: newStock } : p));
+      notify("Остаток обновлён");
+    }
+    setEditingStockId(null);
+  };
 
   const openProduct = (product: Product) => {
     setSelected(product);
@@ -1071,13 +1209,49 @@ export default function AdminProductsPage() {
                   <tr key={p.id} className={checkedIds.has(p.id) ? "cms-row-selected" : ""}>
                     <td><input type="checkbox" checked={checkedIds.has(p.id)} onChange={() => toggleCheck(p.id)} /></td>
                     <td>
-                      {p.image && <img src={p.image} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} />}
+                      {p.image && (
+                        <img
+                          src={p.image}
+                          alt=""
+                          style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", cursor: "pointer" }}
+                          title="Нажмите для редактирования"
+                          onClick={() => openProduct(p)}
+                        />
+                      )}
                     </td>
                     <td className="cms-td-bold">{p.nameRu || p.name}</td>
                     <td className="cms-td-mono" style={{ fontSize: "11px" }}>{p.slug}</td>
                     <td>{formatPrice(p.price)}</td>
                     <td>{p.discount > 0 ? <span className="cms-badge cms-badge-green">-{p.discount}%</span> : "\u2014"}</td>
-                    <td>{p.stock}</td>
+                    <td>
+                      {editingStockId === p.id ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <input
+                            type="number"
+                            min="0"
+                            className="cms-input"
+                            style={{ width: "56px", padding: "2px 4px", fontSize: "12px" }}
+                            value={editingStockValue}
+                            onChange={(e) => setEditingStockValue(Number(e.target.value))}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveStockInline(p, editingStockValue);
+                              if (e.key === "Escape") setEditingStockId(null);
+                            }}
+                            autoFocus
+                          />
+                          <button className="cms-btn cms-btn-xs cms-btn-primary" onClick={() => saveStockInline(p, editingStockValue)}>✓</button>
+                          <button className="cms-btn cms-btn-xs" onClick={() => setEditingStockId(null)}>✕</button>
+                        </div>
+                      ) : (
+                        <span
+                          style={{ cursor: "pointer", borderBottom: "1px dashed rgba(255,255,255,0.2)", paddingBottom: "1px" }}
+                          title="Нажмите для редактирования"
+                          onClick={() => { setEditingStockId(p.id); setEditingStockValue(p.stock); }}
+                        >
+                          {p.stock}
+                        </span>
+                      )}
+                    </td>
                     <td>
                       <button
                         className={`cms-badge ${p.isActive ? "cms-badge-green" : "cms-badge-red"}`}

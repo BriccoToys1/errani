@@ -9,7 +9,7 @@ export const viewport: Viewport = {
   themeColor: '#080808',
 };
 
-export const metadata: Metadata = {
+const DEFAULT_METADATA: Metadata = {
   title: {
     default: 'errani — Авторская колода Таро',
     template: '%s — errani',
@@ -20,9 +20,7 @@ export const metadata: Metadata = {
   creator: 'Ekaterina Errani',
   publisher: 'errani',
   metadataBase: new URL('https://errani.ru'),
-  alternates: {
-    canonical: '/',
-  },
+  alternates: { canonical: '/' },
   openGraph: {
     type: 'website',
     locale: 'ru_RU',
@@ -30,14 +28,7 @@ export const metadata: Metadata = {
     siteName: 'errani',
     title: 'errani — Авторская колода Таро «Tenderly Vibe»',
     description: 'Авторская колода Таро «Tenderly Vibe» от Ekaterina Errani. 78 уникальных карт с оригинальными иллюстрациями и матовой ламинацией.',
-    images: [
-      {
-        url: '/media/photo-11.jpeg',
-        width: 1200,
-        height: 630,
-        alt: 'Tenderly Vibe — Авторская колода Таро',
-      },
-    ],
+    images: [{ url: '/media/photo-11.jpeg', width: 1200, height: 630, alt: 'Tenderly Vibe — Авторская колода Таро' }],
   },
   twitter: {
     card: 'summary_large_image',
@@ -48,42 +39,53 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
+    googleBot: { index: true, follow: true, 'max-video-preview': -1, 'max-image-preview': 'large', 'max-snippet': -1 },
   },
   icons: {
     icon: '/logos/my_logo.png',
     apple: '/logos/my_logo.png',
   },
-  verification: {
-    other: {},
-  },
+  verification: { other: {} },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const prisma = (await import('@/lib/db')).default;
+    const setting = await prisma.siteSettings.findUnique({ where: { key: 'seo_global' } });
+    if (setting?.value) {
+      const seo = JSON.parse(setting.value) as {
+        title?: string;
+        description?: string;
+        keywords?: string[];
+        ogImage?: string;
+        ogTitle?: string;
+        ogDescription?: string;
+      };
+      return {
+        ...DEFAULT_METADATA,
+        ...(seo.title ? { title: { default: seo.title, template: `%s — errani` } } : {}),
+        ...(seo.description ? { description: seo.description } : {}),
+        ...(seo.keywords ? { keywords: seo.keywords } : {}),
+        openGraph: {
+          ...DEFAULT_METADATA.openGraph,
+          ...(seo.ogTitle ? { title: seo.ogTitle } : {}),
+          ...(seo.ogDescription ? { description: seo.ogDescription } : {}),
+          ...(seo.ogImage ? { images: [{ url: seo.ogImage, width: 1200, height: 630 }] } : {}),
+        },
+      };
+    }
+  } catch {
+    // fall through to defaults
+  }
+  return DEFAULT_METADATA;
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ru">
       <head>
-        <link
-          rel="preload"
-          href="/fonts/Montserrat.woff2"
-          as="font"
-          type="font/woff2"
-          crossOrigin="anonymous"
-        />
-        <link
-          rel="stylesheet"
-          href="https://cdn-uicons.flaticon.com/2.6.0/uicons-regular-rounded/css/uicons-regular-rounded.css"
-        />
+        <link rel="preload" href="/fonts/Montserrat.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="stylesheet" href="https://cdn-uicons.flaticon.com/2.6.0/uicons-regular-rounded/css/uicons-regular-rounded.css" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -93,10 +95,7 @@ export default function RootLayout({
               name: 'errani',
               url: 'https://errani.ru',
               description: 'Авторская колода Таро «Tenderly Vibe» от Ekaterina Errani.',
-              author: {
-                '@type': 'Person',
-                name: 'Ekaterina Errani',
-              },
+              author: { '@type': 'Person', name: 'Ekaterina Errani' },
             }),
           }}
         />

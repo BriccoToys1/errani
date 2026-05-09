@@ -7,16 +7,10 @@ function buildDatabaseUrl(): string | undefined {
   if (!url) return undefined;
   try {
     const parsed = new URL(url);
-    // Limit pool size and set timeouts to prevent stale/dropped connections
-    if (!parsed.searchParams.has('connection_limit')) {
-      parsed.searchParams.set('connection_limit', '5');
-    }
-    if (!parsed.searchParams.has('pool_timeout')) {
-      parsed.searchParams.set('pool_timeout', '20');
-    }
-    if (!parsed.searchParams.has('connect_timeout')) {
-      parsed.searchParams.set('connect_timeout', '10');
-    }
+    // Always enforce safe pool settings regardless of what's in DATABASE_URL
+    parsed.searchParams.set('connection_limit', '5');
+    parsed.searchParams.set('pool_timeout', '20');
+    parsed.searchParams.set('connect_timeout', '10');
     return parsed.toString();
   } catch {
     return url;

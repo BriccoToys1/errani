@@ -1,4 +1,11 @@
 import './admin.css';
+import { Outfit } from 'next/font/google';
+
+const outfit = Outfit({
+  subsets: ['latin', 'latin-ext'],
+  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
+});
 
 export default function AdminLayout({
   children,
@@ -6,7 +13,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div className={outfit.className} style={{ minHeight: '100vh' }}>
       {children}
     </div>
   );

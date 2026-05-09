@@ -135,6 +135,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Per-color stock validation
+    for (const item of normalizedItems) {
+      if (!item.selectedColor) continue;
+      const product = products.find(p => p.id === item.productId)!;
+      try {
+        const colors: Array<{ name: string; stock?: number }> = JSON.parse(product.colors || '[]');
+        const colorEntry = colors.find(c => c.name === item.selectedColor);
+        if (colorEntry && typeof colorEntry.stock === 'number') {
+          if (item.quantity > colorEntry.stock) {
+            return NextResponse.json(
+              { error: `Недостаточно остатков цвета «${item.selectedColor}» для товара «${product.nameRu || product.name}» (доступно: ${colorEntry.stock})` },
+              { status: 409 }
+            );
+          }
+        }
+      } catch {
+        // ignore JSON parse errors
+      }
+    }
+
     let totalAmount = 0;
     const orderItems = normalizedItems.map(item => {
       const product = products.find(p => p.id === item.productId)!;
@@ -143,6 +163,7 @@ export async function POST(req: NextRequest) {
         productId: item.productId,
         quantity: item.quantity,
         price: product.price,
+        selectedColor: item.selectedColor || '',
       };
     });
     // Add shipping cost if provided (Russia only)

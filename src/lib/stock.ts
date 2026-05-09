@@ -2,6 +2,17 @@ import prisma from '@/lib/db';
 
 const PAID_STATUS = 'paid';
 
+type ColorEntry = { name: string; nameEn?: string; hex: string; stock?: number };
+
+function parseColors(raw: string): ColorEntry[] {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function markOrderPaidAndDecrementStock(orderId: string, paymentId?: string) {
   return prisma.$transaction(async (tx) => {
     const markedAsPaid = await tx.order.updateMany({
@@ -27,6 +38,8 @@ export async function markOrderPaidAndDecrementStock(orderId: string, paymentId?
 
     for (const item of order.items) {
       if (item.quantity <= 0) continue;
+
+      // Decrement global stock
       const updated = await tx.product.updateMany({
         where: {
           id: item.productId,
@@ -41,6 +54,27 @@ export async function markOrderPaidAndDecrementStock(orderId: string, paymentId?
 
       if (updated.count === 0) {
         throw new Error(`Insufficient stock for product ${item.productId}`);
+      }
+
+      // Decrement per-color stock if selectedColor is specified
+      const selectedColor = (item as typeof item & { selectedColor?: string }).selectedColor || '';
+      if (selectedColor) {
+        const productData = await tx.product.findUnique({
+          where: { id: item.productId },
+          select: { colors: true },
+        });
+
+        if (productData?.colors) {
+          const colors = parseColors(productData.colors);
+          const colorIdx = colors.findIndex((c) => c.name === selectedColor);
+          if (colorIdx >= 0 && typeof colors[colorIdx].stock === 'number') {
+            colors[colorIdx].stock = Math.max(0, (colors[colorIdx].stock as number) - item.quantity);
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { colors: JSON.stringify(colors) },
+            });
+          }
+        }
       }
     }
 

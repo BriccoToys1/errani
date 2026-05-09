@@ -11,6 +11,15 @@ interface SeoPage {
   indexed: boolean;
 }
 
+interface GlobalSeo {
+  title: string;
+  description: string;
+  keywords: string;
+  ogTitle: string;
+  ogDescription: string;
+  ogImage: string;
+}
+
 const DEFAULT_PAGES: SeoPage[] = [
   { path: "/", title: "errani — Колоды Таро", description: "Авторские колоды Таро от Екатерины Эррани. Оформляйте предзаказ.", indexed: true },
   { path: "/catalog", title: "Каталог — errani", description: "Коллекция колод Таро.", indexed: true },
@@ -38,10 +47,20 @@ function RobotsEditor({ value, onChange }: { value: string; onChange: (v: string
   );
 }
 
+const DEFAULT_GLOBAL: GlobalSeo = {
+  title: "errani — Авторские Колоды Таро",
+  description: "Авторские колоды Таро от Екатерины Эррани. Оформляйте предзаказ.",
+  keywords: "таро, колода таро, авторская колода, errani",
+  ogTitle: "errani — Авторские Колоды Таро",
+  ogDescription: "Авторские колоды Таро от Екатерины Эррани. Оформляйте предзаказ.",
+  ogImage: "https://errani.ru/og-image.jpg",
+};
+
 export default function AdminSeoPage() {
   const router = useRouter();
   const [pages, setPages] = useState<SeoPage[]>(DEFAULT_PAGES);
   const [robots, setRobots] = useState("User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api\nDisallow: /cart\nDisallow: /account\n\nSitemap: https://errani.ru/sitemap.xml");
+  const [globalSeo, setGlobalSeo] = useState<GlobalSeo>(DEFAULT_GLOBAL);
   const [notification, setNotification] = useState("");
   const [editPage, setEditPage] = useState<SeoPage | null>(null);
   const [saving, setSaving] = useState(false);
@@ -77,6 +96,15 @@ export default function AdminSeoPage() {
       .then(r => r.json())
       .then(data => { if (data.value) setRobots(data.value); else { const s = localStorage.getItem("cms_seo_robots"); if (s) setRobots(s); } })
       .catch(() => { const s = localStorage.getItem("cms_seo_robots"); if (s) setRobots(s); });
+
+    fetch("/api/admin/settings?key=seo_global", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => {
+        if (data.value) {
+          try { setGlobalSeo({ ...DEFAULT_GLOBAL, ...JSON.parse(data.value) }); } catch {}
+        }
+      })
+      .catch(() => {});
   }, [getToken, router]);
 
   const handleSavePage = () => {
@@ -100,6 +128,11 @@ export default function AdminSeoPage() {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ key: "seo_robots", value: robots }),
+        }),
+        fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ key: "seo_global", value: JSON.stringify(globalSeo) }),
         }),
       ]);
       localStorage.setItem("cms_seo_pages", JSON.stringify(pages));
@@ -132,6 +165,51 @@ export default function AdminSeoPage() {
         </div>
 
         <div className="cms-content">
+          {/* Global SEO */}
+          <div className="cms-table-wrap" style={{ padding: "20px", marginBottom: "20px" }}>
+            <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              Глобальные настройки сайта
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <label className="cms-label" style={{ display: "block" }}>
+                Заголовок сайта (title)
+                <input className="cms-input" value={globalSeo.title} onChange={e => setGlobalSeo(g => ({ ...g, title: e.target.value }))} placeholder="errani — Авторские Колоды Таро" />
+                <span style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{globalSeo.title.length}/60</span>
+              </label>
+              <label className="cms-label" style={{ display: "block" }}>
+                OG заголовок
+                <input className="cms-input" value={globalSeo.ogTitle} onChange={e => setGlobalSeo(g => ({ ...g, ogTitle: e.target.value }))} placeholder="errani — Авторские Колоды Таро" />
+                <span style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{globalSeo.ogTitle.length}/60</span>
+              </label>
+              <label className="cms-label" style={{ display: "block" }}>
+                Мета-описание
+                <textarea className="cms-textarea" rows={2} value={globalSeo.description} onChange={e => setGlobalSeo(g => ({ ...g, description: e.target.value }))} style={{ width: "100%" }} />
+                <span style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{globalSeo.description.length}/160</span>
+              </label>
+              <label className="cms-label" style={{ display: "block" }}>
+                OG описание
+                <textarea className="cms-textarea" rows={2} value={globalSeo.ogDescription} onChange={e => setGlobalSeo(g => ({ ...g, ogDescription: e.target.value }))} style={{ width: "100%" }} />
+                <span style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{globalSeo.ogDescription.length}/160</span>
+              </label>
+              <label className="cms-label" style={{ display: "block" }}>
+                Ключевые слова
+                <input className="cms-input" value={globalSeo.keywords} onChange={e => setGlobalSeo(g => ({ ...g, keywords: e.target.value }))} placeholder="таро, колода, errani" />
+              </label>
+              <label className="cms-label" style={{ display: "block" }}>
+                OG Image URL
+                <input className="cms-input" value={globalSeo.ogImage} onChange={e => setGlobalSeo(g => ({ ...g, ogImage: e.target.value }))} placeholder="https://errani.ru/og-image.jpg" />
+              </label>
+            </div>
+            {globalSeo.ogImage && (
+              <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "10px" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={globalSeo.ogImage} alt="OG preview" style={{ width: "120px", height: "63px", objectFit: "cover", borderRadius: "6px", border: "1px solid var(--cms-border)" }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                <span style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>Предпросмотр OG Image (1200×630)</span>
+              </div>
+            )}
+          </div>
+
           {/* Pages SEO Table */}
           <div className="cms-table-wrap">
             <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--cms-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
