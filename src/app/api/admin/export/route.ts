@@ -1,20 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
 import prisma from '@/lib/db';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'errani-admin-secret-key-change-me';
+import { adminGuard } from '@/lib/admin-auth';
 
 // Export orders to CSV/XLS format
 export async function GET(req: NextRequest) {
-  // Support both Authorization header and ?token= query param (needed for <a href> downloads)
-  const { searchParams } = new URL(req.url);
-  const headerToken = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || '';
-  const queryToken = searchParams.get('token') || '';
-  const token = headerToken || queryToken;
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  try { jwt.verify(token, JWT_SECRET); } catch { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
+  const denied = adminGuard(req);
+  if (denied) return denied;
 
   try {
+    const { searchParams } = new URL(req.url);
     const format = searchParams.get('format') || 'csv';
     const type = searchParams.get('type') || 'orders';
 

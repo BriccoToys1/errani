@@ -4,8 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { withPrismaRetry } from '@/lib/prisma-retry';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'errani-admin-secret-key-change-me';
+import { getJwtSecret } from '@/lib/jwt-secret';
 
 // ── Rate limiting: in-memory store ──────────────────────────────────────
 const loginAttempts = new Map<string, { count: number; firstAt: number; blockedUntil: number }>();
@@ -84,6 +83,11 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const jwtSecret = getJwtSecret();
+    if (!jwtSecret) {
+      return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
+    }
+
     const ip = getClientIP(req);
     
     // Check rate limit
@@ -142,7 +146,7 @@ export async function POST(req: NextRequest) {
 
     const token = jwt.sign(
       { adminId: admin.id, email: admin.email, name: admin.name },
-      JWT_SECRET,
+      jwtSecret,
       { expiresIn: '7d' }
     );
 

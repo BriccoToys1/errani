@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { Resend } from 'resend';
 
 // Resend sends inbound emails as POST to this webhook.
 // Configure in Resend dashboard → Webhooks → Add endpoint:
@@ -16,20 +17,34 @@ export async function GET() {
 // POST: receive inbound email from Resend
 export async function POST(req: NextRequest) {
   try {
-    const contentType = req.headers.get('content-type') || '';
-    let payload: Record<string, unknown>;
+    const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      return NextResponse.json({ error: 'Webhook misconfiguration' }, { status: 500 });
+    }
 
-    if (contentType.includes('application/json')) {
-      payload = await req.json();
-    } else {
-      // Try to parse as JSON anyway
-      const text = await req.text();
-      try {
-        payload = JSON.parse(text);
-      } catch {
-        console.error('Email webhook: invalid payload format', text.substring(0, 500));
-        return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-      }
+    const rawPayload = await req.text();
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const signatureHeaders = {
+      id: req.headers.get('svix-id') || req.headers.get('x-svix-id') || '',
+      timestamp: req.headers.get('svix-timestamp') || req.headers.get('x-svix-timestamp') || '',
+      signature: req.headers.get('svix-signature') || req.headers.get('x-svix-signature') || '',
+    };
+
+    if (!signatureHeaders.id || !signatureHeaders.timestamp || !signatureHeaders.signature) {
+      return NextResponse.json({ error: 'Missing webhook signature' }, { status: 400 });
+    }
+
+    let payload: Record<string, unknown>;
+    try {
+      const verifiedPayload = resend.webhooks.verify({
+        payload: rawPayload,
+        headers: signatureHeaders,
+        webhookSecret,
+      });
+      payload = verifiedPayload as unknown as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
     }
 
     console.log('Email webhook received:', JSON.stringify(payload).substring(0, 1000));

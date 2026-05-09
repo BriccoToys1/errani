@@ -1,8 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { adminGuard } from '@/lib/admin-auth';
 
 // POST: mark all orders as viewed (update timestamp)
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     await prisma.siteSettings.upsert({
       where: { key: 'ordersViewedAt' },

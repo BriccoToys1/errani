@@ -94,6 +94,14 @@ export default function AdminOrdersPage() {
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
+  const ensureAuthorized = useCallback((token: string | null) => {
+    if (!token) {
+      router.push("/admin/login");
+      return false;
+    }
+    return true;
+  }, [router]);
+
   const fetchOrders = useCallback(async () => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
@@ -157,6 +165,68 @@ export default function AdminOrdersPage() {
   const notify = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(""), 3000);
+  };
+
+  const downloadOrdersExport = async (format: "csv" | "xls") => {
+    const token = getToken();
+    if (!ensureAuthorized(token)) return;
+
+    try {
+      const res = await fetch(`/api/admin/export?type=orders&format=${format}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem("admin_token");
+        router.push("/admin/login");
+        return;
+      }
+      if (!res.ok) {
+        notify("Не удалось скачать экспорт");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `orders_${new Date().toISOString().slice(0, 10)}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      notify("Ошибка сети");
+    }
+  };
+
+  const openReceipt = async (orderId: string) => {
+    const token = getToken();
+    if (!ensureAuthorized(token)) return;
+
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/receipt`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem("admin_token");
+        router.push("/admin/login");
+        return;
+      }
+      if (!res.ok) {
+        notify("Не удалось открыть чек");
+        return;
+      }
+
+      const html = await res.text();
+      const blobUrl = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+      const opened = window.open(blobUrl, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        notify("Браузер заблокировал открытие вкладки");
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch {
+      notify("Ошибка сети");
+    }
   };
 
   const deleteUnpaid = async () => {
@@ -283,12 +353,12 @@ export default function AdminOrdersPage() {
             <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={deleteUnpaid} disabled={deleting}>
               {deleting ? "Удаление..." : "Удалить неоплаченные"}
             </button>
-            <a href={`/api/admin/export?type=orders&format=csv&token=${getToken()}`} className="cms-btn cms-btn-sm" download>
+            <button className="cms-btn cms-btn-sm" onClick={() => downloadOrdersExport("csv")}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
-            </a>
-            <a href={`/api/admin/export?type=orders&format=xls&token=${getToken()}`} className="cms-btn cms-btn-sm" download>
+            </button>
+            <button className="cms-btn cms-btn-sm" onClick={() => downloadOrdersExport("xls")}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>XLS
-            </a>
+            </button>
             <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchOrders(); }} title="Обновить">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
             </button>
@@ -367,9 +437,9 @@ export default function AdminOrdersPage() {
                         <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openOrder(order)} title="Изменить">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                         </button>
-                        <a href={`/api/admin/orders/${order.id}/receipt?token=${getToken()}`} target="_blank" rel="noopener noreferrer" className="cms-btn cms-btn-xs cms-btn-ghost" title="Чек">
+                        <button className="cms-btn cms-btn-xs cms-btn-ghost" title="Чек" onClick={() => openReceipt(order.id)}>
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                        </a>
+                        </button>
                         {(order.isManual || order.status === "pending" || order.status === "cancelled" || order.status === "unpaid") && (
                           <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => deleteOrder(order)} title="Удалить">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
@@ -449,7 +519,7 @@ export default function AdminOrdersPage() {
             </div>
             <div className="cms-modal-actions">
               <button className="cms-btn cms-btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Сохранение..." : "Сохранить"}</button>
-              <a href={`/api/admin/orders/${selected.id}/receipt?token=${getToken()}`} target="_blank" rel="noopener noreferrer" className="cms-btn">📄 Чек</a>
+              <button className="cms-btn" onClick={() => openReceipt(selected.id)}>📄 Чек</button>
               <button className="cms-btn" onClick={() => setSelected(null)}>Отмена</button>
             </div>
           </div>

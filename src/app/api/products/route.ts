@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
     const descriptionRu = String(body.descriptionRu || '').trim();
     const description = String(body.description || '').trim();
     const stock = Number(body.stock ?? 0);
-    const inStock = Boolean(body.inStock ?? true) && stock > 0;
+    const inStock = Boolean(body.inStock ?? true);
     const slugInput = String(body.slug || '').trim() || nameRu || name;
     const baseSlug = normalizeSlug(slugInput) || `product-${Date.now()}`;
     const slug = await getUniqueSlug(baseSlug);

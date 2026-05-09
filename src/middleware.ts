@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'errani-admin-secret-key-change-me';
+import { getJwtSecret } from '@/lib/jwt-secret';
 
 async function verifyToken(token: string): Promise<boolean> {
   try {
-    const secret = new TextEncoder().encode(JWT_SECRET);
+    const jwtSecret = getJwtSecret();
+    if (!jwtSecret) return false;
+    const secret = new TextEncoder().encode(jwtSecret);
     await jwtVerify(token, secret);
     return true;
   } catch {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { markOrderPaidAndDecrementStock } from '@/lib/stock';
+import { adminGuard } from '@/lib/admin-auth';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -8,6 +9,9 @@ interface Params {
 
 // GET single order
 export async function GET(req: NextRequest, { params }: Params) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const order = await prisma.order.findUnique({
@@ -32,6 +36,9 @@ export async function GET(req: NextRequest, { params }: Params) {
 
 // PUT update order status (admin only)
 export async function PUT(req: NextRequest, { params }: Params) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
     const body = await req.json();
@@ -63,6 +70,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 // DELETE order (admin only)
 export async function DELETE(req: NextRequest, { params }: Params) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const { id } = await params;
 

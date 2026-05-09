@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { generateOrderNumber } from '@/lib/utils';
+import { adminGuard } from '@/lib/admin-auth';
 
 interface OrderItemInput {
   productId: string;
@@ -9,7 +10,10 @@ interface OrderItemInput {
 }
 
 // DELETE unpaid (pending) orders
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const pendingOrders = await prisma.order.findMany({
       where: { status: 'pending' },
@@ -28,7 +32,10 @@ export async function DELETE() {
 }
 
 // GET all orders (admin only)
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     // Auto-purge pending orders older than 2 hours
     const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);

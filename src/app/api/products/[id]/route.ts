@@ -56,7 +56,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const { id } = await params;
     const body = await req.json();
     const stock = Number(body.stock ?? 0);
-    const inStock = Boolean(body.inStock ?? true) && stock > 0;
+    const inStock = Boolean(body.inStock ?? true);
     const slug = String(body.slug || '').trim();
     if (!slug) {
       return NextResponse.json({ error: 'Slug is required' }, { status: 400 });

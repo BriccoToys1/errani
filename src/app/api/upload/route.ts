@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
+import { adminGuard } from '@/lib/admin-auth';
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_SHARP_FORMAT = new Set(['jpeg', 'png', 'webp']);
@@ -17,6 +18,9 @@ function getYearMonth() {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   try {
     const formData = await req.formData();
     const filePart = formData.get('file') || formData.get('image');

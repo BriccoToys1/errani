@@ -3,8 +3,7 @@ import prisma from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { verifyAdminToken } from '@/lib/admin-auth';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'errani-admin-secret-key-change-me';
+import { getJwtSecret } from '@/lib/jwt-secret';
 
 // GET current admin profile
 export async function GET(req: NextRequest) {
@@ -23,6 +22,11 @@ export async function PUT(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
+    const jwtSecret = getJwtSecret();
+    if (!jwtSecret) {
+      return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
+    }
+
     const { email, name, currentPassword, newPassword } = await req.json();
 
     const record = await prisma.admin.findUnique({ where: { id: admin.adminId } });
@@ -71,7 +75,7 @@ export async function PUT(req: NextRequest) {
     // Issue new token with updated info
     const token = jwt.sign(
       { adminId: updated.id, email: updated.email, name: updated.name },
-      JWT_SECRET,
+      jwtSecret,
       { expiresIn: '7d' }
     );
 

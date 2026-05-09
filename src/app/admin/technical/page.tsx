@@ -219,8 +219,11 @@ function PagesTab({ getToken }: { getToken: () => string | null }) {
   const [toast, setToast] = useState("");
 
   useEffect(() => {
-    fetch("/api/pages").then(r => r.json()).then(d => setPages(d)).catch(() => {});
-  }, []);
+    const token = getToken();
+    fetch("/api/pages", {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    }).then(r => r.json()).then(d => setPages(d)).catch(() => {});
+  }, [getToken]);
 
   const handleSave = async () => {
     if (!editing) return;

@@ -1,19 +1,13 @@
 import { NextRequest } from 'next/server';
-import jwt from 'jsonwebtoken';
 import prisma from '@/lib/db';
 import { buildReceiptHtml } from '@/lib/receipt-builder';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'errani-admin-secret-key-change-me';
+import { adminGuard } from '@/lib/admin-auth';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
   const { id } = await params;
-  const token = req.nextUrl.searchParams.get('token');
-  if (!token) return new Response('Unauthorized', { status: 401 });
-  try {
-    jwt.verify(token, JWT_SECRET);
-  } catch {
-    return new Response('Unauthorized', { status: 401 });
-  }
 
   const order = await prisma.order.findUnique({
     where: { id },
