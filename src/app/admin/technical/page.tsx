@@ -428,8 +428,8 @@ function DatabaseTab({ getToken }: { getToken: () => string | null }) {
       if (!token) return;
       const [dashRes, prodRes, ordRes] = await Promise.all([
         fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/products"),
-        fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/products?summary=1"),
+        fetch("/api/orders?light=1&take=120", { headers: { Authorization: `Bearer ${token}` } }),
       ]);
       const dash = dashRes.ok ? await dashRes.json() : {};
       const prods = prodRes.ok ? await prodRes.json() : [];

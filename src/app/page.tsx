@@ -126,7 +126,7 @@ export default function HomePage() {
           <div className="preorder-visual anim-fade-up anim-fade-up-d2">
             <div className="preorder-img-wrap">
               <Image
-                src="/media/photo-11.jpeg"
+                src="/media/photo-11.jpg"
                 alt="Tenderly Vibe Tarot"
                 fill
                 className="preorder-img"

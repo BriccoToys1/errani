@@ -67,25 +67,29 @@ export function CatalogContent() {
       if (filter === 'preorder') params.set('preorder', 'true');
       
       params.set('showAll', 'true');
+      let successful = false;
       let data: unknown = [];
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         const res = await fetch(`/api/products?${params.toString()}`, { cache: 'no-store' });
         const parsed = await res.json().catch(() => []);
         if (res.ok && Array.isArray(parsed)) {
+          successful = true;
           data = parsed;
           break;
         }
         if (![429, 500, 502, 503, 504].includes(res.status) || attempt === 3) {
-          data = Array.isArray(parsed) ? parsed : [];
+          data = parsed;
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 180 * attempt));
       }
 
-      const active = Array.isArray(data) ? data.filter((p: Product) => p.isActive) : [];
-      setProducts(active);
-      if (filter === 'all' && active.length > 0) {
-        localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: active }));
+      if (successful && Array.isArray(data)) {
+        const active = data.filter((p: Product) => p.isActive);
+        setProducts(active);
+        if (filter === 'all' && active.length > 0) {
+          localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: active }));
+        }
       }
     } catch (error) {
       console.error('Failed to fetch products:', error);

@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     let diskTotal = 0;
     let diskFree = 0;
     try {
-      const { stdout } = await execAsync('df -k / | tail -1');
+      const { stdout } = await execAsync('df -k / | tail -1', { timeout: 3000 });
       const parts = stdout.trim().split(/\s+/);
       diskTotal = parseInt(parts[1], 10) * 1024;
       diskUsage = parseInt(parts[2], 10) * 1024;

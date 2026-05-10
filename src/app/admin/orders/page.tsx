@@ -116,7 +116,7 @@ export default function AdminOrdersPage() {
 
   const fetchProducts = useCallback(async () => {
     try {
-      const res = await fetch("/api/products");
+      const res = await fetch("/api/products?summary=1");
       const data = await res.json();
       setProducts(Array.isArray(data) ? data : []);
     } catch { /* ignore */ }

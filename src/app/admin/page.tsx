@@ -207,7 +207,7 @@ export default function AdminDashboard() {
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
-  const fetchWithTimeout = useCallback(async (url: string, token: string, timeoutMs = 10000) => {
+  const fetchWithTimeout = useCallback(async (url: string, token: string, timeoutMs = 20000) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {

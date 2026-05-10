@@ -101,13 +101,6 @@ export async function GET(req: NextRequest) {
           totalAmount: true,
           currency: true,
           createdAt: true,
-          items: {
-            select: {
-              quantity: true,
-              price: true,
-              product: { select: { name: true, nameRu: true } },
-            },
-          },
         },
       }),
       prisma.user.findMany({
@@ -162,12 +155,6 @@ export async function GET(req: NextRequest) {
       }
 
       const profile = byEmail.get(key)!;
-      const items = order.items.map((item) => ({
-        productName: item.product?.nameRu || item.product?.name || 'Товар удалён',
-        quantity: item.quantity,
-        price: item.price,
-      }));
-
       profile.orders.push({
         id: order.id,
         orderNumber: order.orderNumber,
@@ -175,14 +162,11 @@ export async function GET(req: NextRequest) {
         status: order.status,
         totalAmount: order.totalAmount,
         currency: order.currency,
-        items,
+        items: [],
       });
 
       profile._count.orders += 1;
       profile.totalSpent += order.totalAmount;
-      if (!profile.cartItems.length) {
-        profile.cartItems = items;
-      }
     }
 
     for (const user of users) {
@@ -266,6 +250,47 @@ export async function GET(req: NextRequest) {
     const safePage = Math.min(page, pages);
     const start = (safePage - 1) * limit;
     const usersPage = profiles.slice(start, start + limit);
+
+    // Load order items only for orders visible on current page (max 4 per profile)
+    const orderIds = Array.from(
+      new Set(
+        usersPage.flatMap((profile) => profile.orders.slice(0, 4).map((order) => order.id))
+      )
+    );
+
+    const itemsByOrderId = new Map<string, Array<{ productName: string; quantity: number; price: number }>>();
+    if (orderIds.length > 0) {
+      const orderItems = await prisma.orderItem.findMany({
+        where: { orderId: { in: orderIds } },
+        select: {
+          orderId: true,
+          quantity: true,
+          price: true,
+          product: { select: { name: true, nameRu: true } },
+        },
+      });
+
+      for (const item of orderItems) {
+        const normalized = {
+          productName: item.product?.nameRu || item.product?.name || 'Товар удалён',
+          quantity: item.quantity,
+          price: item.price,
+        };
+        const existing = itemsByOrderId.get(item.orderId);
+        if (existing) {
+          existing.push(normalized);
+        } else {
+          itemsByOrderId.set(item.orderId, [normalized]);
+        }
+      }
+    }
+
+    for (const profile of usersPage) {
+      for (const order of profile.orders.slice(0, 4)) {
+        order.items = itemsByOrderId.get(order.id) || [];
+      }
+      profile.cartItems = profile.orders[0]?.items || [];
+    }
 
     return NextResponse.json({ users: usersPage, total, page: safePage, pages });
   } catch (e) {

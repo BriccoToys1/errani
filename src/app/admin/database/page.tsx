@@ -54,20 +54,25 @@ export default function AdminDatabasePage() {
     try {
       const [dashRes, productsRes, ordersRes] = await Promise.all([
         fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } }),
-        fetch("/api/products"),
-        fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } }),
+        fetch("/api/products?summary=1"),
+        fetch("/api/orders?light=1&take=120", { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       if (dashRes.ok) {
         const dash = await dashRes.json();
+        const productsCount = dash.productCount ?? dash.stats?.products ?? 0;
+        const ordersCount = dash.orderCount ?? dash.stats?.orders ?? 0;
+        const usersCount = dash.userCount ?? dash.stats?.users ?? 0;
+        const inquiriesCount = dash.inquiryCount ?? dash.stats?.inquiries ?? 0;
+        const pageViewsCount = dash.pageViewCount ?? dash.stats?.pageViews ?? 0;
         setStats({
-          products: dash.stats?.products ?? 0,
-          orders: dash.stats?.orders ?? 0,
-          users: dash.stats?.users ?? 0,
+          products: productsCount,
+          orders: ordersCount,
+          users: usersCount,
           admins: 1,
           orderItems: 0,
-          analytics: dash.stats?.pageViews ?? 0,
-          inquiries: dash.stats?.inquiries ?? 0,
+          analytics: pageViewsCount,
+          inquiries: inquiriesCount,
         });
       }
 

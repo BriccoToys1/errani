@@ -25,7 +25,21 @@ export async function GET(req: NextRequest) {
     );
     const ordersViewedAt = viewedSetting ? new Date(viewedSetting.value) : new Date(0);
 
-    const [orderCount, productCount, totalRevenue, pendingCount, recentOrders, inquiryCount, newInquiryCount, waitlistCount, newOrdersCount, newEmailsCount, expenseAgg] = await Promise.all([
+    const [
+      orderCount,
+      productCount,
+      totalRevenue,
+      pendingCount,
+      recentOrders,
+      inquiryCount,
+      newInquiryCount,
+      waitlistCount,
+      newOrdersCount,
+      newEmailsCount,
+      expenseAgg,
+      userCount,
+      pageViewCount,
+    ] = await Promise.all([
       withTimeout(prisma.order.count({ where: paidFilter }), 0),
       withTimeout(prisma.product.count(), 0),
       withTimeout(prisma.order.aggregate({ where: paidFilter, _sum: { totalAmount: true } }), { _sum: { totalAmount: 0 } }),
@@ -44,6 +58,8 @@ export async function GET(req: NextRequest) {
       withTimeout(prisma.order.count({ where: { status: { in: ['paid', 'assembling'] }, createdAt: { gt: ordersViewedAt } } }), 0),
       withTimeout(prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }), 0),
       withTimeout(prisma.expense.aggregate({ _sum: { amount: true } }), { _sum: { amount: 0 } }),
+      withTimeout(prisma.user.count(), 0),
+      withTimeout(prisma.pageView.count(), 0),
     ]);
 
     const totalRevenueAmount = totalRevenue._sum.totalAmount || 0;
@@ -63,6 +79,16 @@ export async function GET(req: NextRequest) {
       newOrdersCount,
       newInquiriesCount: newInquiryCount,
       newEmailsCount,
+      userCount,
+      pageViewCount,
+      // backward-compatible shape for older admin pages
+      stats: {
+        products: productCount,
+        orders: orderCount,
+        users: userCount,
+        inquiries: inquiryCount,
+        pageViews: pageViewCount,
+      },
     });
   } catch (error) {
     console.error('Dashboard error:', error);

@@ -3,7 +3,7 @@ import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 
-const PRODUCTS_STALE_TTL_MS = 60_000;
+const PRODUCTS_STALE_TTL_MS = 60 * 60 * 1000;
 const QUERY_TIMEOUT_MS = 15_000;
 const productsStaleCache = new Map<string, { ts: number; data: unknown }>();
 
@@ -67,6 +67,7 @@ function getProductsCacheKey(req: NextRequest): string {
     discount: searchParams.get('discount') === 'true',
     preorder: searchParams.get('preorder') === 'true',
     includeArchived: searchParams.get('includeArchived') === 'true',
+    summary: searchParams.get('summary') === '1',
   });
 }
 
@@ -82,6 +83,7 @@ export async function GET(req: NextRequest) {
     const isDiscount = filter === 'discount' || searchParams.get('discount') === 'true';
     const isPreorder = filter === 'preorder' || searchParams.get('preorder') === 'true';
     const includeArchived = searchParams.get('includeArchived') === 'true';
+    const summary = searchParams.get('summary') === '1';
 
     let where: Record<string, unknown> = includeArchived ? {} : { isActive: true };
     if (!showAll) where = { ...where, inStock: true };
@@ -93,6 +95,23 @@ export async function GET(req: NextRequest) {
       withPrismaRetry(() =>
         prisma.product.findMany({
           where,
+          ...(summary
+            ? {
+                select: {
+                  id: true,
+                  name: true,
+                  nameRu: true,
+                  slug: true,
+                  price: true,
+                  stock: true,
+                  inStock: true,
+                  isActive: true,
+                  isPreorder: true,
+                  isLimited: true,
+                  createdAt: true,
+                },
+              }
+            : {}),
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
         }),
         2,
@@ -112,7 +131,20 @@ export async function GET(req: NextRequest) {
     if (stale && Date.now() - stale.ts < PRODUCTS_STALE_TTL_MS) {
       return NextResponse.json(stale.data, { headers: { 'X-Products-Cache': 'stale' } });
     }
-    return NextResponse.json([], { headers: { 'X-Products-Cache': 'empty-fallback' } });
+
+    // As a final fallback, try any freshest cache variant to avoid catalog drop.
+    let freshest: { ts: number; data: unknown } | null = null;
+    for (const entry of productsStaleCache.values()) {
+      if (!freshest || entry.ts > freshest.ts) freshest = entry;
+    }
+    if (freshest) {
+      return NextResponse.json(freshest.data, { headers: { 'X-Products-Cache': 'stale-global' } });
+    }
+
+    return NextResponse.json(
+      { error: 'Products temporarily unavailable' },
+      { status: 503, headers: { 'X-Products-Cache': 'miss' } }
+    );
   }
 }
 

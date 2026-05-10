@@ -37,26 +37,52 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   try {
+    const { searchParams } = new URL(req.url);
+    const takeRaw = parseInt(searchParams.get('take') || '', 10);
+    const take = Number.isFinite(takeRaw) && takeRaw > 0 ? Math.min(takeRaw, 1000) : undefined;
+    const light = searchParams.get('light') === '1';
+
     // Auto-purge pending orders older than 2 hours
     const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    const stale = await prisma.order.findMany({
+    await prisma.order.deleteMany({
       where: { status: 'pending', createdAt: { lt: cutoff } },
-      select: { id: true },
     });
-    if (stale.length > 0) {
-      const ids = stale.map(o => o.id);
-      await prisma.orderItem.deleteMany({ where: { orderId: { in: ids } } });
-      await prisma.order.deleteMany({ where: { id: { in: ids } } });
-    }
+
     const orders = await prisma.order.findMany({
-      include: {
+      ...(take ? { take } : {}),
+      select: {
+        id: true,
+        orderNumber: true,
+        customerName: true,
+        customerEmail: true,
+        customerPhone: true,
+        country: true,
+        oblast: true,
+        city: true,
+        zipCode: true,
+        street: true,
+        house: true,
+        apartment: true,
+        shippingMethod: true,
+        status: true,
+        paymentMethod: true,
+        totalAmount: true,
+        currency: true,
+        notes: true,
+        isManual: true,
+        createdAt: true,
         items: {
-          include: {
-            product: true,
+          select: {
+            id: true,
+            productId: true,
+            quantity: true,
+            price: true,
+            product: {
+              select: light
+                ? { name: true }
+                : { name: true, nameRu: true },
+            },
           },
-        },
-        user: {
-          select: { name: true, email: true },
         },
       },
       orderBy: [{ isManual: 'desc' }, { createdAt: 'desc' }],
