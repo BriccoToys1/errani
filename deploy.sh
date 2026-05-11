@@ -47,6 +47,9 @@ ssh $SSH_OPTS "$SSH_HOST" /bin/bash <<ENDSSH
 set -e
 export PATH=$NODE_PATH:\$PATH
 cd $REMOTE_DIR
+echo "🔐 Нормализация прав для public..."
+find public -type d -exec chmod 755 {} +
+find public -type f -exec chmod 644 {} +
 echo "🗄️  Синхронизация схемы БД..."
 npm run db:push 2>&1 | tail -12
 npm run build 2>&1 | tail -15
