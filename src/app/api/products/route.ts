@@ -4,6 +4,7 @@ import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 
 const PRODUCTS_STALE_TTL_MS = 60 * 60 * 1000;
+const PRODUCTS_FRESH_TTL_MS = 20 * 1000;
 const QUERY_TIMEOUT_MS = 15_000;
 const productsStaleCache = new Map<string, { ts: number; data: unknown }>();
 
@@ -74,6 +75,10 @@ function getProductsCacheKey(req: NextRequest): string {
 // GET all products
 export async function GET(req: NextRequest) {
   const cacheKey = getProductsCacheKey(req);
+  const cached = productsStaleCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < PRODUCTS_FRESH_TTL_MS) {
+    return NextResponse.json(cached.data, { headers: { 'X-Products-Cache': 'fresh' } });
+  }
   try {
     const { searchParams } = new URL(req.url);
     const filter = searchParams.get('filter'); // author, discount, preorder, all
@@ -124,7 +129,7 @@ export async function GET(req: NextRequest) {
 
     productsStaleCache.set(cacheKey, { ts: Date.now(), data: products });
 
-    return NextResponse.json(products);
+    return NextResponse.json(products, { headers: { 'X-Products-Cache': 'miss' } });
   } catch (error) {
     console.error('Error fetching products:', error);
     const stale = productsStaleCache.get(cacheKey);
