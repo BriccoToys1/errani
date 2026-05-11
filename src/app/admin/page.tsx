@@ -261,13 +261,8 @@ export default function AdminDashboard() {
     }
 
     try {
-      const [dashResult, analyticsResult, serverResult] = await Promise.allSettled([
-        fetchWithTimeout("/api/admin/dashboard", token),
-        fetchWithTimeout(`/api/admin/analytics?period=${period}`, token),
-        fetchWithTimeout("/api/admin/server-stats", token),
-      ]);
-
-      if (dashResult.status === "fulfilled" && dashResult.value.status === 401) {
+      const dashResponse = await fetchWithTimeout("/api/admin/dashboard", token, 8000).catch(() => null);
+      if (dashResponse?.status === 401) {
         localStorage.removeItem("admin_token");
         router.push("/admin/login");
         return;
@@ -277,10 +272,19 @@ export default function AdminDashboard() {
       let freshA: AnalyticsData | null = null;
       let freshS: ServerStats | null = null;
 
-      if (dashResult.status === "fulfilled" && dashResult.value.ok) {
-        freshD = await dashResult.value.json();
+      if (dashResponse?.ok) {
+        freshD = await dashResponse.json();
         if (freshD) setData(freshD);
       }
+
+      // Do not block first render on heavy analytics endpoints.
+      setLoading(false);
+
+      const [analyticsResult, serverResult] = await Promise.allSettled([
+        fetchWithTimeout(`/api/admin/analytics?period=${period}`, token, 7000),
+        fetchWithTimeout("/api/admin/server-stats", token, 4000),
+      ]);
+
       if (analyticsResult.status === "fulfilled" && analyticsResult.value.ok) {
         const json = await analyticsResult.value.json();
         if (json && !json.error) { freshA = json; setAnalytics(freshA); }

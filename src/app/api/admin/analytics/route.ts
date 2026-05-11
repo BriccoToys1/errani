@@ -3,136 +3,160 @@ import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 
-// Server-side cache keyed by period (ms)
-const cache = new Map<number, { data: unknown; at: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+type AnalyticsPayload = {
+  realtime: { onlineNow: number };
+  today: { views: number; visitors: number; orders: number; avgDuration: number };
+  chart: Array<{ date: string; views: number; visitors: number; orders: number; revenue: number }>;
+  countries: Array<{ country: string; count: number }>;
+  totals: { views: number; orders: number; revenue: number; products: number; uniqueIPs: number };
+};
+
+const cache = new Map<number, { data: AnalyticsPayload; at: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const STALE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function buildDateRange(period: number, now: Date): string[] {
+  const days: string[] = [];
+  for (let i = period - 1; i >= 0; i -= 1) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+async function safeQuery<T>(
+  operation: () => Promise<T>,
+  fallback: T,
+  timeoutMs = 4000
+): Promise<T> {
+  try {
+    return await Promise.race([
+      withPrismaRetry(operation, 2, 80),
+      new Promise<T>((resolve) => setTimeout(() => resolve(fallback), timeoutMs)),
+    ]);
+  } catch {
+    return fallback;
+  }
+}
+
+function getStaleCache(period: number): AnalyticsPayload | null {
+  const hit = cache.get(period);
+  if (!hit) return null;
+  if (Date.now() - hit.at > STALE_TTL_MS) return null;
+  return hit.data;
+}
 
 export async function GET(req: NextRequest) {
   const denied = adminGuard(req);
   if (denied) return denied;
 
+  const { searchParams } = new URL(req.url);
+  const period = Math.min(Math.max(parseInt(searchParams.get('period') || '30', 10), 7), 90);
+
+  const cached = cache.get(period);
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    return NextResponse.json(cached.data, { headers: { 'X-Analytics-Cache': 'hit' } });
+  }
+
   try {
-    const { searchParams } = new URL(req.url);
-    const period = Math.min(Math.max(parseInt(searchParams.get('period') || '30', 10), 7), 90);
-
-    // Return cached response if fresh
-    const cached = cache.get(period);
-    if (cached && Date.now() - cached.at < CACHE_TTL) {
-      return NextResponse.json(cached.data);
-    }
-
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
-    const todayStart = new Date(`${today}T00:00:00Z`);
-    const todayEnd = new Date(`${today}T23:59:59Z`);
     const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    const days = buildDateRange(period, now);
+    const startDay = days[0];
 
-    // Run independent queries in parallel with retry on connection errors
     const [
       recentViews,
-      todayViews,
-      todayVisitors,
-      todayOrderCount,
-      avgDurationRaw,
+      chartRows,
       countriesRaw,
-      uniqueIPsRaw,
-      dailyStats,
       totalViews,
-      totalOrdersRaw,
+      totalPaidOrders,
       totalRevenueRaw,
       totalProducts,
-    ] = await withPrismaRetry(() => Promise.all([
-      // Realtime: distinct sessions in last 5 min
-      prisma.pageView.findMany({
-        where: { createdAt: { gte: fiveMinAgo } },
-        distinct: ['sessionId'],
-        select: { sessionId: true },
-      }),
-      // Today views
-      prisma.pageView.count({ where: { createdAt: { gte: todayStart, lte: todayEnd } } }),
-      // Today visitors (distinct sessions)
-      prisma.pageView.findMany({
-        where: { createdAt: { gte: todayStart, lte: todayEnd } },
-        distinct: ['sessionId'],
-        select: { sessionId: true },
-      }),
-      // Today orders
-      prisma.order.count({ where: { createdAt: { gte: todayStart, lte: todayEnd } } }),
-      // Avg session duration today
-      prisma.pageView.aggregate({
-        where: { createdAt: { gte: todayStart, lte: todayEnd }, duration: { gt: 0 } },
-        _avg: { duration: true },
-      }),
-      // Countries today
-      prisma.pageView.groupBy({
-        by: ['country'],
-        where: { createdAt: { gte: todayStart, lte: todayEnd }, country: { not: '' } },
-        _count: { country: true },
-        orderBy: { _count: { country: 'desc' } },
-        take: 8,
-      }),
-      // Unique IPs via raw SQL (avoids loading all rows)
-      prisma.$queryRaw<[{ count: bigint }]>`SELECT COUNT(DISTINCT ip)::int AS count FROM "PageView" WHERE ip != ''`,
-      // Chart data: pull from DailyStat (pre-aggregated, fast)
-      prisma.dailyStat.findMany({
-        where: {
-          date: {
-            gte: (() => { const d = new Date(now); d.setDate(d.getDate() - (period - 1)); return d.toISOString().slice(0, 10); })(),
-            lte: today,
-          },
-        },
-        orderBy: { date: 'asc' },
-      }),
-      // Total views (fast with index)
-      prisma.pageView.count(),
-      // Total paid orders
-      prisma.order.count({ where: { status: 'paid' } }),
-      // Total revenue
-      prisma.order.aggregate({ where: { status: 'paid' }, _sum: { totalAmount: true } }),
-      // Product count
-      prisma.product.count(),
-    ]));
+      uniqueIPsRaw,
+    ] = await Promise.all([
+      safeQuery(
+        () => prisma.pageView.findMany({
+          where: { createdAt: { gte: fiveMinAgo } },
+          distinct: ['sessionId'],
+          select: { sessionId: true },
+        }),
+        [] as Array<{ sessionId: string }>,
+        2500
+      ),
+      safeQuery(
+        () => prisma.dailyStat.findMany({
+          where: { date: { gte: startDay, lte: today } },
+          orderBy: { date: 'asc' },
+        }),
+        [] as Array<{ date: string; views: number; visitors: number; orders: number; revenue: number }>
+      ),
+      safeQuery(
+        () => prisma.pageView.groupBy({
+          by: ['country'],
+          where: { createdAt: { gte: new Date(`${today}T00:00:00Z`) }, country: { not: '' } },
+          _count: { country: true },
+          orderBy: { _count: { country: 'desc' } },
+          take: 8,
+        }),
+        [] as Array<{ country: string; _count: { country: number } }>,
+        2500
+      ),
+      safeQuery(() => prisma.pageView.count(), 0),
+      safeQuery(() => prisma.order.count({ where: { status: 'paid' } }), 0),
+      safeQuery(() => prisma.order.aggregate({ where: { status: 'paid' }, _sum: { totalAmount: true } }), { _sum: { totalAmount: 0 } }),
+      safeQuery(() => prisma.product.count(), 0),
+      safeQuery(() => prisma.$queryRaw<[{ count: bigint }]>`SELECT COUNT(DISTINCT ip)::int AS count FROM "PageView" WHERE ip != ''`, [{ count: BigInt(0) }], 3000),
+    ]);
 
-    // Build chart: fill gaps with 0
-    const days: string[] = [];
-    for (let i = period - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      days.push(d.toISOString().slice(0, 10));
-    }
-    const dailyMap = new Map(dailyStats.map((s) => [s.date, s]));
+    const chartMap = new Map(chartRows.map((row) => [row.date, row]));
     const chart = days.map((date) => ({
       date,
-      views: dailyMap.get(date)?.views ?? 0,
-      visitors: dailyMap.get(date)?.visitors ?? 0,
-      orders: dailyMap.get(date)?.orders ?? 0,
-      revenue: dailyMap.get(date)?.revenue ?? 0,
+      views: chartMap.get(date)?.views ?? 0,
+      visitors: chartMap.get(date)?.visitors ?? 0,
+      orders: chartMap.get(date)?.orders ?? 0,
+      revenue: chartMap.get(date)?.revenue ?? 0,
     }));
 
-    const result = {
+    const todayRow = chartMap.get(today);
+    const fallbackTotalViews = chart.reduce((sum, day) => sum + day.views, 0);
+    const fallbackTotalOrders = chart.reduce((sum, day) => sum + day.orders, 0);
+    const fallbackTotalRevenue = chart.reduce((sum, day) => sum + day.revenue, 0);
+
+    const payload: AnalyticsPayload = {
       realtime: { onlineNow: recentViews.length },
       today: {
-        views: todayViews,
-        visitors: todayVisitors.length,
-        orders: todayOrderCount,
-        avgDuration: Math.round(avgDurationRaw._avg.duration ?? 0),
+        views: todayRow?.views ?? 0,
+        visitors: todayRow?.visitors ?? 0,
+        orders: todayRow?.orders ?? 0,
+        avgDuration: 0,
       },
       chart,
       countries: countriesRaw.map((c) => ({ country: c.country, count: c._count.country })),
       totals: {
-        views: totalViews,
-        orders: totalOrdersRaw,
-        revenue: totalRevenueRaw._sum.totalAmount ?? 0,
+        views: totalViews || fallbackTotalViews,
+        orders: totalPaidOrders || fallbackTotalOrders,
+        revenue: totalRevenueRaw._sum.totalAmount ?? fallbackTotalRevenue,
         products: totalProducts,
         uniqueIPs: Number(uniqueIPsRaw[0]?.count ?? 0),
       },
     };
 
-    cache.set(period, { data: result, at: Date.now() });
-
-    return NextResponse.json(result);
+    cache.set(period, { data: payload, at: Date.now() });
+    return NextResponse.json(payload, { headers: { 'X-Analytics-Cache': 'miss' } });
   } catch (error) {
     console.error('Analytics error:', error);
-    return NextResponse.json({ error: 'Failed to load analytics' }, { status: 500 });
+    const stale = getStaleCache(period);
+    if (stale) {
+      return NextResponse.json(stale, { headers: { 'X-Analytics-Cache': 'stale' } });
+    }
+    return NextResponse.json({
+      realtime: { onlineNow: 0 },
+      today: { views: 0, visitors: 0, orders: 0, avgDuration: 0 },
+      chart: [],
+      countries: [],
+      totals: { views: 0, orders: 0, revenue: 0, products: 0, uniqueIPs: 0 },
+    }, { headers: { 'X-Analytics-Cache': 'degraded' } });
   }
 }

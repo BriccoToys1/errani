@@ -51,7 +51,10 @@ const DEFAULT_METADATA: Metadata = {
 export async function generateMetadata(): Promise<Metadata> {
   try {
     const prisma = (await import('@/lib/db')).default;
-    const setting = await prisma.siteSettings.findUnique({ where: { key: 'seo_global' } });
+    const setting = await Promise.race([
+      prisma.siteSettings.findUnique({ where: { key: 'seo_global' } }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
+    ]);
     if (setting?.value) {
       const seo = JSON.parse(setting.value) as {
         title?: string;

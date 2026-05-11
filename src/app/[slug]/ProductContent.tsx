@@ -107,6 +107,7 @@ export function ProductContent({ product }: { product: Product }) {
     ? (product.descriptionRu || product.description)
     : (product.description || product.descriptionRu || '');
   const price = product.price;
+  const hidePrice = product.slug === 'tenderly-vibe';
   const canJoinWaitlist = !product.inStock && !product.isPreorder;
 
   const formatPreorderDate = (dateStr: string) => {
@@ -240,15 +241,17 @@ export function ProductContent({ product }: { product: Product }) {
 
           <h1 className="product-title anim-fade-up anim-fade-up-d1">{displayName}</h1>
 
-          <div className="product-price anim-fade-up anim-fade-up-d3">
-            <span className="product-current-price">{`${price.toLocaleString('ru-RU')} ₽`}</span>
-            {product.oldPrice && (
-              <span className="product-old-price">{`${product.oldPrice.toLocaleString('ru-RU')} ₽`}</span>
-            )}
-            {product.discount > 0 && (
-              <span className="product-discount-badge">-{product.discount}%</span>
-            )}
-          </div>
+          {!hidePrice && (
+            <div className="product-price anim-fade-up anim-fade-up-d3">
+              <span className="product-current-price">{`${price.toLocaleString('ru-RU')} ₽`}</span>
+              {product.oldPrice && (
+                <span className="product-old-price">{`${product.oldPrice.toLocaleString('ru-RU')} ₽`}</span>
+              )}
+              {product.discount > 0 && (
+                <span className="product-discount-badge">-{product.discount}%</span>
+              )}
+            </div>
+          )}
 
           {/* Color selector */}
           {colorOptions.length > 0 && (

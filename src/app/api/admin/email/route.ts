@@ -2,12 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard, verifyAdminToken } from '@/lib/admin-auth';
 import { Resend } from 'resend';
+import { withPrismaRetry } from '@/lib/prisma-retry';
+
+const EMAIL_LIST_CACHE_TTL_MS = 15_000;
+const emailListCache = new Map<string, { ts: number; payload: { emails: unknown[]; unreadCount: number } }>();
 
 async function getApiKey(): Promise<string | null> {
   const envKey = process.env.RESEND_API_KEY;
   if (envKey) return envKey;
   try {
-    const s = await prisma.siteSettings.findUnique({ where: { key: 'resend_api_key' } });
+    const s = await withPrismaRetry(
+      () => prisma.siteSettings.findUnique({ where: { key: 'resend_api_key' } }),
+      2,
+      80
+    );
     return s?.value || null;
   } catch { return null; }
 }
@@ -19,8 +27,14 @@ export async function GET(req: NextRequest) {
 
   const folder = req.nextUrl.searchParams.get('folder') || 'all';
   const search = req.nextUrl.searchParams.get('search') || '';
+  const cacheKey = JSON.stringify({ folder, search: search.trim().toLowerCase() });
 
   try {
+    const cached = emailListCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < EMAIL_LIST_CACHE_TTL_MS) {
+      return NextResponse.json(cached.payload, { headers: { 'X-Email-Cache': 'hit' } });
+    }
+
     const where: Record<string, unknown> = {};
     if (folder === 'inbox') where.direction = 'inbound';
     else if (folder === 'sent') where.direction = 'outbound';
@@ -34,20 +48,27 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const emails = await prisma.adminEmail.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+    const [emails, unreadCount] = await Promise.all([
+      withPrismaRetry(() => prisma.adminEmail.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }), 2, 80),
+      withPrismaRetry(() => prisma.adminEmail.count({
+        where: { direction: 'inbound', isRead: false },
+      }), 2, 80),
+    ]);
 
-    const unreadCount = await prisma.adminEmail.count({
-      where: { direction: 'inbound', isRead: false },
-    });
-
-    return NextResponse.json({ emails, unreadCount });
+    const payload = { emails, unreadCount };
+    emailListCache.set(cacheKey, { ts: Date.now(), payload });
+    return NextResponse.json(payload, { headers: { 'X-Email-Cache': 'miss' } });
   } catch (error) {
     console.error('Email list error:', error);
-    return NextResponse.json({ error: 'Failed to fetch emails' }, { status: 500 });
+    const stale = emailListCache.get(cacheKey);
+    if (stale) {
+      return NextResponse.json(stale.payload, { headers: { 'X-Email-Cache': 'stale' } });
+    }
+    return NextResponse.json({ emails: [], unreadCount: 0, degraded: true }, { headers: { 'X-Email-Cache': 'degraded' } });
   }
 }
 
@@ -79,7 +100,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Save to database
-    const email = await prisma.adminEmail.create({
+    const email = await withPrismaRetry(() => prisma.adminEmail.create({
       data: {
         direction: 'outbound',
         fromAddr: 'mail@errani.ru',
@@ -92,7 +113,8 @@ export async function POST(req: NextRequest) {
         resendId: result.data?.id || '',
         inReplyTo: replyTo || '',
       },
-    });
+    }), 2, 80);
+    emailListCache.clear();
 
     return NextResponse.json({ success: true, id: email.id });
   } catch (error) {
@@ -110,16 +132,17 @@ export async function PUT(req: NextRequest) {
     const { ids, markAll } = await req.json();
 
     if (markAll) {
-      await prisma.adminEmail.updateMany({
+      await withPrismaRetry(() => prisma.adminEmail.updateMany({
         where: { direction: 'inbound', isRead: false },
         data: { isRead: true },
-      });
+      }), 2, 80);
     } else if (ids?.length) {
-      await prisma.adminEmail.updateMany({
+      await withPrismaRetry(() => prisma.adminEmail.updateMany({
         where: { id: { in: ids } },
         data: { isRead: true },
-      });
+      }), 2, 80);
     }
+    emailListCache.clear();
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -136,8 +159,9 @@ export async function DELETE(req: NextRequest) {
   try {
     const { ids } = await req.json();
     if (ids?.length) {
-      await prisma.adminEmail.deleteMany({ where: { id: { in: ids } } });
+      await withPrismaRetry(() => prisma.adminEmail.deleteMany({ where: { id: { in: ids } } }), 2, 80);
     }
+    emailListCache.clear();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Delete email error:', error);

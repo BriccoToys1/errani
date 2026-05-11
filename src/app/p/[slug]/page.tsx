@@ -2,6 +2,9 @@ import { notFound } from 'next/navigation';
 import prisma from '@/lib/db';
 import { Metadata } from 'next';
 import Link from 'next/link';
+import { withPrismaRetry } from '@/lib/prisma-retry';
+
+export const dynamic = 'force-dynamic';
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -9,7 +12,16 @@ interface Props {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const page = await prisma.customPage.findUnique({ where: { slug } });
+  let page = null;
+  try {
+    page = await withPrismaRetry(
+      () => prisma.customPage.findUnique({ where: { slug } }),
+      2,
+      80
+    );
+  } catch {
+    page = null;
+  }
   if (!page || !page.isPublished) return {};
   return {
     title: `${page.titleRu || page.title} — errani`,
@@ -19,7 +31,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CustomPublicPage({ params }: Props) {
   const { slug } = await params;
-  const page = await prisma.customPage.findUnique({ where: { slug } });
+  let page = null;
+  try {
+    page = await withPrismaRetry(
+      () => prisma.customPage.findUnique({ where: { slug } }),
+      2,
+      80
+    );
+  } catch {
+    page = null;
+  }
 
   if (!page || !page.isPublished) {
     notFound();

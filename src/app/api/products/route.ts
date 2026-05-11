@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs/promises';
+import path from 'path';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 
 const PRODUCTS_STALE_TTL_MS = 60 * 60 * 1000;
 const PRODUCTS_FRESH_TTL_MS = 20 * 1000;
-const QUERY_TIMEOUT_MS = 6_000;
+const QUERY_TIMEOUT_MS = 5_000;
+const PRODUCTS_DISK_CACHE_FILE = path.join(process.cwd(), '.next', 'cache', 'products-cache.json');
 const productsStaleCache = new Map<string, { ts: number; data: unknown }>();
 
 const CYRILLIC_MAP: Record<string, string> = {
@@ -72,6 +75,29 @@ function getProductsCacheKey(req: NextRequest): string {
   });
 }
 
+async function saveDiskCache(cacheKey: string, data: unknown) {
+  try {
+    const payload = JSON.stringify({ ts: Date.now(), cacheKey, data });
+    await fs.mkdir(path.dirname(PRODUCTS_DISK_CACHE_FILE), { recursive: true });
+    await fs.writeFile(PRODUCTS_DISK_CACHE_FILE, payload, 'utf8');
+  } catch {
+    // best effort cache
+  }
+}
+
+async function readDiskCache(cacheKey: string): Promise<{ ts: number; data: unknown } | null> {
+  try {
+    const raw = await fs.readFile(PRODUCTS_DISK_CACHE_FILE, 'utf8');
+    const parsed = JSON.parse(raw) as { ts?: number; cacheKey?: string; data?: unknown };
+    if (!parsed || typeof parsed.ts !== 'number' || !parsed.data) return null;
+    if (parsed.cacheKey !== cacheKey) return null;
+    if (Date.now() - parsed.ts > PRODUCTS_STALE_TTL_MS) return null;
+    return { ts: parsed.ts, data: parsed.data };
+  } catch {
+    return null;
+  }
+}
+
 // GET all products
 export async function GET(req: NextRequest) {
   const cacheKey = getProductsCacheKey(req);
@@ -128,6 +154,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     productsStaleCache.set(cacheKey, { ts: Date.now(), data: products });
+    await saveDiskCache(cacheKey, products);
 
     return NextResponse.json(products, { headers: { 'X-Products-Cache': 'miss' } });
   } catch (error) {
@@ -144,6 +171,12 @@ export async function GET(req: NextRequest) {
     }
     if (freshest) {
       return NextResponse.json(freshest.data, { headers: { 'X-Products-Cache': 'stale-global' } });
+    }
+
+    const disk = await readDiskCache(cacheKey);
+    if (disk) {
+      productsStaleCache.set(cacheKey, disk);
+      return NextResponse.json(disk.data, { headers: { 'X-Products-Cache': 'stale-disk' } });
     }
 
     return NextResponse.json(
