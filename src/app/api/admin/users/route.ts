@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
+import { withPrismaRetry } from '@/lib/prisma-retry';
 
 const CUSTOMER_META_KEY = 'customer_profiles_meta_v1';
+const USERS_CACHE_TTL_MS = 20_000;
+const MAX_ORDERS_SCAN = 5_000;
+
+const usersCache = new Map<string, { ts: number; payload: unknown }>();
 
 type CustomerMetaEntry = {
   badges: string[];
@@ -27,7 +32,9 @@ function parseMeta(raw: string | null | undefined): CustomerMetaMap {
 }
 
 async function loadMeta(): Promise<CustomerMetaMap> {
-  const setting = await prisma.siteSettings.findUnique({ where: { key: CUSTOMER_META_KEY } });
+  const setting = await withPrismaRetry(() =>
+    prisma.siteSettings.findUnique({ where: { key: CUSTOMER_META_KEY } })
+  , 2, 80);
   return parseMeta(setting?.value);
 }
 
@@ -82,44 +89,102 @@ export async function GET(req: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = 24;
 
+    const cacheKey = JSON.stringify({ search, view, page });
+    const cached = usersCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < USERS_CACHE_TTL_MS) {
+      return NextResponse.json(cached.payload, { headers: { 'X-Users-Cache': 'hit' } });
+    }
+
+    const withTimeout = async <T,>(promise: Promise<T>, fallback: T, ms = 12_000): Promise<T> => {
+      try {
+        return await Promise.race([
+          promise,
+          new Promise<T>((_, reject) => setTimeout(() => reject(new Error('users timeout')), ms)),
+        ]);
+      } catch {
+        return fallback;
+      }
+    };
+
     const [orders, users, meta] = await Promise.all([
-      prisma.order.findMany({
-        orderBy: { createdAt: 'desc' },
-        select: {
-          id: true,
-          orderNumber: true,
-          customerName: true,
-          customerEmail: true,
-          customerPhone: true,
-          country: true,
-          city: true,
-          zipCode: true,
-          street: true,
-          house: true,
-          apartment: true,
-          status: true,
-          totalAmount: true,
-          currency: true,
-          createdAt: true,
-        },
-      }),
-      prisma.user.findMany({
-        orderBy: { createdAt: 'desc' },
-        select: {
-          email: true,
-          name: true,
-          phone: true,
-          country: true,
-          city: true,
-          zipCode: true,
-          street: true,
-          house: true,
-          apartment: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      }),
-      loadMeta(),
+      withTimeout(
+        withPrismaRetry(() =>
+          prisma.order.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: MAX_ORDERS_SCAN,
+            select: {
+              id: true,
+              orderNumber: true,
+              customerName: true,
+              customerEmail: true,
+              customerPhone: true,
+              country: true,
+              city: true,
+              zipCode: true,
+              street: true,
+              house: true,
+              apartment: true,
+              status: true,
+              totalAmount: true,
+              currency: true,
+              createdAt: true,
+            },
+          }),
+        2,
+        80),
+        [] as Array<{
+          id: string;
+          orderNumber: string;
+          customerName: string;
+          customerEmail: string;
+          customerPhone: string;
+          country: string;
+          city: string;
+          zipCode: string;
+          street: string;
+          house: string;
+          apartment: string;
+          status: string;
+          totalAmount: number;
+          currency: string;
+          createdAt: Date;
+        }>
+      ),
+      withTimeout(
+        withPrismaRetry(() =>
+          prisma.user.findMany({
+            orderBy: { createdAt: 'desc' },
+            select: {
+              email: true,
+              name: true,
+              phone: true,
+              country: true,
+              city: true,
+              zipCode: true,
+              street: true,
+              house: true,
+              apartment: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          }),
+        2,
+        80),
+        [] as Array<{
+          email: string;
+          name: string;
+          phone: string;
+          country: string;
+          city: string;
+          zipCode: string;
+          street: string;
+          house: string;
+          apartment: string;
+          createdAt: Date;
+          updatedAt: Date;
+        }>
+      ),
+      withTimeout(loadMeta(), {}),
     ]);
 
     const byEmail = new Map<string, Profile>();
@@ -260,7 +325,7 @@ export async function GET(req: NextRequest) {
 
     const itemsByOrderId = new Map<string, Array<{ productName: string; quantity: number; price: number }>>();
     if (orderIds.length > 0) {
-      const orderItems = await prisma.orderItem.findMany({
+      const orderItems = await withPrismaRetry(() => prisma.orderItem.findMany({
         where: { orderId: { in: orderIds } },
         select: {
           orderId: true,
@@ -268,7 +333,7 @@ export async function GET(req: NextRequest) {
           price: true,
           product: { select: { name: true, nameRu: true } },
         },
-      });
+      }), 2, 80).catch(() => []);
 
       for (const item of orderItems) {
         const normalized = {
@@ -292,10 +357,20 @@ export async function GET(req: NextRequest) {
       profile.cartItems = profile.orders[0]?.items || [];
     }
 
-    return NextResponse.json({ users: usersPage, total, page: safePage, pages });
+    const payload = { users: usersPage, total, page: safePage, pages };
+    usersCache.set(cacheKey, { ts: Date.now(), payload });
+    return NextResponse.json(payload, { headers: { 'X-Users-Cache': 'miss' } });
   } catch (e) {
     console.error('Users API error:', e);
-    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+    // Serve freshest cached response as last resort
+    let freshest: { ts: number; payload: unknown } | null = null;
+    for (const entry of usersCache.values()) {
+      if (!freshest || entry.ts > freshest.ts) freshest = entry;
+    }
+    if (freshest) {
+      return NextResponse.json(freshest.payload, { headers: { 'X-Users-Cache': 'stale' } });
+    }
+    return NextResponse.json({ users: [], total: 0, page: 1, pages: 1, degraded: true }, { status: 200 });
   }
 }
 
