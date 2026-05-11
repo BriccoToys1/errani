@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     const { data: outputBuffer, info } = await sharp(sourceBuffer, { failOn: 'error' })
       .rotate()
       .resize({ width: 1600, fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 84, effort: 5 })
+      .webp({ quality: 82, effort: 3 })
       .toBuffer({ resolveWithObject: true });
 
     await fs.writeFile(outputPath, outputBuffer);

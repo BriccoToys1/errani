@@ -7,15 +7,12 @@ import { useEffect, useState } from 'react';
 
 export default function HomePage() {
   const { lang } = useLanguage();
-  const [tvPrice, setTvPrice] = useState<number | null>(null);
   const [pgvtPrice, setPgvtPrice] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/products')
       .then(r => r.json())
       .then((list: Array<{ slug: string; price: number }>) => {
-        const tv = list.find(p => p.slug === 'tenderly-vibe');
-        if (tv) setTvPrice(tv.price);
         const pgvt = list.find(p => p.slug === 'pgvt');
         if (pgvt) setPgvtPrice(pgvt.price);
       })
@@ -110,12 +107,6 @@ export default function HomePage() {
                 : 'A unique deck crafted with love — every card carries a special energy and meaning. Be one of the first to own it.'}
             </p>
 
-            {tvPrice !== null && (
-              <div className="preorder-price anim-fade-up anim-fade-up-d3">
-                {formatPrice(tvPrice)}
-              </div>
-            )}
-
             <div className="preorder-actions anim-fade-up anim-fade-up-d4">
               <Link href="/tenderly-vibe" className="preorder-btn-ghost">
                 {lang === 'ru' ? 'Подробнее' : 'Learn more'}
@@ -126,7 +117,7 @@ export default function HomePage() {
           <div className="preorder-visual anim-fade-up anim-fade-up-d2">
             <div className="preorder-img-wrap">
               <Image
-                src="/media/photo-11.jpg"
+                src="/media/photo-11.jpeg"
                 alt="Tenderly Vibe Tarot"
                 fill
                 className="preorder-img"

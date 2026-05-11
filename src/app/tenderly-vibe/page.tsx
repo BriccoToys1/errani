@@ -18,7 +18,7 @@ const TENDERLY_FALLBACK_PRODUCT = {
   price: 5690,
   oldPrice: null,
   discount: 0,
-  image: '/media/photo-11.jpg',
+  image: '/media/photo-11.jpeg',
   images: '["/media/photo-1.jpeg","/media/photo-2.jpeg","/media/photo-3.jpeg","/media/photo-9.jpeg","/media/photo-10.jpeg","/media/photo-8.jpeg"]',
   inStock: false,
   isPreorder: false,

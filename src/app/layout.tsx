@@ -28,13 +28,13 @@ const DEFAULT_METADATA: Metadata = {
     siteName: 'errani',
     title: 'errani — Авторская колода Таро «Tenderly Vibe»',
     description: 'Авторская колода Таро «Tenderly Vibe» от Ekaterina Errani. 78 уникальных карт с оригинальными иллюстрациями и матовой ламинацией.',
-    images: [{ url: '/media/photo-11.jpg', width: 1200, height: 630, alt: 'Tenderly Vibe — Авторская колода Таро' }],
+    images: [{ url: '/media/photo-11.jpeg', width: 1200, height: 630, alt: 'Tenderly Vibe — Авторская колода Таро' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'errani — Авторская колода Таро',
     description: 'Авторская колода Таро «Tenderly Vibe» от Ekaterina Errani.',
-    images: ['/media/photo-11.jpg'],
+    images: ['/media/photo-11.jpeg'],
   },
   robots: {
     index: true,

@@ -42,6 +42,13 @@ interface CustomerProfile {
   cartItems: OrderItem[];
 }
 
+interface ProductSummary {
+  id: string;
+  slug: string;
+  name: string;
+  nameRu: string | null;
+}
+
 const COUNTRY_NAMES: Record<string, string> = {
   RU: "Россия", US: "США", DE: "Германия", FR: "Франция", IT: "Италия",
   ES: "Испания", TR: "Турция", GB: "Великобритания", KZ: "Казахстан",
@@ -96,6 +103,10 @@ export default function AdminUsersPage() {
   const [notification, setNotification] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [badgeInputs, setBadgeInputs] = useState<Record<string, string>>({});
+  const [products, setProducts] = useState<ProductSummary[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [selectedEmails, setSelectedEmails] = useState<Record<string, boolean>>({});
+  const [sendingInvites, setSendingInvites] = useState(false);
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
@@ -134,6 +145,24 @@ export default function AdminUsersPage() {
     fetchUsers("", 1, view);
   }, [fetchUsers, view]);
 
+  useEffect(() => {
+    const adminToken = localStorage.getItem("admin_token");
+    if (!adminToken) return;
+    fetch("/api/products?summary=1&includeArchived=true&showAll=true")
+      .then((res) => res.json())
+      .then((data: ProductSummary[]) => {
+        if (!Array.isArray(data)) return;
+        setProducts(data);
+        if (!selectedProductId && data.length > 0) setSelectedProductId(data[0].id);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setSelectedEmails({});
+  }, [users, page, view, search]);
+
   const onSearch = (e: React.FormEvent) => {
     e.preventDefault();
     fetchUsers(search, 1, view);
@@ -162,6 +191,49 @@ export default function AdminUsersPage() {
       fetchUsers(search, page, view);
     } finally {
       setPending(null);
+    }
+  };
+
+  const toggleSelectedEmail = (email: string, checked: boolean) => {
+    setSelectedEmails((prev) => ({ ...prev, [email]: checked }));
+  };
+
+  const sendReviewInvites = async (recipients: Array<{ email: string; name?: string }>) => {
+    const adminToken = getToken();
+    if (!adminToken) return;
+    if (!selectedProductId) {
+      notify("Выберите товар для отзыва");
+      return;
+    }
+    if (recipients.length === 0) {
+      notify("Не выбраны получатели");
+      return;
+    }
+
+    setSendingInvites(true);
+    try {
+      const res = await fetch("/api/admin/reviews/invites", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: JSON.stringify({
+          productId: selectedProductId,
+          recipients,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        notify(data.message || "Ошибка отправки ссылок");
+        return;
+      }
+      notify(`Отправлено: ${data.sentCount}. Ошибок: ${data.failedCount}.`);
+      setSelectedEmails({});
+    } catch {
+      notify("Ошибка сети при отправке ссылок");
+    } finally {
+      setSendingInvites(false);
     }
   };
 
@@ -194,6 +266,10 @@ export default function AdminUsersPage() {
     if (!confirm(`Удалить профиль ${profile.email} и связанные данные навсегда?`)) return;
     patchProfile(profile.email, { purge: true }, "Профиль удалён навсегда");
   };
+
+  const selectedRecipientList = users
+    .filter((profile) => selectedEmails[profile.email])
+    .map((profile) => ({ email: profile.email, name: profile.name || profile.email }));
 
   return (
     <div className="cms-root">
@@ -230,6 +306,51 @@ export default function AdminUsersPage() {
             )}
           </form>
 
+          <div className="cms-card" style={{ marginBottom: "14px", padding: "12px", border: "1px solid var(--cms-border)" }}>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+              <strong style={{ fontSize: "13px" }}>Ссылки на отзыв:</strong>
+              <select
+                className="cms-select"
+                value={selectedProductId}
+                onChange={(e) => setSelectedProductId(e.target.value)}
+                style={{ minWidth: "220px" }}
+              >
+                <option value="">Выберите товар</option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.nameRu || product.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="cms-btn cms-btn-sm"
+                disabled={sendingInvites || selectedRecipientList.length === 0 || !selectedProductId}
+                onClick={() => void sendReviewInvites(selectedRecipientList)}
+              >
+                {sendingInvites ? "Отправка..." : `Отправить выбранным (${selectedRecipientList.length})`}
+              </button>
+              <button
+                type="button"
+                className="cms-btn cms-btn-sm cms-btn-ghost"
+                onClick={() => {
+                  const all: Record<string, boolean> = {};
+                  for (const u of users) all[u.email] = true;
+                  setSelectedEmails(all);
+                }}
+              >
+                Выбрать всех на странице
+              </button>
+              <button
+                type="button"
+                className="cms-btn cms-btn-sm cms-btn-ghost"
+                onClick={() => setSelectedEmails({})}
+              >
+                Снять выбор
+              </button>
+            </div>
+          </div>
+
           {loading ? (
             <div style={{ padding: "48px", textAlign: "center", color: "var(--cms-text-muted)" }}>
               <div className="cms-spinner" style={{ margin: "0 auto 12px" }} />
@@ -247,6 +368,12 @@ export default function AdminUsersPage() {
                 return (
                   <div key={profile.id} className="cms-card" style={{ border: "1px solid var(--cms-border)", padding: "14px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(selectedEmails[profile.email])}
+                        onChange={(e) => toggleSelectedEmail(profile.email, e.target.checked)}
+                        title="Выбрать для массовой отправки ссылки на отзыв"
+                      />
                       <UserAvatar name={profile.name || profile.email} />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.name || "Без имени"}</div>
@@ -347,6 +474,13 @@ export default function AdminUsersPage() {
                     </div>
 
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <button
+                        className="cms-btn cms-btn-xs cms-btn-secondary"
+                        disabled={sendingInvites || !selectedProductId}
+                        onClick={() => void sendReviewInvites([{ email: profile.email, name: profile.name || profile.email }])}
+                      >
+                        Ссылка на отзыв
+                      </button>
                       <button className="cms-btn cms-btn-xs" onClick={() => toggleArchive(profile)} disabled={pending === profile.email}>
                         {profile.archived ? "Восстановить" : "В архив"}
                       </button>

@@ -8,8 +8,9 @@ import {
   listActiveMediaItems,
   readMediaLibrary,
   softDeleteMediaItem,
-  upsertMediaItem,
 } from '@/lib/admin-media-library';
+import prisma from '@/lib/db';
+import { withPrismaRetry } from '@/lib/prisma-retry';
 
 interface MediaItemResponse {
   filename: string;
@@ -94,21 +95,26 @@ async function listFilesFromFs(baseUrl: string): Promise<MediaItemResponse[]> {
 
 async function syncDbWithFs(baseUrl: string): Promise<void> {
   const fsItems = await listFilesFromFs(baseUrl);
-  for (const item of fsItems) {
-    await upsertMediaItem({
-      id: uuidv4(),
-      filename: item.filename,
-      relativePath: item.relativePath,
-      url: item.url,
-      size: item.size,
-      width: 0,
-      height: 0,
-      mimeType: 'image/webp',
-      createdAt: item.updatedAt,
-      updatedAt: item.updatedAt,
-      deletedAt: null,
-    });
-  }
+  if (fsItems.length === 0) return;
+
+  await withPrismaRetry(() =>
+    prisma.mediaAsset.createMany({
+      data: fsItems.map((item) => ({
+        id: uuidv4(),
+        filename: item.filename,
+        relativePath: item.relativePath,
+        url: item.url,
+        size: item.size,
+        width: 0,
+        height: 0,
+        mimeType: 'image/webp',
+        source: 'admin',
+        createdAt: new Date(item.updatedAt),
+        updatedAt: new Date(item.updatedAt),
+      })),
+      skipDuplicates: true,
+    })
+  );
 }
 
 export async function GET(req: NextRequest) {

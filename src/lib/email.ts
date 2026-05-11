@@ -300,3 +300,82 @@ export async function sendStockAvailableEmail(data: {
 }
 
 // Receipt PDF is now attached directly to sendOrderConfirmation — no separate email needed.
+
+export async function sendReviewInviteEmail(data: {
+  recipientEmail: string;
+  recipientName: string;
+  productName: string;
+  reviewUrl: string;
+}) {
+  const apiKey = await getResendApiKey();
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY not set and not found in DB settings, skipping review invite email');
+    return { ok: false as const, reason: 'missing_api_key' as const };
+  }
+
+  const resend = new Resend(apiKey);
+  const subject = `Оставьте отзыв о ${data.productName} — errani`;
+  const safeName = data.recipientName?.trim() || 'Здравствуйте';
+  const html = `<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f2f2f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:36px 16px 48px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;">
+        <tr><td style="padding:0 0 18px;text-align:center;"><span style="font-size:26px;font-weight:900;color:#1a1a1a;">errani</span></td></tr>
+        <tr><td style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.09);">
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;background:#e8601c;font-size:0;line-height:0;">&nbsp;</td></tr></table>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:26px 28px 12px;">
+            <p style="margin:0 0 8px;font-size:10px;font-weight:700;color:#e8601c;letter-spacing:0.14em;text-transform:uppercase;">errani</p>
+            <h1 style="margin:0;font-size:24px;font-weight:900;color:#1a1a1a;">Поделитесь впечатлением</h1>
+          </td></tr></table>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 24px;">
+            <p style="margin:0 0 14px;font-size:15px;color:#555;line-height:1.7;">${safeName}, будем благодарны за отзыв о товаре <strong>${data.productName}</strong>.</p>
+            <p style="margin:0 0 18px;font-size:13px;color:#777;line-height:1.7;">Ссылка персональная и одноразовая: отзыв можно оставить только один раз.</p>
+            <a href="${data.reviewUrl}" style="display:inline-block;padding:14px 22px;background:#e8601c;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:700;">Оставить отзыв</a>
+            <p style="margin:18px 0 0;font-size:12px;color:#888;word-break:break-all;">Если кнопка не работает, откройте ссылку:<br/>${data.reviewUrl}</p>
+          </td></tr></table>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 28px;">
+            <p style="margin:0;font-size:13px;color:#888;line-height:1.7;">Спасибо, что выбираете errani.</p>
+          </td></tr></table>
+        </td></tr>
+        <tr><td style="padding:22px 0 0;text-align:center;"><p style="margin:0;font-size:12px;color:#aaa;">© ${new Date().getFullYear()} errani.ru</p></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  try {
+    const result = await resend.emails.send({
+      from: 'errani <mail@errani.ru>',
+      to: data.recipientEmail,
+      subject,
+      html,
+    });
+
+    try {
+      await prisma.adminEmail.create({
+        data: {
+          direction: 'outbound',
+          fromAddr: 'mail@errani.ru',
+          toAddr: data.recipientEmail,
+          subject,
+          body: html,
+          textBody: `Оставьте отзыв о ${data.productName}: ${data.reviewUrl}`,
+          status: 'sent',
+          isRead: true,
+          resendId: result.data?.id || '',
+        },
+      });
+    } catch (dbErr) {
+      console.error('Failed to save review invite email to DB:', dbErr);
+    }
+
+    return { ok: true as const };
+  } catch (err) {
+    console.error('Failed to send review invite email:', err);
+    return { ok: false as const, reason: 'send_failed' as const };
+  }
+}

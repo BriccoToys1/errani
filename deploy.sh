@@ -47,6 +47,8 @@ ssh $SSH_OPTS "$SSH_HOST" /bin/bash <<ENDSSH
 set -e
 export PATH=$NODE_PATH:\$PATH
 cd $REMOTE_DIR
+echo "🗄️  Синхронизация схемы БД..."
+npm run db:push 2>&1 | tail -12
 npm run build 2>&1 | tail -15
 echo "🔄 Перезапуск PM2..."
 pm2 reload ecosystem.config.js --update-env

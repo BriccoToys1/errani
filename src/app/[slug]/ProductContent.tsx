@@ -30,6 +30,16 @@ interface Product {
   colors?: string;
 }
 
+interface PublicReview {
+  id: string;
+  customerName: string;
+  rating: number;
+  text: string;
+  media: string[];
+  approvedAt?: string;
+  createdAt?: string;
+}
+
 export function ProductContent({ product }: { product: Product }) {
   const { lang } = useLanguage();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -43,6 +53,8 @@ export function ProductContent({ product }: { product: Product }) {
   const [waitlistLoading, setWaitlistLoading] = useState(false);
   const [waitlistSuccess, setWaitlistSuccess] = useState('');
   const [waitlistError, setWaitlistError] = useState('');
+  const [reviews, setReviews] = useState<PublicReview[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
 
   // Check if product is already in cart on mount / when selectedColor changes
   useEffect(() => {
@@ -142,6 +154,25 @@ export function ProductContent({ product }: { product: Product }) {
 
   const carouselPrev = () => setCarouselIndex((carouselIndex - 1 + allImages.length) % allImages.length);
   const carouselNext = () => setCarouselIndex((carouselIndex + 1) % allImages.length);
+
+  useEffect(() => {
+    let canceled = false;
+    const loadReviews = async () => {
+      setReviewsLoading(true);
+      try {
+        const res = await fetch(`/api/reviews/public?slug=${encodeURIComponent(product.slug)}`);
+        const data = await res.json();
+        if (!res.ok || !data.success) return;
+        if (!canceled) setReviews(Array.isArray(data.reviews) ? data.reviews : []);
+      } catch {
+        // ignore
+      } finally {
+        if (!canceled) setReviewsLoading(false);
+      }
+    };
+    loadReviews();
+    return () => { canceled = true; };
+  }, [product.slug]);
 
   return (
     <main>
@@ -508,6 +539,40 @@ export function ProductContent({ product }: { product: Product }) {
           </div>
         </section>
       )}
+
+      {/* Gallery */}
+      <section className="description-section" style={{ paddingTop: '3rem' }}>
+        <h2 className="description-heading">{lang === 'ru' ? 'Отзывы' : 'Reviews'}</h2>
+        {reviewsLoading ? (
+          <p style={{ color: 'var(--text-secondary)' }}>{lang === 'ru' ? 'Загрузка отзывов...' : 'Loading reviews...'}</p>
+        ) : reviews.length === 0 ? (
+          <p style={{ color: 'var(--text-secondary)' }}>{lang === 'ru' ? 'Пока нет опубликованных отзывов.' : 'No published reviews yet.'}</p>
+        ) : (
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {reviews.map((review) => (
+              <article key={review.id} style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  <strong>{review.customerName || (lang === 'ru' ? 'Клиент' : 'Customer')}</strong>
+                  <span style={{ color: '#ffcc66' }}>{review.rating.toFixed(1)} ★</span>
+                </div>
+                {review.text && <p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{review.text}</p>}
+                {Array.isArray(review.media) && review.media.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px', marginTop: '10px' }}>
+                    {review.media.map((url) => {
+                      const isVideo = /\\.(mp4|webm|mov)$/i.test(url);
+                      return isVideo ? (
+                        <video key={url} src={url} controls style={{ width: '100%', borderRadius: '8px' }} />
+                      ) : (
+                        <img key={url} src={url} alt="review media" style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '8px' }} />
+                      );
+                    })}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Gallery */}
       {allImages.length > 1 && (

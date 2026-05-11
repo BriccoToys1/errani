@@ -2,6 +2,7 @@ import prisma from '@/lib/db';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 
 export const ADMIN_MEDIA_LIBRARY_KEY = 'admin_media_library_v1';
+const MEDIA_CACHE_TTL_MS = 12_000;
 
 export interface MediaLibraryItem {
   id: string;
@@ -15,6 +16,18 @@ export interface MediaLibraryItem {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+}
+
+let mediaCache: { expiresAt: number; data: MediaLibraryItem[] } | null = null;
+
+function toDateOrNow(value: string | undefined): Date {
+  if (!value) return new Date();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function invalidateCache() {
+  mediaCache = null;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -46,7 +59,35 @@ function normalizeItem(raw: unknown): MediaLibraryItem | null {
   };
 }
 
-export async function readMediaLibrary(): Promise<MediaLibraryItem[]> {
+function toLibraryItem(asset: {
+  id: string;
+  filename: string;
+  relativePath: string;
+  url: string;
+  size: number;
+  width: number;
+  height: number;
+  mimeType: string;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+}): MediaLibraryItem {
+  return {
+    id: asset.id,
+    filename: asset.filename,
+    relativePath: asset.relativePath,
+    url: asset.url,
+    size: asset.size,
+    width: asset.width,
+    height: asset.height,
+    mimeType: asset.mimeType,
+    createdAt: asset.createdAt.toISOString(),
+    updatedAt: asset.updatedAt.toISOString(),
+    deletedAt: asset.deletedAt ? asset.deletedAt.toISOString() : null,
+  };
+}
+
+async function readLegacySiteContentMedia(): Promise<MediaLibraryItem[]> {
   const content = await withPrismaRetry(() =>
     prisma.siteContent.findUnique({
       where: { key: ADMIN_MEDIA_LIBRARY_KEY },
@@ -65,61 +106,156 @@ export async function readMediaLibrary(): Promise<MediaLibraryItem[]> {
   }
 }
 
-export async function writeMediaLibrary(items: MediaLibraryItem[]): Promise<void> {
+async function migrateLegacySiteContentMedia(): Promise<MediaLibraryItem[]> {
+  const legacyItems = listActiveMediaItems(await readLegacySiteContentMedia());
+  if (legacyItems.length === 0) return [];
+
   await withPrismaRetry(() =>
-    prisma.siteContent.upsert({
-      where: { key: ADMIN_MEDIA_LIBRARY_KEY },
-      update: { value: JSON.stringify(items) },
-      create: { key: ADMIN_MEDIA_LIBRARY_KEY, value: JSON.stringify(items) },
+    prisma.mediaAsset.createMany({
+      data: legacyItems.map((item) => ({
+        id: item.id,
+        filename: item.filename,
+        relativePath: item.relativePath,
+        url: item.url,
+        size: item.size,
+        width: item.width,
+        height: item.height,
+        mimeType: item.mimeType || 'image/webp',
+        source: 'admin',
+        createdAt: toDateOrNow(item.createdAt),
+        updatedAt: toDateOrNow(item.updatedAt),
+        deletedAt: item.deletedAt ? toDateOrNow(item.deletedAt) : null,
+      })),
+      skipDuplicates: true,
     })
   );
+
+  const assets = await withPrismaRetry(() =>
+    prisma.mediaAsset.findMany({
+      where: { deletedAt: null },
+      orderBy: { updatedAt: 'desc' },
+      take: 5000,
+    })
+  );
+
+  return assets.map(toLibraryItem);
+}
+
+export async function readMediaLibrary(): Promise<MediaLibraryItem[]> {
+  const now = Date.now();
+  if (mediaCache && mediaCache.expiresAt > now) {
+    return mediaCache.data;
+  }
+
+  const assets = await withPrismaRetry(() =>
+    prisma.mediaAsset.findMany({
+      where: { deletedAt: null },
+      orderBy: { updatedAt: 'desc' },
+      take: 5000,
+    })
+  );
+
+  let items = assets.map(toLibraryItem);
+  if (items.length === 0) {
+    items = await migrateLegacySiteContentMedia();
+  }
+
+  mediaCache = { expiresAt: now + MEDIA_CACHE_TTL_MS, data: items };
+  return items;
+}
+
+export async function writeMediaLibrary(items: MediaLibraryItem[]): Promise<void> {
+  const activeItems = listActiveMediaItems(items);
+  const now = new Date();
+
+  await withPrismaRetry(() =>
+    prisma.$transaction(async (tx) => {
+      for (const item of activeItems) {
+        await tx.mediaAsset.upsert({
+          where: { relativePath: item.relativePath },
+          update: {
+            filename: item.filename,
+            url: item.url,
+            size: item.size,
+            width: item.width,
+            height: item.height,
+            mimeType: item.mimeType || 'image/webp',
+            deletedAt: null,
+            updatedAt: now,
+          },
+          create: {
+            id: item.id,
+            filename: item.filename,
+            relativePath: item.relativePath,
+            url: item.url,
+            size: item.size,
+            width: item.width,
+            height: item.height,
+            mimeType: item.mimeType || 'image/webp',
+            source: 'admin',
+            createdAt: item.createdAt ? toDateOrNow(item.createdAt) : now,
+            updatedAt: item.updatedAt ? toDateOrNow(item.updatedAt) : now,
+            deletedAt: null,
+          },
+        });
+      }
+    })
+  );
+
+  invalidateCache();
 }
 
 export async function upsertMediaItem(item: MediaLibraryItem): Promise<void> {
-  const items = await readMediaLibrary();
-  const now = new Date().toISOString();
+  const now = new Date();
 
-  const next = [...items];
-  const existingIndex = next.findIndex((x) => x.relativePath === item.relativePath);
-  if (existingIndex >= 0) {
-    const existing = next[existingIndex];
-    next[existingIndex] = {
-      ...existing,
-      ...item,
-      id: existing.id,
-      createdAt: existing.createdAt,
-      updatedAt: now,
-      deletedAt: null,
-    };
-  } else {
-    next.unshift({
-      ...item,
-      createdAt: item.createdAt || now,
-      updatedAt: item.updatedAt || now,
-      deletedAt: null,
-    });
-  }
+  await withPrismaRetry(() =>
+    prisma.mediaAsset.upsert({
+      where: { relativePath: item.relativePath },
+      update: {
+        filename: item.filename,
+        url: item.url,
+        size: item.size,
+        width: item.width,
+        height: item.height,
+        mimeType: item.mimeType || 'image/webp',
+        deletedAt: null,
+        updatedAt: now,
+      },
+      create: {
+        id: item.id,
+        filename: item.filename,
+        relativePath: item.relativePath,
+        url: item.url,
+        size: item.size,
+        width: item.width,
+        height: item.height,
+        mimeType: item.mimeType || 'image/webp',
+        source: 'admin',
+        createdAt: item.createdAt ? toDateOrNow(item.createdAt) : now,
+        updatedAt: item.updatedAt ? toDateOrNow(item.updatedAt) : now,
+        deletedAt: null,
+      },
+    })
+  );
 
-  await writeMediaLibrary(next);
+  invalidateCache();
 }
 
 export async function softDeleteMediaItem(relativePath: string): Promise<boolean> {
-  const items = await readMediaLibrary();
-  const now = new Date().toISOString();
-  let changed = false;
+  const now = new Date();
+  const result = await withPrismaRetry(() =>
+    prisma.mediaAsset.updateMany({
+      where: { relativePath, deletedAt: null },
+      data: { deletedAt: now },
+    })
+  );
 
-  const next = items.map((item) => {
-    if (item.relativePath !== relativePath) return item;
-    if (item.deletedAt) return item;
-    changed = true;
-    return { ...item, deletedAt: now, updatedAt: now };
-  });
-
-  if (changed) {
-    await writeMediaLibrary(next);
+  if (result.count > 0) {
+    invalidateCache();
+    return true;
   }
 
-  return changed;
+  return false;
 }
 
 export function listActiveMediaItems(items: MediaLibraryItem[]): MediaLibraryItem[] {

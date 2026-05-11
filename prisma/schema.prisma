@@ -68,6 +68,8 @@ model Product {
   favorites     Favorite[]
   avitoProducts AvitoProduct[]
   waitlistRequests WaitlistRequest[]
+  reviews       Review[]
+  reviewInvites ReviewInvite[]
 }
 
 model Favorite {
@@ -125,6 +127,70 @@ model SiteContent {
   key       String   @unique
   value     String   // JSON content
   updatedAt DateTime @updatedAt
+}
+
+model MediaAsset {
+  id           String   @id @default(uuid())
+  filename     String
+  relativePath String   @unique
+  url          String
+  size         Int      @default(0)
+  width        Int      @default(0)
+  height       Int      @default(0)
+  mimeType     String   @default("image/webp")
+  source       String   @default("admin")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  @@index([deletedAt, updatedAt])
+  @@index([source, updatedAt])
+}
+
+model ReviewInvite {
+  id           String    @id @default(uuid())
+  tokenHash    String    @unique
+  tokenPreview String    @default("")
+  email        String
+  customerName String    @default("")
+  productId    String
+  product      Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  status       String    @default("sent") // sent, used, revoked, expired
+  sentAt       DateTime  @default(now())
+  expiresAt    DateTime?
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  review       Review?
+
+  @@index([email, createdAt])
+  @@index([productId, createdAt])
+  @@index([status, createdAt])
+}
+
+model Review {
+  id           String       @id @default(uuid())
+  productId    String
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inviteId     String       @unique
+  invite       ReviewInvite @relation(fields: [inviteId], references: [id], onDelete: Restrict)
+  customerEmail String
+  customerName String       @default("")
+  rating       Float
+  text         String       @default("")
+  media        String       @default("[]") // JSON array of images/videos
+  status       String       @default("pending") // pending, approved, rejected
+  ip           String       @default("")
+  userAgent    String       @default("")
+  approvedAt   DateTime?
+  rejectedAt   DateTime?
+  moderatedBy  String       @default("")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([productId, status, createdAt])
+  @@index([customerEmail, createdAt])
+  @@index([status, createdAt])
 }
 
 // ─── Analytics ───
