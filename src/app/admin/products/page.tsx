@@ -534,6 +534,7 @@ interface Product {
   description: string;
   descriptionRu: string;
   price: number;
+  shippingFee: number;
   oldPrice: number | null;
   discount: number;
   stock: number;
@@ -566,7 +567,7 @@ interface MediaLibraryItem {
 
 const emptyProduct = {
   name: "", nameRu: "", slug: "", description: "", descriptionRu: "",
-  price: 0, oldPrice: null as number | null, discount: 0, stock: 0,
+  price: 0, shippingFee: 0, oldPrice: null as number | null, discount: 0, stock: 0,
   currency: "RUB", image: "", images: "[]", inStock: true, isPreorder: false,
   preorderClosed: false, preorderAvailableDate: "",
   isAuthor: false, isLimited: false, limitedEditionText: "", isActive: true,
@@ -876,6 +877,7 @@ export default function AdminProductsPage() {
     description: product.description,
     descriptionRu: product.descriptionRu || "",
     price: product.price,
+    shippingFee: product.shippingFee ?? 0,
     oldPrice: product.oldPrice,
     discount: product.discount,
     stock: product.stock,
@@ -937,7 +939,7 @@ export default function AdminProductsPage() {
     setForm({
       name: product.name, nameRu: product.nameRu || "", slug: product.slug,
       description: product.description, descriptionRu: product.descriptionRu || "",
-      price: product.price, oldPrice: product.oldPrice, discount: product.discount,
+      price: product.price, shippingFee: product.shippingFee ?? 0, oldPrice: product.oldPrice, discount: product.discount,
       stock: product.stock, currency: product.currency, image: product.image,
       images: product.images, inStock: product.inStock, isPreorder: product.isPreorder,
       preorderClosed: product.preorderClosed || false,
@@ -964,6 +966,7 @@ export default function AdminProductsPage() {
       description: product.description,
       descriptionRu: product.descriptionRu || "",
       price: product.price,
+      shippingFee: product.shippingFee ?? 0,
       oldPrice: product.oldPrice,
       discount: product.discount,
       stock: product.stock,
@@ -1022,6 +1025,7 @@ export default function AdminProductsPage() {
       body: JSON.stringify({
         ...form,
         price: Number(form.price),
+        shippingFee: Number(form.shippingFee) || 0,
         oldPrice: form.oldPrice !== null && form.oldPrice !== undefined
           ? Number(form.oldPrice)
           : null,
@@ -1365,10 +1369,14 @@ export default function AdminProductsPage() {
                 Description (EN) — перевод
                 <textarea className="cms-textarea" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} style={{ width: "100%" }} placeholder="English translation" />
               </label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "12px" }}>
                 <label className="cms-label">
                   Цена
                   <input className="cms-input" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} />
+                </label>
+                <label className="cms-label">
+                  Доставка (товар), ₽
+                  <input className="cms-input" type="number" min="0" value={form.shippingFee} onChange={(e) => setForm({ ...form, shippingFee: Number(e.target.value) })} />
                 </label>
                 <label className="cms-label">
                   Старая цена

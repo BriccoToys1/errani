@@ -15,6 +15,7 @@ interface Product {
   description: string;
   descriptionRu: string | null;
   price: number;
+  shippingFee?: number;
   oldPrice: number | null;
   discount: number;
   image: string;
@@ -144,6 +145,7 @@ export function ProductContent({ product }: { product: Product }) {
       productId: product.id,
       name: displayName,
       price,
+      shippingFee: Number(product.shippingFee || 0),
       currency: 'RUB',
       image: heroImage,
       isPreorder: product.isPreorder,

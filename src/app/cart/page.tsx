@@ -113,7 +113,13 @@ export default function CartPage() {
   const handleRemove = (id: string) => setCart(removeFromCart(id));
   const total = getCartTotal(cart);
   const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
-  const shippingCost = isRussia ? getShippingCost(itemCount) : 0;
+  const hasLegacyItemsWithoutShippingFee = cart.some((item) => typeof item.shippingFee !== 'number');
+  const perProductShippingCost = cart.reduce(
+    (sum, item) => sum + (Number(item.shippingFee || 0) * item.quantity),
+    0
+  );
+  const fallbackShippingCost = isRussia ? getShippingCost(itemCount) : 0;
+  const shippingCost = hasLegacyItemsWithoutShippingFee ? fallbackShippingCost : perProductShippingCost;
   const grandTotal = total + shippingCost;
   const unavailableItems = cart.filter(item => unavailableProductIds.has(item.productId));
   const hasUnavailableItems = unavailableItems.length > 0;

@@ -50,6 +50,7 @@ export default async function ProductPage({ params }: Props) {
         description: product.description,
         descriptionRu: product.descriptionRu,
         price: product.price,
+        shippingFee: product.shippingFee,
         oldPrice: product.oldPrice,
         discount: product.discount,
         image: product.image,

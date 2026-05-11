@@ -76,6 +76,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         description: description || descriptionRu || 'No description',
         descriptionRu: nullableString(descriptionRu),
         price: Number(body.price) || 0,
+        shippingFee: Number(body.shippingFee) || 0,
         oldPrice: body.oldPrice !== null && body.oldPrice !== undefined && body.oldPrice !== ''
           ? Number(body.oldPrice)
           : null,

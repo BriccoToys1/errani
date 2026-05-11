@@ -5,7 +5,7 @@ import { withPrismaRetry } from '@/lib/prisma-retry';
 
 const PRODUCTS_STALE_TTL_MS = 60 * 60 * 1000;
 const PRODUCTS_FRESH_TTL_MS = 20 * 1000;
-const QUERY_TIMEOUT_MS = 15_000;
+const QUERY_TIMEOUT_MS = 6_000;
 const productsStaleCache = new Map<string, { ts: number; data: unknown }>();
 
 const CYRILLIC_MAP: Record<string, string> = {
@@ -179,6 +179,7 @@ export async function POST(req: NextRequest) {
         description: description || descriptionRu || 'No description',
         descriptionRu: nullableString(descriptionRu),
         price: Number(body.price) || 0,
+        shippingFee: Number(body.shippingFee) || 0,
         oldPrice: body.oldPrice !== null && body.oldPrice !== undefined && body.oldPrice !== ''
           ? Number(body.oldPrice)
           : null,

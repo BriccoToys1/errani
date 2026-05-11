@@ -42,6 +42,7 @@ model Product {
   description   String
   descriptionRu String?        // Russian description
   price         Float
+  shippingFee   Float          @default(0) // Per-product delivery fee in RUB
   oldPrice      Float?         // Original price (for discount display)
   discount      Int            @default(0) // Discount percentage 0-100
   currency      String         @default("RUB")

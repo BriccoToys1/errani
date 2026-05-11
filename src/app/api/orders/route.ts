@@ -98,7 +98,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, email, phone, country, customCountry, oblast, city, zipCode, street, house, apartment, shippingMethod, items, shippingCost: shippingCostInput } = body as {
+    const { name, email, phone, country, customCountry, oblast, city, zipCode, street, house, apartment, shippingMethod, items } = body as {
       name: string;
       email: string;
       phone: string;
@@ -112,7 +112,6 @@ export async function POST(req: NextRequest) {
       apartment: string;
       shippingMethod: string;
       items: OrderItemInput[];
-      shippingCost?: number;
     };
 
     // Validate
@@ -189,9 +188,11 @@ export async function POST(req: NextRequest) {
     }
 
     let totalAmount = 0;
+    let perProductShippingAmount = 0;
     const orderItems = normalizedItems.map(item => {
       const product = products.find(p => p.id === item.productId)!;
       totalAmount += product.price * item.quantity;
+      perProductShippingAmount += (Number((product as { shippingFee?: number }).shippingFee || 0) * item.quantity);
       return {
         productId: item.productId,
         quantity: item.quantity,
@@ -199,8 +200,15 @@ export async function POST(req: NextRequest) {
         selectedColor: item.selectedColor || '',
       };
     });
-    // Add shipping cost if provided (Russia only)
-    totalAmount += Number(shippingCostInput) || 0;
+
+    // Legacy fallback for products without per-product shipping configured
+    const totalItemCount = normalizedItems.reduce((sum, item) => sum + item.quantity, 0);
+    const legacyShipping = country === 'RU'
+      ? (totalItemCount <= 2 ? 350 : totalItemCount <= 5 ? 470 : 790)
+      : 0;
+    const hasConfiguredPerProductShipping = products.some((p) => Number((p as { shippingFee?: number }).shippingFee || 0) > 0);
+    const shippingAmount = hasConfiguredPerProductShipping ? perProductShippingAmount : legacyShipping;
+    totalAmount += shippingAmount;
 
     // Build notes from color selections
     const colorNotes = normalizedItems

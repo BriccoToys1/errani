@@ -124,12 +124,30 @@ export async function POST(req: NextRequest) {
     
     challenges.delete(challengeId); // One-time use
 
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const envAdminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const envAdminPassword = String(process.env.ADMIN_PASSWORD || '');
+    if (envAdminEmail && envAdminPassword && normalizedEmail === envAdminEmail && String(password) === envAdminPassword) {
+      clearAttempts(ip);
+      const token = jwt.sign(
+        { adminId: 'env-admin', email: String(email).trim(), name: 'Admin' },
+        jwtSecret,
+        { expiresIn: '7d' }
+      );
+      return NextResponse.json({ token, name: 'Admin' });
+    }
+
     // Constant-time-ish lookup: always do bcrypt compare even if user not found
-    const admin = await withPrismaRetry(
-      () => prisma.admin.findUnique({ where: { email } }),
-      2,
-      80
-    );
+    let admin = null;
+    try {
+      admin = await withPrismaRetry(
+        () => prisma.admin.findUnique({ where: { email } }),
+        2,
+        80
+      );
+    } catch {
+      admin = null;
+    }
 
     // Use a dummy hash if admin not found to prevent timing attacks
     const hashToCompare = admin?.password || '$2a$10$dummyHashThatWillNeverMatchAnything00000000000';

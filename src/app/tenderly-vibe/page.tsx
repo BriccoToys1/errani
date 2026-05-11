@@ -16,6 +16,7 @@ const TENDERLY_FALLBACK_PRODUCT = {
   descriptionRu:
     'Создавая эту колоду, я хотела передать тёплую, добрую атмосферу и искреннюю нежность, которые живут в каждом из нас.',
   price: 5690,
+  shippingFee: 0,
   oldPrice: null,
   discount: 0,
   image: '/media/photo-11.jpeg',
@@ -90,6 +91,7 @@ export default async function TenderlyVibePage() {
         description: effectiveProduct.description,
         descriptionRu: effectiveProduct.descriptionRu,
         price: effectiveProduct.price,
+        shippingFee: (effectiveProduct as { shippingFee?: number }).shippingFee ?? 0,
         oldPrice: effectiveProduct.oldPrice,
         discount: effectiveProduct.discount,
         image: effectiveProduct.image,
