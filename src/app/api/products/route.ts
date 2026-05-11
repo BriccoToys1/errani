@@ -7,9 +7,42 @@ import { withPrismaRetry } from '@/lib/prisma-retry';
 
 const PRODUCTS_STALE_TTL_MS = 60 * 60 * 1000;
 const PRODUCTS_FRESH_TTL_MS = 20 * 1000;
-const QUERY_TIMEOUT_MS = 5_000;
+const QUERY_TIMEOUT_MS = 12_000;
 const PRODUCTS_DISK_CACHE_FILE = path.join(process.cwd(), '.next', 'cache', 'products-cache.json');
 const productsStaleCache = new Map<string, { ts: number; data: unknown }>();
+const FALLBACK_PRODUCTS = [
+  {
+    id: 'tenderly-vibe-fallback',
+    slug: 'tenderly-vibe',
+    name: 'Tenderly Vibe',
+    nameRu: 'Tenderly Vibe',
+    description: 'Авторская колода Таро Tenderly Vibe.',
+    descriptionRu: 'Авторская колода Таро Tenderly Vibe.',
+    price: 5690,
+    shippingFee: 0,
+    oldPrice: null,
+    discount: 0,
+    currency: 'RUB',
+    image: '/media/photo-11.jpeg',
+    images: '["/media/photo-1.jpeg","/media/photo-2.jpeg","/media/photo-3.jpeg","/media/photo-9.jpeg","/media/photo-10.jpeg","/media/photo-8.jpeg"]',
+    stock: 0,
+    inStock: false,
+    isPreorder: false,
+    preorderClosed: false,
+    preorderAvailableDate: null,
+    isAuthor: true,
+    isLimited: true,
+    limitedEditionText: '',
+    characteristics: '[]',
+    colors: '[]',
+    isActive: true,
+    isSaleDisabled: true,
+    isSoldOut: true,
+    sortOrder: 0,
+    createdAt: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+  },
+];
 
 const CYRILLIC_MAP: Record<string, string> = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y',
@@ -179,10 +212,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(disk.data, { headers: { 'X-Products-Cache': 'stale-disk' } });
     }
 
-    return NextResponse.json(
-      { error: 'Products temporarily unavailable' },
-      { status: 503, headers: { 'X-Products-Cache': 'miss' } }
-    );
+    return NextResponse.json(FALLBACK_PRODUCTS, { headers: { 'X-Products-Cache': 'fallback-static' } });
+
   }
 }
 
