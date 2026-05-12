@@ -6,6 +6,7 @@ import { withPrismaRetry } from '@/lib/prisma-retry';
 import { ProductContent } from './ProductContent';
 
 export const dynamic = 'force-dynamic';
+const DB_PAGE_TIMEOUT_MS = 4_000;
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -13,8 +14,21 @@ interface Props {
 
 const SAFE_SLUG_PATTERN = /^[a-z0-9_-]+$/i;
 
+async function withDbTimeout<T>(operation: Promise<T>): Promise<T | null> {
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), DB_PAGE_TIMEOUT_MS)),
+    ]);
+  } catch {
+    return null;
+  }
+}
+
 const getProductBySlug = cache(async (slug: string) => {
-  return withPrismaRetry(() => prisma.product.findUnique({ where: { slug } }), 2, 80);
+  return withDbTimeout(
+    withPrismaRetry(() => prisma.product.findUnique({ where: { slug } }), 2, 80)
+  );
 });
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

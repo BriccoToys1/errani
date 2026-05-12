@@ -5,6 +5,7 @@ import { withPrismaRetry } from '@/lib/prisma-retry';
 import { ProductContent } from '../[slug]/ProductContent';
 
 export const dynamic = 'force-dynamic';
+const DB_PAGE_TIMEOUT_MS = 4_000;
 
 const TENDERLY_FALLBACK_PRODUCT = {
   id: 'tenderly-vibe-fallback',
@@ -34,25 +35,40 @@ const TENDERLY_FALLBACK_PRODUCT = {
 
 type TenderlyProduct = Awaited<ReturnType<typeof prisma.product.findUnique>>;
 
+async function withDbTimeout<T>(operation: Promise<T>): Promise<T | null> {
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), DB_PAGE_TIMEOUT_MS)),
+    ]);
+  } catch {
+    return null;
+  }
+}
+
 const getTenderlyProduct = cache(async (): Promise<TenderlyProduct> => {
-  const bySlug = await withPrismaRetry(() =>
-    prisma.product.findUnique({ where: { slug: 'tenderly-vibe' } })
-  , 2, 80);
+  const bySlug = await withDbTimeout(
+    withPrismaRetry(() =>
+      prisma.product.findUnique({ where: { slug: 'tenderly-vibe' } })
+    , 2, 80)
+  );
   if (bySlug) return bySlug;
 
-  return withPrismaRetry(() =>
-    prisma.product.findFirst({
-      where: {
-        OR: [
-          { slug: { startsWith: 'tenderly-vibe' } },
-          { slug: { contains: 'tenderly' } },
-          { name: { contains: 'Tenderly', mode: 'insensitive' } },
-          { nameRu: { contains: 'Tenderly', mode: 'insensitive' } },
-        ],
-      },
-      orderBy: { updatedAt: 'desc' },
-    })
-  , 2, 80);
+  return withDbTimeout(
+    withPrismaRetry(() =>
+      prisma.product.findFirst({
+        where: {
+          OR: [
+            { slug: { startsWith: 'tenderly-vibe' } },
+            { slug: { contains: 'tenderly' } },
+            { name: { contains: 'Tenderly', mode: 'insensitive' } },
+            { nameRu: { contains: 'Tenderly', mode: 'insensitive' } },
+          ],
+        },
+        orderBy: { updatedAt: 'desc' },
+      })
+    , 2, 80)
+  );
 });
 
 export async function generateMetadata(): Promise<Metadata> {
