@@ -41,7 +41,6 @@ export async function GET(req: NextRequest) {
       newEmailsCount,
       expenseAgg,
       userCount,
-      pageViewCountRaw,
     ] = await withTimeout(
       withPrismaRetry(
         () =>
@@ -62,7 +61,6 @@ export async function GET(req: NextRequest) {
             prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }),
             prisma.expense.aggregate({ _sum: { amount: true } }),
             prisma.user.count(),
-            prisma.pageView.count(),
           ]),
         3,
         120
@@ -72,6 +70,10 @@ export async function GET(req: NextRequest) {
 
     const totalRevenueAmount = totalRevenue._sum.totalAmount || 0;
     const totalExpenses = expenseAgg._sum.amount || 0;
+    const previousPayload = dashboardCache?.payload as { pageViewCount?: unknown } | undefined;
+    const pageViewCount = typeof previousPayload?.pageViewCount === 'number'
+      ? previousPayload.pageViewCount
+      : 0;
 
     const payload = {
       orderCount,
@@ -88,14 +90,14 @@ export async function GET(req: NextRequest) {
       newInquiriesCount: newInquiryCount,
       newEmailsCount,
       userCount,
-      pageViewCount: pageViewCountRaw,
+      pageViewCount,
       // backward-compatible shape for older admin pages
       stats: {
         products: productCount,
         orders: orderCount,
         users: userCount,
         inquiries: inquiryCount,
-        pageViews: pageViewCountRaw,
+        pageViews: pageViewCount,
       },
     };
 
