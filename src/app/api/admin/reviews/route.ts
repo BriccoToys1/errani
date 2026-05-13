@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(cached.payload, { headers: { 'X-Reviews-Cache': 'hit' } });
     }
 
-    const withTimeout = async <T,>(promise: Promise<T>, fallback: T, ms = 12_000): Promise<T> => {
+    const withTimeout = async <T,>(promise: Promise<T>, fallback: T, ms = 4_000): Promise<T> => {
       try {
         return await Promise.race([
           promise,
