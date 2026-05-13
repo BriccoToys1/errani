@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     }
 
     const paidFilter = { status: { in: ['paid', 'assembling', 'shipped', 'in_transit', 'delivered'] } };
-    const withTimeout = async <T,>(promise: Promise<T>, ms = 6000): Promise<T> =>
+    const withTimeout = async <T,>(promise: Promise<T>, ms = 12000): Promise<T> =>
       Promise.race([
         promise,
         new Promise<T>((_, reject) => setTimeout(() => reject(new Error('dashboard query timeout')), ms)),
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       newEmailsCount,
       expenseAgg,
       userCount,
-      pageViewCount,
+      pageViewCountRaw,
     ] = await withTimeout(
       withPrismaRetry(
         () =>
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
         3,
         120
       ),
-      8000
+      15000
     );
 
     const totalRevenueAmount = totalRevenue._sum.totalAmount || 0;
@@ -88,14 +88,14 @@ export async function GET(req: NextRequest) {
       newInquiriesCount: newInquiryCount,
       newEmailsCount,
       userCount,
-      pageViewCount,
+      pageViewCount: pageViewCountRaw,
       // backward-compatible shape for older admin pages
       stats: {
         products: productCount,
         orders: orderCount,
         users: userCount,
         inquiries: inquiryCount,
-        pageViews: pageViewCount,
+        pageViews: pageViewCountRaw,
       },
     };
 

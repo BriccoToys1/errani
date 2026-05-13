@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const denied = adminGuard(req);
   if (denied) return denied;
 
-  const withTimeout = async <T,>(promise: Promise<T>, ms = 5000): Promise<T> =>
+  const withTimeout = async <T,>(promise: Promise<T>, ms = 12000): Promise<T> =>
     Promise.race([
       promise,
       new Promise<T>((_, reject) => setTimeout(() => reject(new Error('counts timeout')), ms)),

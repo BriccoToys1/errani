@@ -8,7 +8,7 @@ import { normalizeProductMediaList } from '@/lib/product-media';
 
 const PRODUCTS_STALE_TTL_MS = 60 * 60 * 1000;
 const PRODUCTS_FRESH_TTL_MS = 20 * 1000;
-const QUERY_TIMEOUT_MS = 12_000;
+const QUERY_TIMEOUT_MS = 20_000;
 const PRODUCTS_DISK_CACHE_FILE = path.join(process.cwd(), '.next', 'cache', 'products-cache.json');
 const productsStaleCache = new Map<string, { ts: number; data: unknown }>();
 const FALLBACK_PRODUCTS = [
