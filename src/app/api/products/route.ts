@@ -4,6 +4,7 @@ import path from 'path';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
+import { normalizeProductMediaList } from '@/lib/product-media';
 
 const PRODUCTS_STALE_TTL_MS = 60 * 60 * 1000;
 const PRODUCTS_FRESH_TTL_MS = 20 * 1000;
@@ -186,10 +187,11 @@ export async function GET(req: NextRequest) {
       ),
     ]);
 
-    productsStaleCache.set(cacheKey, { ts: Date.now(), data: products });
-    await saveDiskCache(cacheKey, products);
+    const normalizedProducts = await normalizeProductMediaList(products);
+    productsStaleCache.set(cacheKey, { ts: Date.now(), data: normalizedProducts });
+    await saveDiskCache(cacheKey, normalizedProducts);
 
-    return NextResponse.json(products, { headers: { 'X-Products-Cache': 'miss' } });
+    return NextResponse.json(normalizedProducts, { headers: { 'X-Products-Cache': 'miss' } });
   } catch (error) {
     console.error('Error fetching products:', error);
     const stale = productsStaleCache.get(cacheKey);

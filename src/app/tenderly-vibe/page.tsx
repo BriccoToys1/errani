@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { cache } from 'react';
 import prisma from '@/lib/db';
 import { withPrismaRetry } from '@/lib/prisma-retry';
+import { normalizeProductMedia } from '@/lib/product-media';
 import { ProductContent } from '../[slug]/ProductContent';
 
 export const dynamic = 'force-dynamic';
@@ -75,7 +76,7 @@ export async function generateMetadata(): Promise<Metadata> {
   let product = null;
   try { product = await getTenderlyProduct(); } catch { /* ignore */ }
 
-  const effective = product || TENDERLY_FALLBACK_PRODUCT;
+  const effective = await normalizeProductMedia(product || TENDERLY_FALLBACK_PRODUCT);
 
   const name = effective.nameRu || effective.name;
   const desc = effective.descriptionRu || effective.description || '';
@@ -94,7 +95,7 @@ export default async function TenderlyVibePage() {
     console.error('Tenderly page DB error:', error);
   }
 
-  const effectiveProduct = product || TENDERLY_FALLBACK_PRODUCT;
+  const effectiveProduct = await normalizeProductMedia(product || TENDERLY_FALLBACK_PRODUCT);
   const preorderAvailableDate = product?.preorderAvailableDate?.toISOString() ?? null;
 
   return (

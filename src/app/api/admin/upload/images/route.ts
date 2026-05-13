@@ -20,7 +20,9 @@ interface MediaItemResponse {
   updatedAt: string;
 }
 
-const ROOT_MEDIA_DIR = path.join(process.cwd(), 'public', 'media', 'products');
+const ROOT_MEDIA_PRODUCTS_DIR = path.join(process.cwd(), 'public', 'media', 'products');
+const ROOT_MEDIA_LEGACY_DIR = path.join(process.cwd(), 'public', 'media');
+const ALLOWED_MEDIA_EXT = new Set(['.webp', '.jpg', '.jpeg', '.png']);
 
 function getPublicBaseUrl(req: NextRequest): string {
   const configured = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
@@ -49,35 +51,40 @@ function normalizeRelativePath(raw: string): string | null {
     : trimmed;
 
   const normalized = `/${rawPath.replace(/\\/g, '/').replace(/^\/+/, '')}`;
-  if (!normalized.startsWith('/media/products/')) return null;
+  if (!normalized.startsWith('/media/')) return null;
   return normalized;
 }
 
 function safeResolveFromRelative(relativePath: string): string | null {
   const absolute = path.resolve(process.cwd(), 'public', relativePath.replace(/^\/+/, ''));
-  const root = path.resolve(ROOT_MEDIA_DIR);
+  const root = path.resolve(ROOT_MEDIA_LEGACY_DIR);
   if (!absolute.startsWith(root)) return null;
   return absolute;
 }
 
 async function listFilesFromFs(baseUrl: string): Promise<MediaItemResponse[]> {
-  const exists = await fs.stat(ROOT_MEDIA_DIR).then(() => true).catch(() => false);
-  if (!exists) return [];
-
   const rows: MediaItemResponse[] = [];
+  const seen = new Set<string>();
 
   async function walk(currentDir: string) {
+    const exists = await fs.stat(currentDir).then(() => true).catch(() => false);
+    if (!exists) return;
     const entries = await fs.readdir(currentDir, { withFileTypes: true });
     for (const entry of entries) {
       const absolutePath = path.join(currentDir, entry.name);
       if (entry.isDirectory()) {
+        if (entry.name === '.DS_Store') continue;
         await walk(absolutePath);
         continue;
       }
-      if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.webp')) continue;
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!entry.isFile() || !ALLOWED_MEDIA_EXT.has(ext)) continue;
 
       const stats = await fs.stat(absolutePath);
       const relative = `/${path.relative(path.join(process.cwd(), 'public'), absolutePath).replace(/\\/g, '/')}`;
+      if (relative.startsWith('/media/reviews/')) continue;
+      if (seen.has(relative)) continue;
+      seen.add(relative);
       rows.push({
         filename: entry.name,
         relativePath: relative,
@@ -88,7 +95,10 @@ async function listFilesFromFs(baseUrl: string): Promise<MediaItemResponse[]> {
     }
   }
 
-  await walk(ROOT_MEDIA_DIR);
+  await walk(ROOT_MEDIA_PRODUCTS_DIR);
+  if (rows.length === 0) {
+    await walk(ROOT_MEDIA_LEGACY_DIR);
+  }
   rows.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
   return rows;
 }

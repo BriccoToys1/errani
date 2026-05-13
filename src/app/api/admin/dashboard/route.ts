@@ -17,22 +17,16 @@ export async function GET(req: NextRequest) {
     }
 
     const paidFilter = { status: { in: ['paid', 'assembling', 'shipped', 'in_transit', 'delivered'] } };
-    const withTimeout = async <T,>(promise: Promise<T>, fallback: T, ms = 5000): Promise<T> => {
-      try {
-        return await Promise.race([
-          promise,
-          new Promise<T>((_, reject) => setTimeout(() => reject(new Error('dashboard query timeout')), ms)),
-        ]);
-      } catch {
-        return fallback;
-      }
-    };
+    const withTimeout = async <T,>(promise: Promise<T>, ms = 6000): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('dashboard query timeout')), ms)),
+      ]);
 
     const viewedSetting = await withTimeout(
-      withPrismaRetry(() => prisma.siteSettings.findUnique({ where: { key: 'ordersViewedAt' } }), 2, 80),
-      null
+      withPrismaRetry(() => prisma.siteSettings.findUnique({ where: { key: 'ordersViewedAt' } }), 3, 120)
     );
-    const ordersViewedAt = viewedSetting ? new Date(viewedSetting.value) : new Date(0);
+    const ordersViewedAt = viewedSetting?.value ? new Date(viewedSetting.value) : new Date(0);
 
     const [
       orderCount,
@@ -49,26 +43,25 @@ export async function GET(req: NextRequest) {
       userCount,
       pageViewCount,
     ] = await Promise.all([
-      withTimeout(withPrismaRetry(() => prisma.order.count({ where: paidFilter }), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.product.count(), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.order.aggregate({ where: paidFilter, _sum: { totalAmount: true } }), 2, 80), { _sum: { totalAmount: 0 } }),
-      withTimeout(withPrismaRetry(() => prisma.order.count({ where: { status: 'pending' } }), 2, 80), 0),
+      withTimeout(withPrismaRetry(() => prisma.order.count({ where: paidFilter }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.product.count(), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.order.aggregate({ where: paidFilter, _sum: { totalAmount: true } }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.order.count({ where: { status: 'pending' } }), 3, 120)),
       withTimeout(
         withPrismaRetry(() => prisma.order.findMany({
           where: paidFilter,
           take: 5,
           orderBy: { createdAt: 'desc' },
-        }), 2, 80),
-        []
+        }), 3, 120)
       ),
-      withTimeout(withPrismaRetry(() => prisma.inquiry.count({ where: { status: { not: 'archived' } } }), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.inquiry.count({ where: { status: 'new' } }), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.waitlistRequest.count({ where: { status: 'pending' } }), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.order.count({ where: { status: { in: ['paid', 'assembling'] }, createdAt: { gt: ordersViewedAt } } }), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.expense.aggregate({ _sum: { amount: true } }), 2, 80), { _sum: { amount: 0 } }),
-      withTimeout(withPrismaRetry(() => prisma.user.count(), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.pageView.count(), 2, 80), 0),
+      withTimeout(withPrismaRetry(() => prisma.inquiry.count({ where: { status: { not: 'archived' } } }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.inquiry.count({ where: { status: 'new' } }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.waitlistRequest.count({ where: { status: 'pending' } }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.order.count({ where: { status: { in: ['paid', 'assembling'] }, createdAt: { gt: ordersViewedAt } } }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.expense.aggregate({ _sum: { amount: true } }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.user.count(), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.pageView.count(), 3, 120)),
     ]);
 
     const totalRevenueAmount = totalRevenue._sum.totalAmount || 0;

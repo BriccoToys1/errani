@@ -13,16 +13,11 @@ export async function GET(req: NextRequest) {
   const denied = adminGuard(req);
   if (denied) return denied;
 
-  const withTimeout = async <T,>(promise: Promise<T>, fallback: T, ms = 4000): Promise<T> => {
-    try {
-      return await Promise.race([
-        promise,
-        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('counts timeout')), ms)),
-      ]);
-    } catch {
-      return fallback;
-    }
-  };
+  const withTimeout = async <T,>(promise: Promise<T>, ms = 5000): Promise<T> =>
+    Promise.race([
+      promise,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error('counts timeout')), ms)),
+    ]);
 
   try {
     const now = Date.now();
@@ -33,10 +28,10 @@ export async function GET(req: NextRequest) {
     }
 
     const [newOrders, newInquiries, newWaitlist, newEmails] = await Promise.all([
-      withTimeout(withPrismaRetry(() => prisma.order.count({ where: { status: { in: ['paid', 'assembling'] } } }), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.inquiry.count({ where: { status: 'new' } }), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.waitlistRequest.count({ where: { status: 'pending' } }), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }), 2, 80), 0),
+      withTimeout(withPrismaRetry(() => prisma.order.count({ where: { status: { in: ['paid', 'assembling'] } } }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.inquiry.count({ where: { status: 'new' } }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.waitlistRequest.count({ where: { status: 'pending' } }), 3, 120)),
+      withTimeout(withPrismaRetry(() => prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }), 3, 120)),
     ]);
 
     const payload = {
@@ -52,6 +47,11 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error('Counts error:', error);
-    return NextResponse.json({ error: 'Failed to load counts' }, { status: 500 });
+    if (countsCache) {
+      return NextResponse.json(countsCache.payload, {
+        headers: { 'X-Admin-Counts-Cache': 'stale' },
+      });
+    }
+    return NextResponse.json({ error: 'Failed to load counts' }, { status: 503 });
   }
 }

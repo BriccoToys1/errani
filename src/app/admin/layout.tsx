@@ -1,4 +1,5 @@
 import './admin.css';
+import './admin-modern.css';
 import { Outfit } from 'next/font/google';
 
 const outfit = Outfit({

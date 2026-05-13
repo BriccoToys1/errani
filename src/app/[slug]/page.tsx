@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import { cache } from 'react';
 import prisma from '@/lib/db';
 import { withPrismaRetry } from '@/lib/prisma-retry';
+import { normalizeProductMedia } from '@/lib/product-media';
 import { ProductContent } from './ProductContent';
 
 export const dynamic = 'force-dynamic';
@@ -52,6 +53,7 @@ export default async function ProductPage({ params }: Props) {
   }
 
   if (!product || !product.isActive) notFound();
+  const normalizedProduct = await normalizeProductMedia(product);
   const canBePurchased = product.inStock && !product.isSaleDisabled && product.stock > 0;
 
   return (
@@ -67,8 +69,8 @@ export default async function ProductPage({ params }: Props) {
         shippingFee: product.shippingFee,
         oldPrice: product.oldPrice,
         discount: product.discount,
-        image: product.image,
-        images: product.images,
+        image: normalizedProduct.image,
+        images: normalizedProduct.images,
         inStock: canBePurchased,
         isPreorder: product.isPreorder,
         isLimited: product.isLimited,
