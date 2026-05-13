@@ -27,12 +27,19 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const [newOrders, newInquiries, newWaitlist, newEmails] = await Promise.all([
-      withTimeout(withPrismaRetry(() => prisma.order.count({ where: { status: { in: ['paid', 'assembling'] } } }), 3, 120)),
-      withTimeout(withPrismaRetry(() => prisma.inquiry.count({ where: { status: 'new' } }), 3, 120)),
-      withTimeout(withPrismaRetry(() => prisma.waitlistRequest.count({ where: { status: 'pending' } }), 3, 120)),
-      withTimeout(withPrismaRetry(() => prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }), 3, 120)),
-    ]);
+    const [newOrders, newInquiries, newWaitlist, newEmails] = await withTimeout(
+      withPrismaRetry(
+        () =>
+          prisma.$transaction([
+            prisma.order.count({ where: { status: { in: ['paid', 'assembling'] } } }),
+            prisma.inquiry.count({ where: { status: 'new' } }),
+            prisma.waitlistRequest.count({ where: { status: 'pending' } }),
+            prisma.adminEmail.count({ where: { direction: 'inbound', isRead: false } }),
+          ]),
+        3,
+        120
+      )
+    );
 
     const payload = {
       newOrders,

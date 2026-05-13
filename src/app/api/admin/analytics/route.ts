@@ -25,21 +25,6 @@ function buildDateRange(period: number, now: Date): string[] {
   return days;
 }
 
-async function safeQuery<T>(
-  operation: () => Promise<T>,
-  fallback: T,
-  timeoutMs = 4000
-): Promise<T> {
-  try {
-    return await Promise.race([
-      withPrismaRetry(operation, 2, 80),
-      new Promise<T>((resolve) => setTimeout(() => resolve(fallback), timeoutMs)),
-    ]);
-  } catch {
-    return fallback;
-  }
-}
-
 function getStaleCache(period: number): AnalyticsPayload | null {
   const hit = cache.get(period);
   if (!hit) return null;
@@ -66,6 +51,12 @@ export async function GET(req: NextRequest) {
     const days = buildDateRange(period, now);
     const startDay = days[0];
 
+    const withTimeout = async <T,>(promise: Promise<T>, ms = 8000): Promise<T> =>
+      Promise.race([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('analytics query timeout')), ms)),
+      ]);
+
     const [
       recentViews,
       chartRows,
@@ -74,41 +65,45 @@ export async function GET(req: NextRequest) {
       totalPaidOrders,
       totalRevenueRaw,
       totalProducts,
-      uniqueIPsRaw,
-    ] = await Promise.all([
-      safeQuery(
-        () => prisma.pageView.findMany({
-          where: { createdAt: { gte: fiveMinAgo } },
-          distinct: ['sessionId'],
-          select: { sessionId: true },
-        }),
-        [] as Array<{ sessionId: string }>,
-        2500
+    ] = await withTimeout(
+      withPrismaRetry(
+        () =>
+          prisma.$transaction([
+            prisma.pageView.findMany({
+              where: { createdAt: { gte: fiveMinAgo } },
+              distinct: ['sessionId'],
+              select: { sessionId: true },
+            }),
+            prisma.dailyStat.findMany({
+              where: { date: { gte: startDay, lte: today } },
+              orderBy: { date: 'asc' },
+            }),
+            prisma.pageView.groupBy({
+              by: ['country'],
+              where: { createdAt: { gte: new Date(`${today}T00:00:00Z`) }, country: { not: '' } },
+              _count: { country: true },
+              orderBy: { _count: { country: 'desc' } },
+              take: 8,
+            }),
+            prisma.pageView.count(),
+            prisma.order.count({ where: { status: 'paid' } }),
+            prisma.order.aggregate({ where: { status: 'paid' }, _sum: { totalAmount: true } }),
+            prisma.product.count(),
+          ]),
+        3,
+        120
+      )
+    );
+
+    const uniqueIPsRaw = await withTimeout(
+      withPrismaRetry(
+        () =>
+          prisma.$queryRaw<[{ count: bigint }]>`SELECT COUNT(DISTINCT ip)::int AS count FROM "PageView" WHERE ip != ''`,
+        2,
+        120
       ),
-      safeQuery(
-        () => prisma.dailyStat.findMany({
-          where: { date: { gte: startDay, lte: today } },
-          orderBy: { date: 'asc' },
-        }),
-        [] as Array<{ date: string; views: number; visitors: number; orders: number; revenue: number }>
-      ),
-      safeQuery(
-        () => prisma.pageView.groupBy({
-          by: ['country'],
-          where: { createdAt: { gte: new Date(`${today}T00:00:00Z`) }, country: { not: '' } },
-          _count: { country: true },
-          orderBy: { _count: { country: 'desc' } },
-          take: 8,
-        }),
-        [] as Array<{ country: string; _count: { country: number } }>,
-        2500
-      ),
-      safeQuery(() => prisma.pageView.count(), 0),
-      safeQuery(() => prisma.order.count({ where: { status: 'paid' } }), 0),
-      safeQuery(() => prisma.order.aggregate({ where: { status: 'paid' }, _sum: { totalAmount: true } }), { _sum: { totalAmount: 0 } }),
-      safeQuery(() => prisma.product.count(), 0),
-      safeQuery(() => prisma.$queryRaw<[{ count: bigint }]>`SELECT COUNT(DISTINCT ip)::int AS count FROM "PageView" WHERE ip != ''`, [{ count: BigInt(0) }], 3000),
-    ]);
+      5000
+    ).catch(() => [{ count: BigInt(0) }]);
 
     const chartMap = new Map(chartRows.map((row) => [row.date, row]));
     const chart = days.map((date) => ({
