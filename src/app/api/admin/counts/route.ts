@@ -59,6 +59,9 @@ export async function GET(req: NextRequest) {
         headers: { 'X-Admin-Counts-Cache': 'stale' },
       });
     }
-    return NextResponse.json({ error: 'Failed to load counts' }, { status: 503 });
+    return NextResponse.json(
+      { newOrders: 0, newInquiries: 0, newWaitlist: 0, newEmails: 0, degraded: true },
+      { headers: { 'X-Admin-Counts-Cache': 'degraded' } }
+    );
   }
 }
