@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AdminSidebar } from "../AdminSidebar";
 
@@ -576,6 +576,24 @@ const emptyProduct = {
   colors: "[]",
 };
 
+const LOW_STOCK_THRESHOLD = 3;
+
+type StockFilter = "all" | "inStock" | "outOfStock" | "preorder" | "lowStock";
+type TypeFilter = "all" | "author" | "limited";
+type StatusFilter = "all" | "onSale" | "soon" | "soldOut";
+type SortMode = "updatedDesc" | "priceAsc" | "priceDesc" | "stockAsc" | "stockDesc" | "nameAsc";
+type BulkAction =
+  | "none"
+  | "activate"
+  | "deactivate"
+  | "makeAvailable"
+  | "makeUnavailable"
+  | "markSoon"
+  | "unmarkSoon"
+  | "markSoldOut"
+  | "unmarkSoldOut"
+  | "archive";
+
 function slugify(text: string): string {
   const map: Record<string, string> = {
     а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "y",
@@ -777,9 +795,14 @@ export default function AdminProductsPage() {
   const [notification, setNotification] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [filterStock, setFilterStock] = useState("all");
-  const [filterType, setFilterType] = useState("all");
+  const [filterStock, setFilterStock] = useState<StockFilter>("all");
+  const [filterType, setFilterType] = useState<TypeFilter>("all");
+  const [filterStatus, setFilterStatus] = useState<StatusFilter>("all");
+  const [sortMode, setSortMode] = useState<SortMode>("updatedDesc");
+  const [bulkAction, setBulkAction] = useState<BulkAction>("none");
+  const [bulkApplying, setBulkApplying] = useState(false);
   const [archiveView, setArchiveView] = useState<"active" | "archived" | "all">("active");
   const [mediaPickerTarget, setMediaPickerTarget] = useState<"main" | "gallery" | null>(null);
   const [mediaItems, setMediaItems] = useState<MediaLibraryItem[]>([]);
@@ -924,6 +947,13 @@ export default function AdminProductsPage() {
     fetchProducts();
   }, [fetchProducts, getToken, router]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput.trim().toLowerCase());
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const saveStockInline = async (product: Product, newStock: number) => {
     const ok = await updateProductById(product, { stock: newStock });
     if (ok) {
@@ -1013,6 +1043,73 @@ export default function AdminProductsPage() {
     const ok = await updateProductById(product, { isActive: true });
     if (ok) fetchProducts();
   };
+
+  const getProductStatusBadges = useCallback((product: Product) => {
+    const badges: Array<{ label: string; cls: string }> = [];
+    if (!product.isActive) badges.push({ label: "Архив", cls: "cms-badge-red" });
+    if (product.isPreorder) badges.push({ label: "Предзаказ", cls: "cms-badge-blue" });
+    if (product.isSaleDisabled) badges.push({ label: "Скоро", cls: "cms-badge-yellow" });
+    if (product.isSoldOut) badges.push({ label: "Sold Out", cls: "cms-badge-red" });
+    if (product.discount > 0) badges.push({ label: `-${product.discount}%`, cls: "cms-badge-green" });
+    if (product.isAuthor) badges.push({ label: "Авторский", cls: "cms-badge-blue" });
+    if (product.isLimited) badges.push({ label: "Limited", cls: "cms-badge-yellow" });
+    if (product.inStock && product.stock <= LOW_STOCK_THRESHOLD && !product.isSaleDisabled && !product.isSoldOut) {
+      badges.push({ label: `Мало: ${product.stock}`, cls: "cms-badge-red" });
+    }
+    if (badges.length === 0 && product.inStock) {
+      badges.push({ label: "В продаже", cls: "cms-badge-green" });
+    }
+    return badges;
+  }, []);
+
+  const applyBulkAction = useCallback(async () => {
+    const ids = Array.from(checkedIds);
+    if (ids.length === 0) {
+      notify("Выберите товары для массового действия");
+      return;
+    }
+    if (bulkAction === "none") {
+      notify("Выберите действие");
+      return;
+    }
+    if (bulkAction === "archive") {
+      setDeleteConfirm(ids);
+      return;
+    }
+
+    const selectedProducts = products.filter((p) => checkedIds.has(p.id));
+    if (selectedProducts.length === 0) {
+      notify("Выбранные товары не найдены");
+      return;
+    }
+
+    const toOverrides = (action: BulkAction): Record<string, unknown> => {
+      switch (action) {
+        case "activate": return { isActive: true };
+        case "deactivate": return { isActive: false };
+        case "makeAvailable": return { inStock: true };
+        case "makeUnavailable": return { inStock: false };
+        case "markSoon": return { isSaleDisabled: true };
+        case "unmarkSoon": return { isSaleDisabled: false };
+        case "markSoldOut": return { isSoldOut: true };
+        case "unmarkSoldOut": return { isSoldOut: false };
+        default: return {};
+      }
+    };
+
+    const overrides = toOverrides(bulkAction);
+    setBulkApplying(true);
+    let okCount = 0;
+    for (const product of selectedProducts) {
+      const ok = await updateProductById(product, overrides);
+      if (ok) okCount += 1;
+    }
+    setBulkApplying(false);
+    setBulkAction("none");
+    setCheckedIds(new Set());
+    await fetchProducts();
+    notify(okCount === selectedProducts.length ? `Обновлено: ${okCount}` : `Обновлено: ${okCount}, ошибок: ${selectedProducts.length - okCount}`);
+  }, [bulkAction, checkedIds, fetchProducts, notify, products, updateProductById]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -1124,22 +1221,55 @@ export default function AdminProductsPage() {
     return item.filename.toLowerCase().includes(q) || item.relativePath.toLowerCase().includes(q);
   });
 
-  const filtered = products.filter((p) => {
-    if (archiveView === "active" && !p.isActive) return false;
-    if (archiveView === "archived" && p.isActive) return false;
-    // Search filter
-    if (search) {
-      const q = search.toLowerCase();
-      if (!p.name.toLowerCase().includes(q) && !p.slug.toLowerCase().includes(q)) return false;
-    }
-    // Stock filter
-    if (filterStock === "inStock" && !p.inStock) return false;
-    if (filterStock === "outOfStock" && p.inStock) return false;
-    if (filterStock === "preorder" && !p.isPreorder) return false;
-    // Type filter
-    if (filterType === "author" && !p.isAuthor) return false;
-    return true;
-  });
+  const catalogStats = useMemo(() => {
+    const active = products.filter((p) => p.isActive).length;
+    const archived = products.length - active;
+    const onSale = products.filter((p) => p.isActive && p.inStock && !p.isSaleDisabled && !p.isSoldOut).length;
+    const soon = products.filter((p) => p.isSaleDisabled).length;
+    const soldOut = products.filter((p) => p.isSoldOut).length;
+    const lowStock = products.filter((p) => p.inStock && p.stock <= LOW_STOCK_THRESHOLD && !p.isSoldOut).length;
+    return { active, archived, onSale, soon, soldOut, lowStock };
+  }, [products]);
+
+  const filtered = useMemo(() => {
+    const rows = products.filter((p) => {
+      if (archiveView === "active" && !p.isActive) return false;
+      if (archiveView === "archived" && p.isActive) return false;
+
+      if (search) {
+        const haystack = [p.name, p.nameRu, p.slug, p.description, p.descriptionRu].join(" ").toLowerCase();
+        if (!haystack.includes(search)) return false;
+      }
+
+      if (filterStock === "inStock" && !p.inStock) return false;
+      if (filterStock === "outOfStock" && p.inStock) return false;
+      if (filterStock === "preorder" && !p.isPreorder) return false;
+      if (filterStock === "lowStock" && !(p.inStock && p.stock <= LOW_STOCK_THRESHOLD)) return false;
+
+      if (filterType === "author" && !p.isAuthor) return false;
+      if (filterType === "limited" && !p.isLimited) return false;
+
+      if (filterStatus === "onSale" && !(p.isActive && p.inStock && !p.isSaleDisabled && !p.isSoldOut)) return false;
+      if (filterStatus === "soon" && !p.isSaleDisabled) return false;
+      if (filterStatus === "soldOut" && !p.isSoldOut) return false;
+
+      return true;
+    });
+
+    rows.sort((a, b) => {
+      switch (sortMode) {
+        case "priceAsc": return a.price - b.price;
+        case "priceDesc": return b.price - a.price;
+        case "stockAsc": return a.stock - b.stock;
+        case "stockDesc": return b.stock - a.stock;
+        case "nameAsc": return (a.nameRu || a.name).localeCompare(b.nameRu || b.name, "ru");
+        case "updatedDesc":
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
+    return rows;
+  }, [archiveView, filterStatus, filterStock, filterType, products, search, sortMode]);
 
   const toggleAll = () => {
     if (checkedIds.size === filtered.length) setCheckedIds(new Set());
@@ -1164,48 +1294,125 @@ export default function AdminProductsPage() {
           </div>
         </div>
 
-        <div className="cms-content">
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" }}>
-            <input className="cms-input cms-input-sm" placeholder="Поиск..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "180px" }} />
-            <select className="cms-select" value={filterStock} onChange={(e) => setFilterStock(e.target.value)}>
-              <option value="all">Все статусы</option>
-              <option value="inStock">В наличии</option>
-              <option value="outOfStock">Нет в наличии</option>
-              <option value="preorder">Предзаказ</option>
-            </select>
-            <select className="cms-select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-              <option value="all">Все типы</option>
-              <option value="author">Авторская</option>
-            </select>
-            <select className="cms-select" value={archiveView} onChange={(e) => setArchiveView(e.target.value as "active" | "archived" | "all")}>
-              <option value="active">Активные</option>
-              <option value="archived">Архив</option>
-              <option value="all">Все</option>
-            </select>
-            {checkedIds.size > 0 && (
-              <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={() => setDeleteConfirm(Array.from(checkedIds))}>
-                {archiveView === "archived" ? `Удалить навсегда (${checkedIds.size})` : `В архив (${checkedIds.size})`}
-              </button>
-            )}
+        <div className="cms-content cms-products-content">
+          <div className="cms-products-kpi-grid">
+            <button className={`cms-products-kpi-card ${archiveView === "active" ? "active" : ""}`} onClick={() => setArchiveView("active")}>
+              <span className="cms-products-kpi-label">Активные</span>
+              <span className="cms-products-kpi-value">{catalogStats.active}</span>
+            </button>
+            <button className={`cms-products-kpi-card ${filterStatus === "onSale" ? "active" : ""}`} onClick={() => setFilterStatus(filterStatus === "onSale" ? "all" : "onSale")}>
+              <span className="cms-products-kpi-label">В продаже</span>
+              <span className="cms-products-kpi-value">{catalogStats.onSale}</span>
+            </button>
+            <button className={`cms-products-kpi-card ${filterStatus === "soon" ? "active" : ""}`} onClick={() => setFilterStatus(filterStatus === "soon" ? "all" : "soon")}>
+              <span className="cms-products-kpi-label">Скоро</span>
+              <span className="cms-products-kpi-value">{catalogStats.soon}</span>
+            </button>
+            <button className={`cms-products-kpi-card ${filterStatus === "soldOut" ? "active" : ""}`} onClick={() => setFilterStatus(filterStatus === "soldOut" ? "all" : "soldOut")}>
+              <span className="cms-products-kpi-label">Sold Out</span>
+              <span className="cms-products-kpi-value">{catalogStats.soldOut}</span>
+            </button>
+            <button className={`cms-products-kpi-card ${filterStock === "lowStock" ? "active" : ""}`} onClick={() => setFilterStock(filterStock === "lowStock" ? "all" : "lowStock")}>
+              <span className="cms-products-kpi-label">Низкий остаток</span>
+              <span className="cms-products-kpi-value">{catalogStats.lowStock}</span>
+            </button>
           </div>
 
-          <div className="cms-table-wrap">
+          <div className="cms-products-toolbar">
+            <div className="cms-products-toolbar-row">
+              <input
+                className="cms-input cms-products-search"
+                placeholder="Поиск по названию, slug, описанию..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+              <select className="cms-select cms-products-select" value={filterStock} onChange={(e) => setFilterStock(e.target.value as StockFilter)}>
+                <option value="all">Наличие: все</option>
+                <option value="inStock">Только в наличии</option>
+                <option value="outOfStock">Нет в наличии</option>
+                <option value="preorder">Только предзаказ</option>
+                <option value="lowStock">Низкий остаток</option>
+              </select>
+              <select className="cms-select cms-products-select" value={filterType} onChange={(e) => setFilterType(e.target.value as TypeFilter)}>
+                <option value="all">Тип: все</option>
+                <option value="author">Авторские</option>
+                <option value="limited">Лимитированные</option>
+              </select>
+              <select className="cms-select cms-products-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as StatusFilter)}>
+                <option value="all">Статус: все</option>
+                <option value="onSale">В продаже</option>
+                <option value="soon">Скоро</option>
+                <option value="soldOut">Sold Out</option>
+              </select>
+              <select className="cms-select cms-products-select" value={archiveView} onChange={(e) => setArchiveView(e.target.value as "active" | "archived" | "all")}>
+                <option value="active">Активные</option>
+                <option value="archived">Архив</option>
+                <option value="all">Все</option>
+              </select>
+              <select className="cms-select cms-products-select" value={sortMode} onChange={(e) => setSortMode(e.target.value as SortMode)}>
+                <option value="updatedDesc">Сначала новые</option>
+                <option value="nameAsc">По имени</option>
+                <option value="priceAsc">Цена ↑</option>
+                <option value="priceDesc">Цена ↓</option>
+                <option value="stockAsc">Остаток ↑</option>
+                <option value="stockDesc">Остаток ↓</option>
+              </select>
+            </div>
+
+            <div className="cms-products-toolbar-row">
+              <div className="cms-products-results">
+                Показано: <strong>{filtered.length}</strong> из {products.length}
+              </div>
+              <button
+                className="cms-btn cms-btn-sm"
+                onClick={() => {
+                  setSearchInput("");
+                  setSearch("");
+                  setFilterStock("all");
+                  setFilterType("all");
+                  setFilterStatus("all");
+                  setSortMode("updatedDesc");
+                  setArchiveView("active");
+                }}
+              >
+                Сбросить фильтры
+              </button>
+              <div className="cms-products-bulk">
+                <select
+                  className="cms-select cms-products-select"
+                  value={bulkAction}
+                  onChange={(e) => setBulkAction(e.target.value as BulkAction)}
+                  disabled={bulkApplying}
+                >
+                  <option value="none">Быстрое действие...</option>
+                  <option value="activate">Сделать активными</option>
+                  <option value="deactivate">Снять с витрины</option>
+                  <option value="makeAvailable">Открыть для заказа</option>
+                  <option value="makeUnavailable">Закрыть для заказа</option>
+                  <option value="markSoon">Пометить «Скоро»</option>
+                  <option value="unmarkSoon">Снять «Скоро»</option>
+                  <option value="markSoldOut">Поставить Sold Out</option>
+                  <option value="unmarkSoldOut">Снять Sold Out</option>
+                  <option value="archive">{archiveView === "archived" ? "Удалить выбранные" : "Архивировать выбранные"}</option>
+                </select>
+                <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={applyBulkAction} disabled={bulkApplying || checkedIds.size === 0}>
+                  {bulkApplying ? "Применяем..." : `Применить (${checkedIds.size})`}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="cms-table-wrap cms-products-desktop-table">
             <table className="cms-table">
               <thead>
                 <tr>
                   <th style={{ width: 36 }}><input type="checkbox" checked={checkedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>
-                  <th style={{ width: 50 }}>Фото</th>
-                  <th>Название</th>
-                  <th>Slug</th>
+                  <th style={{ width: 54 }}>Фото</th>
+                  <th>Товар</th>
+                  <th>Статусы</th>
                   <th>Цена</th>
-                  <th>Скидка</th>
                   <th>Остаток</th>
-                  <th>Активен</th>
-                  <th>Доступно</th>
-                  <th title="Disable of Sale — кнопка «Скоро»">Скоро</th>
-                  <th title="Плашка Sold Out на фото">Sold Out</th>
-                  <th>Авторская</th>
-                  <th style={{ width: 110 }}>Действия</th>
+                  <th style={{ width: 220 }}>Быстрые действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -1213,20 +1420,35 @@ export default function AdminProductsPage() {
                   <tr key={p.id} className={checkedIds.has(p.id) ? "cms-row-selected" : ""}>
                     <td><input type="checkbox" checked={checkedIds.has(p.id)} onChange={() => toggleCheck(p.id)} /></td>
                     <td>
-                      {p.image && (
+                      {p.image ? (
                         <img
                           src={p.image}
                           alt=""
-                          style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover", cursor: "pointer" }}
+                          className="cms-products-thumb"
                           title="Нажмите для редактирования"
                           onClick={() => openProduct(p)}
                         />
+                      ) : (
+                        <div className="cms-products-thumb cms-products-thumb-empty">—</div>
                       )}
                     </td>
-                    <td className="cms-td-bold">{p.nameRu || p.name}</td>
-                    <td className="cms-td-mono" style={{ fontSize: "11px" }}>{p.slug}</td>
-                    <td>{formatPrice(p.price)}</td>
-                    <td>{p.discount > 0 ? <span className="cms-badge cms-badge-green">-{p.discount}%</span> : "\u2014"}</td>
+                    <td>
+                      <div className="cms-td-bold">{p.nameRu || p.name}</div>
+                      <div className="cms-td-mono" style={{ fontSize: "11px", marginTop: "2px" }}>{p.slug}</div>
+                    </td>
+                    <td>
+                      <div className="cms-products-badges">
+                        {getProductStatusBadges(p).map((badge, index) => (
+                          <span key={`${badge.label}-${index}`} className={`cms-badge ${badge.cls}`}>{badge.label}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td>
+                      <div>{formatPrice(p.price)}</div>
+                      {p.oldPrice && p.oldPrice > p.price && (
+                        <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", textDecoration: "line-through" }}>{formatPrice(p.oldPrice)}</div>
+                      )}
+                    </td>
                     <td>
                       {editingStockId === p.id ? (
                         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -1234,7 +1456,7 @@ export default function AdminProductsPage() {
                             type="number"
                             min="0"
                             className="cms-input"
-                            style={{ width: "56px", padding: "2px 4px", fontSize: "12px" }}
+                            style={{ width: "64px", padding: "2px 6px", fontSize: "12px" }}
                             value={editingStockValue}
                             onChange={(e) => setEditingStockValue(Number(e.target.value))}
                             onKeyDown={(e) => {
@@ -1247,84 +1469,73 @@ export default function AdminProductsPage() {
                           <button className="cms-btn cms-btn-xs" onClick={() => setEditingStockId(null)}>✕</button>
                         </div>
                       ) : (
-                        <span
-                          style={{ cursor: "pointer", borderBottom: "1px dashed rgba(255,255,255,0.2)", paddingBottom: "1px" }}
-                          title="Нажмите для редактирования"
-                          onClick={() => { setEditingStockId(p.id); setEditingStockValue(p.stock); }}
-                        >
+                        <button className="cms-btn cms-btn-xs" onClick={() => { setEditingStockId(p.id); setEditingStockValue(p.stock); }}>
                           {p.stock}
-                        </span>
+                        </button>
                       )}
                     </td>
                     <td>
-                      <button
-                        className={`cms-badge ${p.isActive ? "cms-badge-green" : "cms-badge-red"}`}
-                        style={{ cursor: "pointer", border: "none" }}
-                        onClick={() => toggleActive(p)}
-                        title="Переключить активность"
-                      >
-                        {p.isActive ? "Да" : "Нет"}
-                      </button>
-                    </td>
-                    <td>
-                      <button
-                        className={`cms-badge ${p.inStock ? "cms-badge-green" : "cms-badge-red"}`}
-                        style={{ cursor: "pointer", border: "none" }}
-                        onClick={() => toggleOrderAvailability(p)}
-                        title="Переключить доступность для заказа"
-                      >
-                        {p.inStock ? "Да" : "Нет"}
-                      </button>
-                    </td>
-                    <td>
-                      <button
-                        className={`cms-badge ${p.isSaleDisabled ? "cms-badge-yellow" : "cms-badge-green"}`}
-                        style={{ cursor: "pointer", border: "none" }}
-                        onClick={() => toggleSaleDisabled(p)}
-                        title="Disable of Sale — показывает «Скоро» вместо кнопки купить"
-                      >
-                        {p.isSaleDisabled ? "Скоро" : "—"}
-                      </button>
-                    </td>
-                    <td>
-                      <button
-                        className={`cms-badge ${p.isSoldOut ? "cms-badge-red" : "cms-badge-green"}`}
-                        style={{ cursor: "pointer", border: "none" }}
-                        onClick={() => toggleSoldOut(p)}
-                        title="Плашка Sold Out на фото товара"
-                      >
-                        {p.isSoldOut ? "Да" : "—"}
-                      </button>
-                    </td>
-                    <td>{p.isAuthor ? <svg width="14" height="14" viewBox="0 0 24 24" fill="#9b59b6"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> : "\u2014"}</td>
-                    <td>
-                      {archiveView === "archived" ? (
-                        <div style={{ display: "flex", gap: "6px" }}>
-                          <button className="cms-btn cms-btn-xs" onClick={() => restoreFromArchive(p)} title="Вернуть товар из архива">
-                            Вернуть
-                          </button>
-                          <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => setDeleteConfirm([p.id])} title="Удалить навсегда">
-                            Удалить
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openProduct(p)} title="Редактировать">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                          </button>
-                          <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([p.id])} title="Архив / удалить" style={{ color: "var(--cms-danger)" }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                          </button>
-                        </>
-                      )}
+                      <div className="cms-products-row-actions">
+                        <button className="cms-btn cms-btn-xs" onClick={() => openProduct(p)}>Изменить</button>
+                        <button className="cms-btn cms-btn-xs" onClick={() => duplicateProduct(p)}>Дубль</button>
+                        <button className="cms-btn cms-btn-xs" onClick={() => (p.isActive ? toggleActive(p) : restoreFromArchive(p))}>
+                          {p.isActive ? "Скрыть" : "Вернуть"}
+                        </button>
+                        <button className="cms-btn cms-btn-xs" onClick={() => toggleOrderAvailability(p)}>
+                          {p.inStock ? "Закрыть заказ" : "Открыть заказ"}
+                        </button>
+                        <a className="cms-btn cms-btn-xs cms-btn-ghost" href={`/${p.slug}`} target="_blank" rel="noreferrer">Сайт</a>
+                        <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => setDeleteConfirm([p.id])}>
+                          {archiveView === "archived" ? "Удалить" : "В архив"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={13} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Товары не найдены</td></tr>
+                  <tr><td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Товары не найдены</td></tr>
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="cms-products-mobile-list">
+            {filtered.map((p) => (
+              <div key={p.id} className="cms-products-mobile-card">
+                <div className="cms-products-mobile-head">
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <input type="checkbox" checked={checkedIds.has(p.id)} onChange={() => toggleCheck(p.id)} />
+                    {p.image ? <img src={p.image} alt="" className="cms-products-thumb" /> : <div className="cms-products-thumb cms-products-thumb-empty">—</div>}
+                  </label>
+                  <div style={{ flex: 1 }}>
+                    <div className="cms-td-bold">{p.nameRu || p.name}</div>
+                    <div className="cms-td-mono" style={{ fontSize: "11px" }}>{p.slug}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 700 }}>{formatPrice(p.price)}</div>
+                    <button className="cms-btn cms-btn-xs" onClick={() => openProduct(p)}>Остаток: {p.stock}</button>
+                  </div>
+                </div>
+                <div className="cms-products-badges">
+                  {getProductStatusBadges(p).map((badge, index) => (
+                    <span key={`${p.id}-${badge.label}-${index}`} className={`cms-badge ${badge.cls}`}>{badge.label}</span>
+                  ))}
+                </div>
+                <div className="cms-products-row-actions">
+                  <button className="cms-btn cms-btn-xs cms-btn-primary" onClick={() => openProduct(p)}>Редактировать</button>
+                  <button className="cms-btn cms-btn-xs" onClick={() => duplicateProduct(p)}>Дубль</button>
+                  <button className="cms-btn cms-btn-xs" onClick={() => toggleOrderAvailability(p)}>{p.inStock ? "Закрыть заказ" : "Открыть заказ"}</button>
+                  <button className="cms-btn cms-btn-xs" onClick={() => toggleSaleDisabled(p)}>{p.isSaleDisabled ? "Снять «Скоро»" : "Поставить «Скоро»"}</button>
+                  <button className="cms-btn cms-btn-xs" onClick={() => toggleSoldOut(p)}>{p.isSoldOut ? "Снять Sold Out" : "Поставить Sold Out"}</button>
+                  <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => setDeleteConfirm([p.id])}>
+                    {archiveView === "archived" ? "Удалить" : "В архив"}
+                  </button>
+                </div>
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div className="cms-products-mobile-empty">Товары не найдены</div>
+            )}
           </div>
         </div>
       </main>
