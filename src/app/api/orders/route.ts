@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { generateOrderNumber } from '@/lib/utils';
 import { adminGuard } from '@/lib/admin-auth';
+import { withPrismaRetry } from '@/lib/prisma-retry';
 
 interface OrderItemInput {
   productId: string;
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
     const light = searchParams.get('light') === '1';
     const includeArchived = searchParams.get('includeArchived') === '1';
 
-    const orders = await prisma.order.findMany({
+    const orders = await withPrismaRetry(() => prisma.order.findMany({
       ...(take ? { take } : {}),
       ...(includeArchived ? {} : { where: { status: { not: 'archived' } } }),
       select: {
@@ -62,23 +63,64 @@ export async function GET(req: NextRequest) {
         notes: true,
         isManual: true,
         createdAt: true,
-        items: {
+      },
+      orderBy: [{ isManual: 'desc' }, { createdAt: 'desc' }],
+    }), 2, 80);
+
+    const orderIds = orders.map((order) => order.id);
+    const items = orderIds.length > 0
+      ? await withPrismaRetry(() => prisma.orderItem.findMany({
+          where: { orderId: { in: orderIds } },
           select: {
             id: true,
+            orderId: true,
             productId: true,
             quantity: true,
             price: true,
-            product: {
-              select: light
-                ? { name: true }
-                : { name: true, nameRu: true },
-            },
+            selectedColor: true,
           },
+        }), 2, 80)
+      : [];
+
+    const productIds = [...new Set(items.map((item) => item.productId).filter(Boolean))];
+    const products = productIds.length > 0
+      ? await withPrismaRetry(() => prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, name: true, nameRu: true },
+        }), 2, 80)
+      : [];
+    const productById = new Map(products.map((product) => [product.id, product]));
+    const itemsByOrderId = new Map<string, Array<{
+      id: string;
+      productId: string;
+      quantity: number;
+      price: number;
+      selectedColor: string;
+      product: { name: string; nameRu?: string | null };
+    }>>();
+
+    for (const item of items) {
+      const product = productById.get(item.productId);
+      const normalizedItem = {
+        id: item.id,
+        productId: item.productId,
+        quantity: item.quantity,
+        price: item.price,
+        selectedColor: item.selectedColor,
+        product: {
+          name: product?.name || 'Товар удалён',
+          ...(!light ? { nameRu: product?.nameRu || null } : {}),
         },
-      },
-      orderBy: [{ isManual: 'desc' }, { createdAt: 'desc' }],
-    });
-    return NextResponse.json(orders);
+      };
+      const next = itemsByOrderId.get(item.orderId) || [];
+      next.push(normalizedItem);
+      itemsByOrderId.set(item.orderId, next);
+    }
+
+    return NextResponse.json(orders.map((order) => ({
+      ...order,
+      items: itemsByOrderId.get(order.id) || [],
+    })));
   } catch (error) {
     console.error('Error fetching orders:', error);
     return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });

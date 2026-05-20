@@ -545,7 +545,7 @@ export default function AdminOrdersPage() {
                     </td>
                     <td>
                       {order.items.length > 0 ? order.items.map((item) => (
-                        <div key={item.id} style={{ fontSize: "12px" }}>{item.product.name} ×{item.quantity}</div>
+                        <div key={item.id} style={{ fontSize: "12px" }}>{item.product?.name || "Товар удалён"} ×{item.quantity}</div>
                       )) : <span style={{ color: "var(--cms-text-muted)", fontSize: 12 }}>—</span>}
                     </td>
                     <td style={{ fontWeight: 600 }}>{formatPrice(order.totalAmount)}</td>
@@ -664,7 +664,7 @@ export default function AdminOrdersPage() {
                     <thead><tr><th>Название</th><th>Кол-во</th><th>Цена</th></tr></thead>
                     <tbody>
                       {selected.items.map((item) => (
-                        <tr key={item.id}><td>{item.product.name}</td><td>{item.quantity}</td><td>{formatPrice(item.price)}</td></tr>
+                        <tr key={item.id}><td>{item.product?.name || "Товар удалён"}</td><td>{item.quantity}</td><td>{formatPrice(item.price)}</td></tr>
                       ))}
                     </tbody>
                   </table>
