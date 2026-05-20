@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
           filename,
           relativePath: url,
           url,
-          data: outputBuffer as unknown as Buffer,
+          data: outputBuffer as unknown as Uint8Array<ArrayBuffer>,
           size: info.size,
           width: info.width,
           height: info.height,

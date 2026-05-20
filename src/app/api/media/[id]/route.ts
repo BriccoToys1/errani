@@ -19,7 +19,7 @@ export async function GET(
     return new NextResponse(null, { status: 404 });
   }
 
-  return new NextResponse(asset.data as unknown as Buffer, {
+  return new NextResponse(asset.data as unknown as Uint8Array<ArrayBuffer>, {
     headers: {
       'Content-Type': asset.mimeType,
       'Cache-Control': 'public, max-age=31536000, immutable',
