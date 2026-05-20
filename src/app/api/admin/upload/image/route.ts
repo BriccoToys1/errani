@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
           filename,
           relativePath: url,
           url,
-          data: outputBuffer,
+          data: outputBuffer as unknown as Buffer,
           size: info.size,
           width: info.width,
           height: info.height,
