@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
+
 import { adminGuard } from '@/lib/admin-auth';
+import prisma from '@/lib/db';
+import { withPrismaRetry } from '@/lib/prisma-retry';
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_SHARP_FORMAT = new Set(['jpeg', 'png', 'webp']);
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
-
-function getYearMonth() {
-  const now = new Date();
-  return {
-    year: String(now.getUTCFullYear()),
-    month: String(now.getUTCMonth() + 1).padStart(2, '0'),
-  };
-}
+const OUTPUT_MIME = 'image/webp';
 
 export async function POST(req: NextRequest) {
   const denied = adminGuard(req);
@@ -59,28 +53,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Unsupported image format' }, { status: 400 });
     }
 
-    const { year, month } = getYearMonth();
-    const filename = `${uuidv4()}.webp`;
-    const relativeDir = `/media/${year}/${month}`;
-    const uploadDir = path.join(process.cwd(), 'public', 'media', year, month);
-    const outputPath = path.join(uploadDir, filename);
-
-    await fs.mkdir(uploadDir, { recursive: true });
-
     const { data: outputBuffer, info } = await sharp(sourceBuffer, { failOn: 'error' })
       .rotate()
       .resize({ width: 1600, fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 82, effort: 3 })
       .toBuffer({ resolveWithObject: true });
 
-    await fs.writeFile(outputPath, outputBuffer);
+    const id = uuidv4();
+    const filename = `${id}.webp`;
+    const url = `/api/media/${id}`;
+    const now = new Date();
+
+    await withPrismaRetry(() =>
+      prisma.mediaAsset.create({
+        data: {
+          id,
+          filename,
+          relativePath: url,
+          url,
+          data: outputBuffer,
+          size: info.size,
+          width: info.width,
+          height: info.height,
+          mimeType: OUTPUT_MIME,
+          source: 'admin',
+          createdAt: now,
+          updatedAt: now,
+        },
+      })
+    );
 
     return NextResponse.json({
       success: true,
-      url: `${relativeDir}/${filename}`,
+      url,
       filename,
       size: info.size,
-      type: 'image/webp',
+      type: OUTPUT_MIME,
       width: info.width,
       height: info.height,
     });

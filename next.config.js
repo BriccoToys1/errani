@@ -35,13 +35,14 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
-      // Кэш картинок на 30 дней
+      // Кэш медиа из базы данных — иммутабельно (UUID не меняется)
       {
-        source: '/uploads/(.*)',
+        source: '/api/media/(.*)',
         headers: [
-          { key: 'Cache-Control', value: 'public, max-age=2592000' },
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
+      // Кэш legacy статических медиа из public/
       {
         source: '/media/(.*)',
         headers: [

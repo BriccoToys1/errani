@@ -135,6 +135,7 @@ model MediaAsset {
   filename     String
   relativePath String   @unique
   url          String
+  data         Bytes?
   size         Int      @default(0)
   width        Int      @default(0)
   height       Int      @default(0)

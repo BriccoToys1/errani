@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -34,14 +32,6 @@ async function validateInvite(token: string) {
   return { ok: true as const, inviteId: invite.id };
 }
 
-function getYearMonth() {
-  const now = new Date();
-  return {
-    year: String(now.getUTCFullYear()),
-    month: String(now.getUTCMonth() + 1).padStart(2, '0'),
-  };
-}
-
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -66,7 +56,10 @@ export async function POST(req: NextRequest) {
     const videoExt = VIDEO_MIME_TO_EXT[mimeType];
 
     if (!isImage && !videoExt) {
-      return NextResponse.json({ success: false, message: 'Поддерживаются JPG/PNG/WEBP/MP4/WEBM/MOV' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: 'Поддерживаются JPG/PNG/WEBP/MP4/WEBM/MOV' },
+        { status: 400 }
+      );
     }
 
     if (isImage && filePart.size > MAX_IMAGE_SIZE_BYTES) {
@@ -77,26 +70,41 @@ export async function POST(req: NextRequest) {
     }
 
     const sourceBuffer = Buffer.from(await filePart.arrayBuffer());
-
-    const { year, month } = getYearMonth();
-    const targetDir = path.join(process.cwd(), 'public', 'media', 'reviews', year, month);
-    await fs.mkdir(targetDir, { recursive: true });
+    const id = uuidv4();
+    const now = new Date();
 
     if (isImage) {
-      const filename = `${uuidv4()}.webp`;
-      const targetPath = path.join(targetDir, filename);
-
       const { data: outputBuffer, info } = await sharp(sourceBuffer, { failOn: 'error' })
         .rotate()
         .resize({ width: 1800, fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 82, effort: 3 })
         .toBuffer({ resolveWithObject: true });
 
-      await fs.writeFile(targetPath, outputBuffer);
+      const filename = `${id}.webp`;
+      const url = `/api/media/${id}`;
+
+      await withPrismaRetry(() =>
+        prisma.mediaAsset.create({
+          data: {
+            id,
+            filename,
+            relativePath: url,
+            url,
+            data: outputBuffer,
+            size: info.size,
+            width: info.width,
+            height: info.height,
+            mimeType: 'image/webp',
+            source: 'review',
+            createdAt: now,
+            updatedAt: now,
+          },
+        })
+      );
 
       return NextResponse.json({
         success: true,
-        url: `/media/reviews/${year}/${month}/${filename}`,
+        url,
         type: 'image',
         width: info.width,
         height: info.height,
@@ -104,13 +112,31 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const filename = `${uuidv4()}.${videoExt}`;
-    const targetPath = path.join(targetDir, filename);
-    await fs.writeFile(targetPath, sourceBuffer);
+    const filename = `${id}.${videoExt}`;
+    const url = `/api/media/${id}`;
+
+    await withPrismaRetry(() =>
+      prisma.mediaAsset.create({
+        data: {
+          id,
+          filename,
+          relativePath: url,
+          url,
+          data: sourceBuffer,
+          size: sourceBuffer.length,
+          width: 0,
+          height: 0,
+          mimeType,
+          source: 'review',
+          createdAt: now,
+          updatedAt: now,
+        },
+      })
+    );
 
     return NextResponse.json({
       success: true,
-      url: `/media/reviews/${year}/${month}/${filename}`,
+      url,
       type: 'video',
       size: sourceBuffer.length,
     });

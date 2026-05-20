@@ -1,36 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 
 import { adminGuard } from '@/lib/admin-auth';
-import { upsertMediaItem } from '@/lib/admin-media-library';
+import prisma from '@/lib/db';
+import { withPrismaRetry } from '@/lib/prisma-retry';
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_INPUT_MIME = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const ALLOWED_SHARP_FORMAT = new Set(['jpeg', 'png', 'webp']);
 const OUTPUT_MIME = 'image/webp';
-
-function getBaseUrl(req: NextRequest): string {
-  const envUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
-  if (envUrl) {
-    return envUrl.replace(/\/$/, '');
-  }
-
-  const proto = req.headers.get('x-forwarded-proto') || 'https';
-  const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'errani.ru';
-  const normalizedHost = host.startsWith('admin.') ? host.replace(/^admin\./, '') : host;
-  return `${proto}://${normalizedHost}`;
-}
-
-function getStorageDirParts(): { year: string; month: string } {
-  const now = new Date();
-  return {
-    year: String(now.getUTCFullYear()),
-    month: String(now.getUTCMonth() + 1).padStart(2, '0'),
-  };
-}
 
 export async function POST(req: NextRequest) {
   const denied = adminGuard(req);
@@ -48,10 +27,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (filePart.size <= 0) {
-      return NextResponse.json(
-        { success: false, message: 'Пустой файл' },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, message: 'Пустой файл' }, { status: 400 });
     }
 
     if (filePart.size > MAX_SIZE_BYTES) {
@@ -89,46 +65,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { year, month } = getStorageDirParts();
-    const filename = `${uuidv4()}.webp`;
-    const relativeDir = `/media/products/${year}/${month}`;
-    const targetDir = path.join(process.cwd(), 'public', 'media', 'products', year, month);
-    const targetPath = path.join(targetDir, filename);
-
-    await fs.mkdir(targetDir, { recursive: true });
-
     const { data: outputBuffer, info } = await sharp(sourceBuffer, { failOn: 'error' })
       .rotate()
       .resize({ width: 1600, fit: 'inside', withoutEnlargement: true })
       .webp({ quality: 82, effort: 3 })
       .toBuffer({ resolveWithObject: true });
 
-    await fs.writeFile(targetPath, outputBuffer);
+    const id = uuidv4();
+    const filename = `${id}.webp`;
+    const url = `/api/media/${id}`;
+    const now = new Date();
 
-    const url = `${relativeDir}/${filename}`;
-    const fullUrl = `${getBaseUrl(req)}${url}`;
-    const nowIso = new Date().toISOString();
-
-    await upsertMediaItem({
-      id: uuidv4(),
-      filename,
-      relativePath: url,
-      url: fullUrl,
-      size: info.size,
-      width: info.width,
-      height: info.height,
-      mimeType: OUTPUT_MIME,
-      createdAt: nowIso,
-      updatedAt: nowIso,
-      deletedAt: null,
-    }).catch((error) => {
-      console.error('Media DB sync warning:', error);
-    });
+    await withPrismaRetry(() =>
+      prisma.mediaAsset.create({
+        data: {
+          id,
+          filename,
+          relativePath: url,
+          url,
+          data: outputBuffer,
+          size: info.size,
+          width: info.width,
+          height: info.height,
+          mimeType: OUTPUT_MIME,
+          source: 'admin',
+          createdAt: now,
+          updatedAt: now,
+        },
+      })
+    );
 
     return NextResponse.json({
       success: true,
       url,
-      fullUrl,
+      fullUrl: url,
       filename,
       width: info.width,
       height: info.height,
