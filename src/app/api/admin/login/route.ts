@@ -57,6 +57,60 @@ function clearAttempts(ip: string) {
   loginAttempts.delete(ip);
 }
 
+async function recordAdminSession(req: NextRequest, email: string, name: string) {
+  const ip = getClientIP(req);
+  const userAgent = req.headers.get('user-agent') || '';
+  const country =
+    req.headers.get('x-vercel-ip-country') ||
+    req.headers.get('cf-ipcountry') ||
+    req.headers.get('x-country-code') ||
+    '';
+  const city =
+    req.headers.get('x-vercel-ip-city') ||
+    req.headers.get('cf-ipcity') ||
+    '';
+
+  const entry = {
+    at: new Date().toISOString(),
+    email,
+    name,
+    ip,
+    country,
+    city,
+    userAgent,
+  };
+
+  try {
+    const current = await withPrismaRetry(
+      () => prisma.siteSettings.findUnique({ where: { key: 'admin_sessions_v1' } }),
+      2,
+      80
+    );
+    let list: typeof entry[] = [];
+    try {
+      const parsed = JSON.parse(current?.value || '[]');
+      if (Array.isArray(parsed)) {
+        list = parsed.filter((row) => typeof row === 'object' && row !== null) as typeof entry[];
+      }
+    } catch {
+      list = [];
+    }
+    const next = [entry, ...list].slice(0, 100);
+    await withPrismaRetry(
+      () =>
+        prisma.siteSettings.upsert({
+          where: { key: 'admin_sessions_v1' },
+          update: { value: JSON.stringify(next) },
+          create: { key: 'admin_sessions_v1', value: JSON.stringify(next) },
+        }),
+      2,
+      80
+    );
+  } catch (error) {
+    console.error('Failed to record admin session:', error);
+  }
+}
+
 // ── Challenge system: server-side nonce to prevent automated requests ──
 const challenges = new Map<string, { answer: string; expiresAt: number }>();
 
@@ -129,6 +183,7 @@ export async function POST(req: NextRequest) {
     const envAdminPassword = String(process.env.ADMIN_PASSWORD || '');
     if (envAdminEmail && envAdminPassword && normalizedEmail === envAdminEmail && String(password) === envAdminPassword) {
       clearAttempts(ip);
+      await recordAdminSession(req, String(email).trim(), 'Admin');
       const token = jwt.sign(
         { adminId: 'env-admin', email: String(email).trim(), name: 'Admin' },
         jwtSecret,
@@ -161,6 +216,7 @@ export async function POST(req: NextRequest) {
 
     // Success — clear rate limit for this IP
     clearAttempts(ip);
+    await recordAdminSession(req, admin.email, admin.name);
 
     const token = jwt.sign(
       { adminId: admin.id, email: admin.email, name: admin.name },

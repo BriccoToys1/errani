@@ -27,6 +27,28 @@ interface Settings {
   freeShippingThreshold: number;
 }
 
+interface AdminSessionEntry {
+  at: string;
+  email: string;
+  name: string;
+  ip: string;
+  country?: string;
+  city?: string;
+  userAgent?: string;
+}
+
+interface SeoSettings {
+  title: string;
+  description: string;
+  keywords: string;
+}
+
+const DEFAULT_SEO_SETTINGS: SeoSettings = {
+  title: "errani — Авторские Колоды Таро",
+  description: "Авторские колоды Таро от Екатерины Эррани.",
+  keywords: "таро, колода таро, errani",
+};
+
 const DEFAULT_SETTINGS: Settings = {
   siteEnabled: true,
   maintenanceMode: false,
@@ -664,6 +686,9 @@ export default function AdminSettingsPage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [featuredProductLink, setFeaturedProductLink] = useState("/tenderly-vibe");
   const [deliveryEstimate, setDeliveryEstimate] = useState("Ориентировочный срок доставки ~ начало Мая");
+  const [adminSessions, setAdminSessions] = useState<AdminSessionEntry[]>([]);
+  const [seoSettings, setSeoSettings] = useState<SeoSettings>(DEFAULT_SEO_SETTINGS);
+  const [robotsText, setRobotsText] = useState("User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api\n\nSitemap: https://errani.ru/sitemap.xml");
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
@@ -704,6 +729,30 @@ export default function AdminSettingsPage() {
       .then((r) => r.json())
       .then((d) => { if (d.value) setDeliveryEstimate(d.value); })
       .catch(() => {});
+
+    fetch("/api/admin/settings?key=admin_sessions_v1", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.value) return;
+        try {
+          const parsed = JSON.parse(d.value);
+          if (Array.isArray(parsed)) setAdminSessions(parsed.slice(0, 100));
+        } catch {}
+      })
+      .catch(() => {});
+
+    fetch("/api/admin/settings?key=seo_global", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.value) return;
+        try { setSeoSettings({ ...DEFAULT_SEO_SETTINGS, ...JSON.parse(d.value) }); } catch {}
+      })
+      .catch(() => {});
+
+    fetch("/api/admin/settings?key=seo_robots", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => { if (d.value) setRobotsText(d.value); })
+      .catch(() => {});
   }, [getToken, router]);
 
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => {
@@ -740,6 +789,16 @@ export default function AdminSettingsPage() {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ key: "deliveryEstimate", value: deliveryEstimate }),
+        }),
+        fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ key: "seo_global", value: JSON.stringify(seoSettings) }),
+        }),
+        fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ key: "seo_robots", value: robotsText }),
         }),
       ]);
       localStorage.setItem("cms_settings", JSON.stringify(settings));
@@ -799,12 +858,10 @@ export default function AdminSettingsPage() {
   });
 
   const TABS = [
-    { id: "general", label: "Основные" },
-    { id: "commerce", label: "Магазин" },
-    { id: "shipping", label: "Доставка и оплата" },
-    { id: "social", label: "Соцсети и уведомления" },
+    { id: "general", label: "Основное" },
     { id: "integrations", label: "Интеграции" },
-    { id: "advanced", label: "Расширенные" },
+    { id: "sessions", label: "Сессии" },
+    { id: "seo", label: "SEO" },
   ];
 
   return (
@@ -906,7 +963,7 @@ export default function AdminSettingsPage() {
             </div>
           )}
 
-          {activeTab === "commerce" && (
+          {activeTab === "general" && (
             <div style={{ display: "grid", gap: "16px" }}>
               <SettingSection title="Настройки магазина">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -935,7 +992,7 @@ export default function AdminSettingsPage() {
             </div>
           )}
 
-          {activeTab === "shipping" && (
+          {activeTab === "general" && (
             <div style={{ display: "grid", gap: "16px" }}>
               <SettingSection title="Информация о доставке">
                 <label className="cms-label">
@@ -976,7 +1033,7 @@ export default function AdminSettingsPage() {
             </div>
           )}
 
-          {activeTab === "social" && (
+          {activeTab === "general" && (
             <div style={{ display: "grid", gap: "16px" }}>
               <SettingSection title="Соцсети">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -1005,41 +1062,71 @@ export default function AdminSettingsPage() {
             <IntegrationsTab notify={notify} getToken={getToken} />
           )}
 
-          {activeTab === "advanced" && (
+          {activeTab === "sessions" && (
             <div style={{ display: "grid", gap: "16px" }}>
-              <SettingSection title="Аналитика и приватность">
-                <Toggle checked={settings.analyticsEnabled} onChange={(v) => update("analyticsEnabled", v)} label="Сбор аналитики" description="Отслеживание просмотров страниц и статистики посетителей" />
-                <Toggle checked={settings.cookieConsent} onChange={(v) => update("cookieConsent", v)} label="Баннер cookies" description="Показывать уведомление о файлах cookie новым посетителям" />
-              </SettingSection>
-
-              <SettingSection title="База данных">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "16px" }}>
-                  <div className="cms-stat-card"><div className="cms-stat-label">Заказы</div><div className="cms-stat-value">{dbStats.orders}</div></div>
-                  <div className="cms-stat-card"><div className="cms-stat-label">Товары</div><div className="cms-stat-value">{dbStats.products}</div></div>
-                  <div className="cms-stat-card"><div className="cms-stat-label">Юзеры</div><div className="cms-stat-value">{dbStats.users}</div></div>
-                  <div className="cms-stat-card"><div className="cms-stat-label">Движок</div><div className="cms-stat-value" style={{ fontSize: "14px" }}>PostgreSQL</div></div>
+              <SettingSection title="Сессии">
+                <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginBottom: "10px" }}>
+                  История входов в админку: устройство, IP, страна/город (если передаётся прокси), время входа.
+                </div>
+                <div className="cms-table-wrap" style={{ padding: 0 }}>
+                  <table className="cms-table">
+                    <thead>
+                      <tr>
+                        <th>Email</th>
+                        <th>Устройство</th>
+                        <th>IP</th>
+                        <th>Гео</th>
+                        <th>Вход</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adminSessions.map((session, idx) => (
+                        <tr key={`${session.at}-${session.ip}-${idx}`}>
+                          <td>{session.email}</td>
+                          <td style={{ maxWidth: 280, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.userAgent || "—"}</td>
+                          <td className="cms-td-mono">{session.ip || "—"}</td>
+                          <td>{[session.country, session.city].filter(Boolean).join(", ") || "—"}</td>
+                          <td>{new Date(session.at).toLocaleString("ru-RU")}</td>
+                        </tr>
+                      ))}
+                      {adminSessions.length === 0 && (
+                        <tr><td colSpan={5} style={{ textAlign: "center", padding: "18px", color: "var(--cms-text-muted)" }}>Входов пока нет</td></tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </SettingSection>
-
-              <MemoryManagement getToken={getToken} notify={notify} />
 
               <ExportSection getToken={getToken} notify={notify} />
+            </div>
+          )}
 
-              <SettingSection title="Резервное копирование">
-                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                  <button className="cms-btn cms-btn-sm" onClick={handleExportConfig}>Экспорт конфигурации</button>
-                  <button className="cms-btn cms-btn-sm" onClick={handleImportConfig}>Импорт конфигурации</button>
-                  <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={() => setShowResetConfirm(true)}>Сбросить настройки</button>
+          {activeTab === "seo" && (
+            <div style={{ display: "grid", gap: "16px" }}>
+              <SettingSection title="Глобальные настройки сайта">
+                <div style={{ display: "grid", gap: "12px" }}>
+                  <label className="cms-label">
+                    Meta title
+                    <input className="cms-input" value={seoSettings.title} onChange={(e) => setSeoSettings((prev) => ({ ...prev, title: e.target.value }))} />
+                  </label>
+                  <label className="cms-label">
+                    Meta description
+                    <textarea className="cms-textarea" rows={3} value={seoSettings.description} onChange={(e) => setSeoSettings((prev) => ({ ...prev, description: e.target.value }))} />
+                  </label>
+                  <label className="cms-label">
+                    Keywords
+                    <input className="cms-input" value={seoSettings.keywords} onChange={(e) => setSeoSettings((prev) => ({ ...prev, keywords: e.target.value }))} />
+                  </label>
                 </div>
               </SettingSection>
 
-              <SettingSection title="Информация о системе">
-                <div style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: "6px", fontSize: "13px" }}>
-                  <strong>Платформа:</strong> <span>Next.js + Prisma</span>
-                  <strong>База данных:</strong> <span>PostgreSQL</span>
-                  <strong>Авторизация:</strong> <span>JWT (admin_token)</span>
-                  <strong>Хранилище:</strong> <span>Локальная ФС (/public)</span>
-                  <strong>Версия CMS:</strong> <span>1.0.0</span>
+              <SettingSection title="robots.txt">
+                <textarea className="cms-textarea" rows={8} value={robotsText} onChange={(e) => setRobotsText(e.target.value)} style={{ width: "100%", fontFamily: "monospace" }} />
+              </SettingSection>
+
+              <SettingSection title="Sitemap">
+                <div style={{ fontSize: "13px" }}>
+                  <a href="https://errani.ru/sitemap.xml" target="_blank" rel="noreferrer">https://errani.ru/sitemap.xml</a>
                 </div>
               </SettingSection>
             </div>

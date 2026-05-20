@@ -799,8 +799,6 @@ export default function AdminProductsPage() {
   const [mediaItems, setMediaItems] = useState<MediaLibraryItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaSearch, setMediaSearch] = useState("");
-  const [editingStockId, setEditingStockId] = useState<string | null>(null);
-  const [editingStockValue, setEditingStockValue] = useState<number>(0);
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
   const notify = useCallback((msg: string) => {
@@ -944,15 +942,6 @@ export default function AdminProductsPage() {
     }, 180);
     return () => clearTimeout(timer);
   }, [searchInput]);
-
-  const saveStockInline = async (product: Product, newStock: number) => {
-    const ok = await updateProductById(product, { stock: newStock });
-    if (ok) {
-      setProducts((prev) => prev.map((p) => p.id === product.id ? { ...p, stock: newStock } : p));
-      notify("Остаток обновлён");
-    }
-    setEditingStockId(null);
-  };
 
   const openProduct = (product: Product) => {
     setSelected(product);
@@ -1446,31 +1435,7 @@ export default function AdminProductsPage() {
                         <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", textDecoration: "line-through" }}>{formatPrice(p.oldPrice)}</div>
                       )}
                     </td>
-                    <td>
-                      {editingStockId === p.id ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          <input
-                            type="number"
-                            min="0"
-                            className="cms-input"
-                            style={{ width: "64px", padding: "2px 6px", fontSize: "12px" }}
-                            value={editingStockValue}
-                            onChange={(e) => setEditingStockValue(Number(e.target.value))}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") saveStockInline(p, editingStockValue);
-                              if (e.key === "Escape") setEditingStockId(null);
-                            }}
-                            autoFocus
-                          />
-                          <button className="cms-btn cms-btn-xs cms-btn-primary" onClick={() => saveStockInline(p, editingStockValue)}>✓</button>
-                          <button className="cms-btn cms-btn-xs" onClick={() => setEditingStockId(null)}>✕</button>
-                        </div>
-                      ) : (
-                        <button className="cms-btn cms-btn-xs" onClick={() => { setEditingStockId(p.id); setEditingStockValue(p.stock); }}>
-                          {p.stock}
-                        </button>
-                      )}
-                    </td>
+                    <td style={{ fontWeight: 700 }}>{p.stock}</td>
                     <td>
                       <div className="cms-products-row-actions">
                         <button className="cms-btn cms-btn-xs" onClick={() => openProduct(p)} title="Изменить">
