@@ -21,7 +21,10 @@ const RETRYABLE_MESSAGE_PARTS = [
   'Connection reset by peer',
   'Connection timed out',
   'Timed out fetching a new connection from the connection pool',
+  'Prisma operation timeout',
 ];
+
+const OPERATION_TIMEOUT_MS = Number(process.env.PRISMA_OPERATION_TIMEOUT_MS || 10_000);
 
 function getErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error && 'message' in error) {
@@ -29,6 +32,16 @@ function getErrorMessage(error: unknown): string {
     return typeof message === 'string' ? message : '';
   }
   return '';
+}
+
+function withOperationTimeout<T>(promise: Promise<T>): Promise<T> {
+  if (!Number.isFinite(OPERATION_TIMEOUT_MS) || OPERATION_TIMEOUT_MS <= 0) return promise;
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Prisma operation timeout')), OPERATION_TIMEOUT_MS)
+    ),
+  ]);
 }
 
 export function isRetryablePrismaError(error: unknown): boolean {
@@ -46,7 +59,7 @@ export async function withPrismaRetry<T>(
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      return await operation();
+      return await withOperationTimeout(operation());
     } catch (error) {
       lastError = error;
       if (!isRetryablePrismaError(error) || attempt === attempts) {
