@@ -32,11 +32,27 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
   ]);
 }
 
+async function disconnectQuietly(db: PrismaClient): Promise<void> {
+  await Promise.race([
+    db.$disconnect().catch(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, 1_000)),
+  ]);
+}
+
 export async function withFreshPrisma<T>(operation: (db: PrismaClient) => Promise<T>): Promise<T> {
-  const db = createFreshClient();
-  try {
-    return await withTimeout(operation(db));
-  } finally {
-    await db.$disconnect().catch(() => undefined);
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const db = createFreshClient();
+    try {
+      return await withTimeout(operation(db));
+    } catch (error) {
+      lastError = error;
+      if (attempt === 2) throw error;
+    } finally {
+      await disconnectQuietly(db);
+    }
   }
+
+  throw lastError;
 }
