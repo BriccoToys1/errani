@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   const cacheKey = JSON.stringify({ folder, search: search.trim().toLowerCase() });
 
   try {
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { status: { not: 'archived' } };
     if (folder === 'inbox') where.direction = 'inbound';
     else if (folder === 'sent') where.direction = 'outbound';
 
@@ -42,16 +42,14 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const [emails, unreadCount] = await Promise.all([
-      withPrismaRetry(() => prisma.adminEmail.findMany({
+    const emails = await withPrismaRetry(() => prisma.adminEmail.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         take: 100,
-      }), 2, 80),
-      withPrismaRetry(() => prisma.adminEmail.count({
-        where: { direction: 'inbound', isRead: false },
-      }), 2, 80),
-    ]);
+      }), 2, 80);
+    const unreadCount = await withPrismaRetry(() => prisma.adminEmail.count({
+      where: { direction: 'inbound', isRead: false, status: { not: 'archived' } },
+    }), 2, 80);
 
     const payload = { emails, unreadCount };
     emailListCache.set(cacheKey, { ts: Date.now(), payload });
@@ -150,7 +148,7 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// DELETE: delete email(s)
+// DELETE: archive email(s) without removing rows from the database
 export async function DELETE(req: NextRequest) {
   const denied = adminGuard(req);
   if (denied) return denied;
@@ -158,7 +156,10 @@ export async function DELETE(req: NextRequest) {
   try {
     const { ids } = await req.json();
     if (ids?.length) {
-      await withPrismaRetry(() => prisma.adminEmail.deleteMany({ where: { id: { in: ids } } }), 2, 80);
+      await withPrismaRetry(() => prisma.adminEmail.updateMany({
+        where: { id: { in: ids } },
+        data: { status: 'archived' },
+      }), 2, 80);
     }
     emailListCache.clear();
     return NextResponse.json({ success: true });
