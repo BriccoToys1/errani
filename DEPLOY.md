@@ -1,3 +1,8 @@
+
+./deploy.sh "fix: исправил"
+
+
+
 # AI Agent Deploy Runbook (errani.ru)
 
 Этот файл — рабочая инструкция для AI-агентов, которые деплоят проект на текущий production-сервер.

@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
       () => prisma.order.aggregate({ where: paidFilter, _sum: { totalAmount: true } }),
       { _sum: { totalAmount: prev.totalRevenue } }
     ),
-    safeQuery(() => prisma.order.count({ where: { status: 'pending' } }), prev.pendingCount),
+    safeQuery(() => prisma.order.count({ where: { status: { in: ['pending', 'unpaid'] } } }), prev.pendingCount),
     safeQuery(
       () =>
         prisma.order.findMany({

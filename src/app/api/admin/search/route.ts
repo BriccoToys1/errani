@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const [orders, products, inquiries, users] = await Promise.all([
     prisma.order.findMany({
       where: {
-        status: { not: 'pending' },
+        status: { not: 'archived' },
         OR: [
           { orderNumber: search },
           { customerName: search },

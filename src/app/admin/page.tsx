@@ -414,6 +414,24 @@ export default function AdminDashboard() {
 
   const cpuColor = (serverStats?.cpu.usage ?? 0) > 80 ? "#ef4444" : (serverStats?.cpu.usage ?? 0) > 60 ? "#f59e0b" : "#22c55e";
   const ramColor = (serverStats?.memory.usage ?? 0) > 80 ? "#ef4444" : (serverStats?.memory.usage ?? 0) > 60 ? "#f59e0b" : "#3b82f6";
+  const statusDots = [
+    {
+      color: siteOnline === null ? "#f59e0b" : siteOnline ? "#22c55e" : "#ef4444",
+      title: siteOnline === null ? "Проверяем сайт" : siteOnline ? "Все отлично: сайт доступен" : "Ошибка: сайт недоступен",
+    },
+    {
+      color: serverStats?.dbConnected === false ? "#ef4444" : "#22c55e",
+      title: serverStats?.dbConnected === false ? "Ошибка: база данных недоступна" : "Все отлично: база данных подключена",
+    },
+    {
+      color: (serverStats?.cpu.usage ?? 0) > 80 ? "#ef4444" : (serverStats?.cpu.usage ?? 0) > 60 ? "#f59e0b" : "#22c55e",
+      title: (serverStats?.cpu.usage ?? 0) > 80
+        ? `Ошибка: высокая нагрузка CPU ${serverStats?.cpu.usage ?? 0}%`
+        : (serverStats?.cpu.usage ?? 0) > 60
+          ? `Предупреждение: CPU ${serverStats?.cpu.usage ?? 0}%`
+          : "Все отлично: нагрузка CPU в норме",
+    },
+  ];
 
   return (
     <div className="cms-root">
@@ -439,26 +457,27 @@ export default function AdminDashboard() {
             )}
           </div>
           <div className="cms-header-actions">
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--cms-text-muted)" }}>
-              <SiteStatusDot ok={siteOnline} />
-              <span>{siteOnline === null ? "Проверяем..." : siteOnline ? "Сайт работает" : "Сайт недоступен"}</span>
+            <span style={{ fontSize: 12, color: "var(--cms-text-muted)" }}>Статус</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {statusDots.map((dot, idx) => (
+                <span key={idx} title={dot.title} style={{ width: 10, height: 10, borderRadius: "999px", background: dot.color, display: "inline-block" }} />
+              ))}
             </div>
-            <a href="https://errani.ru" target="_blank" rel="noopener noreferrer" className="cms-btn cms-btn-sm">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 5 }}><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg>
-              Открыть сайт
+            <a href="https://errani.ru" target="_blank" rel="noopener noreferrer" className="cms-btn cms-btn-sm" title="Открыть сайт">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg>
             </a>
-            <button className="cms-btn cms-btn-sm" onClick={() => setShowExport(true)}>Экспорт</button>
             <button
               className="cms-btn cms-btn-sm cms-btn-ghost"
               onClick={() => fetchData(true)}
               disabled={refreshing}
-              style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 88 }}
+              style={{ display: "flex", alignItems: "center", gap: 5 }}
+              title="Обновить"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
                 style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }}>
                 <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
               </svg>
-              {refreshing ? "..." : "Обновить"}
+              {refreshing ? "..." : ""}
             </button>
           </div>
         </div>

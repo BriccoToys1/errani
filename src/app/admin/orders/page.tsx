@@ -44,6 +44,7 @@ interface Product {
 }
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
+  pending:    { label: "Ожидает оплаты", cls: "cms-badge-yellow" },
   unpaid:     { label: "Не оплачен",  cls: "cms-badge-red" },
   paid:       { label: "Оплачен",     cls: "cms-badge-green" },
   assembling: { label: "Сборка",      cls: "cms-badge-yellow" },
@@ -51,9 +52,11 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   in_transit: { label: "В пути",      cls: "cms-badge-blue" },
   delivered:  { label: "Доставлен",   cls: "cms-badge-green" },
   cancelled:  { label: "Отменён",     cls: "cms-badge-red" },
+  archived:   { label: "В архиве",    cls: "cms-badge-blue" },
 };
 
-const ALL_STATUSES = ["unpaid", "paid", "assembling", "shipped", "in_transit", "delivered", "cancelled"];
+const ALL_STATUSES = ["pending", "unpaid", "paid", "assembling", "shipped", "in_transit", "delivered", "cancelled", "archived"];
+const PERIOD_OPTIONS = [1, 3, 7, 14, 30, 60, 90, 180, 365];
 
 const emptyManualForm = {
   customerName: "",
@@ -81,14 +84,30 @@ export default function AdminOrdersPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Order | null>(null);
-  const [editStatus, setEditStatus] = useState("");
-  const [editNotes, setEditNotes] = useState("");
-  const [editTotalAmount, setEditTotalAmount] = useState("");
+  const [editForm, setEditForm] = useState({
+    customerName: "",
+    customerEmail: "",
+    customerPhone: "",
+    country: "",
+    oblast: "",
+    city: "",
+    zipCode: "",
+    street: "",
+    house: "",
+    apartment: "",
+    shippingMethod: "",
+    paymentMethod: "",
+    totalAmount: "",
+  });
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState("");
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [showNewOrder, setShowNewOrder] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [regionFilter, setRegionFilter] = useState<"all" | "ru" | "foreign">("all");
+  const [periodDays, setPeriodDays] = useState<number>(30);
+  const [customRange, setCustomRange] = useState({ from: "", to: "" });
   const [manualForm, setManualForm] = useState<typeof emptyManualForm>(emptyManualForm);
   const [creatingManual, setCreatingManual] = useState(false);
 
@@ -106,7 +125,7 @@ export default function AdminOrdersPage() {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
     try {
-      const res = await fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch("/api/orders?includeArchived=1", { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
@@ -126,22 +145,45 @@ export default function AdminOrdersPage() {
 
   const openOrder = (order: Order) => {
     setSelected(order);
-    setEditStatus(order.status);
-    setEditNotes(order.notes);
-    setEditTotalAmount(String(order.totalAmount));
+    setEditForm({
+      customerName: order.customerName || "",
+      customerEmail: order.customerEmail || "",
+      customerPhone: order.customerPhone || "",
+      country: order.country || "",
+      oblast: order.oblast || "",
+      city: order.city || "",
+      zipCode: order.zipCode || "",
+      street: order.street || "",
+      house: order.house || "",
+      apartment: order.apartment || "",
+      shippingMethod: order.shippingMethod || "",
+      paymentMethod: order.paymentMethod || "",
+      totalAmount: String(order.totalAmount || ""),
+    });
   };
 
   const handleSave = async () => {
     if (!selected) return;
+    if (!confirm("Подтвердить изменение данных клиента и заказа?")) return;
     setSaving(true);
     const token = getToken();
     const res = await fetch(`/api/orders/${selected.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        status: editStatus,
-        notes: editNotes,
-        ...(selected.isManual ? { totalAmount: Number(editTotalAmount) } : {}),
+        customerName: editForm.customerName,
+        customerEmail: editForm.customerEmail,
+        customerPhone: editForm.customerPhone,
+        country: editForm.country,
+        oblast: editForm.oblast,
+        city: editForm.city,
+        zipCode: editForm.zipCode,
+        street: editForm.street,
+        house: editForm.house,
+        apartment: editForm.apartment,
+        shippingMethod: editForm.shippingMethod,
+        paymentMethod: editForm.paymentMethod,
+        totalAmount: Number(editForm.totalAmount || selected.totalAmount),
       }),
     });
     if (res.ok) {
@@ -153,12 +195,32 @@ export default function AdminOrdersPage() {
   };
 
   const deleteOrder = async (order: Order) => {
-    if (!confirm(`Удалить заказ ${order.orderNumber}?`)) return;
+    if (!confirm(`Архивировать заказ ${order.orderNumber}?`)) return;
     const token = getToken();
-    const res = await fetch(`/api/orders/${order.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`/api/orders/${order.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: "archived" }),
+    });
     if (res.ok) {
-      notify(`Заказ ${order.orderNumber} удалён`);
+      notify(`Заказ ${order.orderNumber} в архиве`);
       fetchOrders();
+    }
+  };
+
+  const updateOrderStatus = async (order: Order, nextStatus: string) => {
+    const token = getToken();
+    if (!token) return;
+    const res = await fetch(`/api/orders/${order.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ status: nextStatus }),
+    });
+    if (res.ok) {
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status: nextStatus } : o)));
+      notify(`Статус ${order.orderNumber} обновлён`);
+    } else {
+      notify("Не удалось обновить статус");
     }
   };
 
@@ -202,45 +264,51 @@ export default function AdminOrdersPage() {
   const openReceipt = async (orderId: string) => {
     const token = getToken();
     if (!ensureAuthorized(token)) return;
+    const popup = window.open("", "_blank", "noopener,noreferrer");
+    if (!popup) {
+      notify("Браузер заблокировал открытие вкладки");
+      return;
+    }
+    popup.document.write("<p style='font-family:Arial,sans-serif;padding:16px'>Загрузка чека...</p>");
 
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/receipt`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) {
+        popup.close();
         localStorage.removeItem("admin_token");
         router.push("/admin/login");
         return;
       }
       if (!res.ok) {
+        popup.close();
         notify("Не удалось открыть чек");
         return;
       }
 
       const html = await res.text();
-      const blobUrl = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
-      const opened = window.open(blobUrl, "_blank", "noopener,noreferrer");
-      if (!opened) {
-        notify("Браузер заблокировал открытие вкладки");
-      }
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
     } catch {
+      popup.close();
       notify("Ошибка сети");
     }
   };
 
   const deleteUnpaid = async () => {
-    if (!confirm("Удалить все неоплаченные (pending) заказы?")) return;
+    if (!confirm("Архивировать все неоплаченные заказы?")) return;
     setDeleting(true);
     const token = getToken();
     try {
       const res = await fetch("/api/orders", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
-        notify(`Удалено ${data.deleted} неоплаченных заказов`);
+        notify(`Архивировано ${data.archived || 0} неоплаченных заказов`);
         fetchOrders();
       } else {
-        notify("Ошибка при удалении");
+        notify("Ошибка архивации");
       }
     } catch {
       notify("Ошибка сети");
@@ -316,13 +384,46 @@ export default function AdminOrdersPage() {
     setCreatingManual(false);
   };
 
-  const newCount = orders.filter((o) => o.status === "paid" || o.status === "assembling").length;
+  const dayWord = (days: number) => {
+    if (days === 1) return "день";
+    if (days === 3) return "дня";
+    return "дней";
+  };
 
-  const filtered = orders.filter((o) => {
+  const periodLabel = customRange.from && customRange.to
+    ? "от-до"
+    : `${periodDays} ${dayWord(periodDays)}`;
+
+  const nowMs = Date.now();
+  const scopedOrders = orders.filter((o) => {
+    if (!showArchived && o.status === "archived") return false;
+
+    if (customRange.from && customRange.to) {
+      const from = new Date(customRange.from).getTime();
+      const to = new Date(customRange.to).getTime() + 24 * 60 * 60 * 1000 - 1;
+      const ts = new Date(o.createdAt).getTime();
+      if (Number.isFinite(from) && Number.isFinite(to) && (ts < from || ts > to)) return false;
+    } else {
+      const cutoff = nowMs - periodDays * 24 * 60 * 60 * 1000;
+      if (new Date(o.createdAt).getTime() < cutoff) return false;
+    }
+
     if (!search) return true;
     const q = search.toLowerCase();
-    return o.orderNumber.toLowerCase().includes(q) || o.customerName.toLowerCase().includes(q) || (o.customerEmail || "").toLowerCase().includes(q);
+    return (
+      o.orderNumber.toLowerCase().includes(q) ||
+      o.customerName.toLowerCase().includes(q) ||
+      (o.customerEmail || "").toLowerCase().includes(q)
+    );
   });
+
+  const filtered = scopedOrders.filter((o) => {
+    if (regionFilter === "ru") return o.country === "RU" || o.country === "Россия";
+    if (regionFilter === "foreign") return o.country !== "RU" && o.country !== "Россия";
+    return true;
+  });
+
+  const newCount = filtered.filter((o) => o.status === "paid" || o.status === "assembling").length;
 
   const sorted = [...filtered].sort((a, b) => {
     if (a.isManual && !b.isManual) return -1;
@@ -332,6 +433,9 @@ export default function AdminOrdersPage() {
 
   const totalItems = filtered.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0);
   const totalSum = filtered.reduce((sum, o) => sum + o.totalAmount, 0);
+  const hasUnpaid = scopedOrders.some((o) => o.status === "pending" || o.status === "unpaid");
+  const ruCount = scopedOrders.filter((o) => o.country === "RU" || o.country === "Россия").length;
+  const foreignCount = scopedOrders.length - ruCount;
 
   if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
 
@@ -345,19 +449,22 @@ export default function AdminOrdersPage() {
             {newCount > 0 && <span className="cms-badge cms-badge-blue" style={{ marginLeft: "10px", fontSize: "12px" }}>{newCount}</span>}
           </h1>
           <div className="cms-header-actions">
-            <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>{orders.length} всего</span>
-            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={() => setShowNewOrder(true)}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 5 }}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Добавить вручную
+            <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>
+              За {periodLabel}: {filtered.length}
+            </span>
+            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={() => setShowNewOrder(true)} title="Добавить">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
-            <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={deleteUnpaid} disabled={deleting}>
-              {deleting ? "Удаление..." : "Удалить неоплаченные"}
+            {hasUnpaid && (
+              <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={deleteUnpaid} disabled={deleting} title="Архивировать неоплаченные">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              </button>
+            )}
+            <button className="cms-btn cms-btn-sm" onClick={() => downloadOrdersExport("csv")} title="Экспорт CSV">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </button>
-            <button className="cms-btn cms-btn-sm" onClick={() => downloadOrdersExport("csv")}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
-            </button>
-            <button className="cms-btn cms-btn-sm" onClick={() => downloadOrdersExport("xls")}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>XLS
+            <button className="cms-btn cms-btn-sm" onClick={() => downloadOrdersExport("xls")} title="Импорт/Экспорт XLS">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M16 3h3a2 2 0 012 2v3"/><path d="M8 21H5a2 2 0 01-2-2v-3"/><path d="M16 21h3a2 2 0 002-2v-3"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
             </button>
             <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchOrders(); }} title="Обновить">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
@@ -370,6 +477,19 @@ export default function AdminOrdersPage() {
 
         <div className="cms-content">
           <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
+            <select className="cms-select cms-input-sm" value={String(periodDays)} onChange={(e) => { setPeriodDays(Number(e.target.value)); setCustomRange({ from: "", to: "" }); }}>
+              {PERIOD_OPTIONS.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+            <input className="cms-input cms-input-sm" type="date" value={customRange.from} onChange={(e) => setCustomRange((prev) => ({ ...prev, from: e.target.value }))} />
+            <input className="cms-input cms-input-sm" type="date" value={customRange.to} onChange={(e) => setCustomRange((prev) => ({ ...prev, to: e.target.value }))} />
+            <button className={`cms-btn cms-btn-sm ${regionFilter === "all" ? "cms-btn-primary" : ""}`} onClick={() => setRegionFilter("all")}>Все ({scopedOrders.length})</button>
+            <button className={`cms-btn cms-btn-sm ${regionFilter === "ru" ? "cms-btn-primary" : ""}`} onClick={() => setRegionFilter("ru")}>Россия ({ruCount})</button>
+            <button className={`cms-btn cms-btn-sm ${regionFilter === "foreign" ? "cms-btn-primary" : ""}`} onClick={() => setRegionFilter("foreign")}>Зарубеж ({foreignCount})</button>
+            <button className="cms-btn cms-btn-sm" title="Фильтр">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            </button>
             <input
               className="cms-input cms-input-sm"
               placeholder="Поиск по номеру, имени, email..."
@@ -377,6 +497,9 @@ export default function AdminOrdersPage() {
               onChange={(e) => setSearch(e.target.value)}
               style={{ width: "240px" }}
             />
+            <button className={`cms-btn cms-btn-sm ${showArchived ? "cms-btn-primary" : ""}`} onClick={() => setShowArchived((v) => !v)} title="Архив">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            </button>
             {sorted.some((o) => o.isManual) && (
               <span style={{ fontSize: "11px", display: "flex", alignItems: "center", gap: 5, color: "var(--cms-text-muted)" }}>
                 <span style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#a78bfa", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>РУЧНОЙ</span>
@@ -426,9 +549,16 @@ export default function AdminOrdersPage() {
                     </td>
                     <td style={{ fontWeight: 600 }}>{formatPrice(order.totalAmount)}</td>
                     <td>
-                      <span className={`cms-badge ${STATUS_MAP[order.status]?.cls ?? "cms-badge-yellow"}`}>
-                        {STATUS_MAP[order.status]?.label ?? order.status}
-                      </span>
+                      <select
+                        className="cms-select"
+                        value={order.status}
+                        onChange={(e) => updateOrderStatus(order, e.target.value)}
+                        style={{ minWidth: "132px" }}
+                      >
+                        {ALL_STATUSES.map((s) => (
+                          <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>
+                        ))}
+                      </select>
                     </td>
                     <td>{order.shippingMethod || "—"}</td>
                     <td>{new Date(order.createdAt).toLocaleDateString("ru-RU")}</td>
@@ -441,7 +571,7 @@ export default function AdminOrdersPage() {
                           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                         </button>
                         {(order.isManual || order.status === "pending" || order.status === "cancelled" || order.status === "unpaid") && (
-                          <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => deleteOrder(order)} title="Удалить">
+                          <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => deleteOrder(order)} title="В архив">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                           </button>
                         )}
@@ -470,21 +600,61 @@ export default function AdminOrdersPage() {
               <button className="cms-modal-close" onClick={() => setSelected(null)}>&times;</button>
             </div>
             <div className="cms-modal-body" style={{ maxHeight: "65vh", overflowY: "auto" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: "6px 14px", fontSize: "13px", marginBottom: "14px" }}>
-                <strong>Клиент:</strong> <span>{selected.customerName}</span>
-                <strong>Email:</strong> <span>{selected.customerEmail || "—"}</span>
-                <strong>Телефон:</strong> <span>{selected.customerPhone || "—"}</span>
-                <strong>Город:</strong> <span>{selected.city || "—"}</span>
-                {!selected.isManual && <><strong>Доставка:</strong> <span>{selected.shippingMethod || "—"}</span></>}
-                <strong>Оплата:</strong> <span>{selected.paymentMethod || "—"}</span>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "14px" }}>
+                <label className="cms-label">
+                  Клиент
+                  <input className="cms-input" value={editForm.customerName} onChange={(e) => setEditForm((prev) => ({ ...prev, customerName: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Email
+                  <input className="cms-input" value={editForm.customerEmail} onChange={(e) => setEditForm((prev) => ({ ...prev, customerEmail: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Телефон
+                  <input className="cms-input" value={editForm.customerPhone} onChange={(e) => setEditForm((prev) => ({ ...prev, customerPhone: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Страна
+                  <input className="cms-input" value={editForm.country} onChange={(e) => setEditForm((prev) => ({ ...prev, country: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Область
+                  <input className="cms-input" value={editForm.oblast} onChange={(e) => setEditForm((prev) => ({ ...prev, oblast: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Город
+                  <input className="cms-input" value={editForm.city} onChange={(e) => setEditForm((prev) => ({ ...prev, city: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Индекс
+                  <input className="cms-input" value={editForm.zipCode} onChange={(e) => setEditForm((prev) => ({ ...prev, zipCode: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Улица
+                  <input className="cms-input" value={editForm.street} onChange={(e) => setEditForm((prev) => ({ ...prev, street: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Дом
+                  <input className="cms-input" value={editForm.house} onChange={(e) => setEditForm((prev) => ({ ...prev, house: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Квартира
+                  <input className="cms-input" value={editForm.apartment} onChange={(e) => setEditForm((prev) => ({ ...prev, apartment: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Доставка
+                  <input className="cms-input" value={editForm.shippingMethod} onChange={(e) => setEditForm((prev) => ({ ...prev, shippingMethod: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Оплата
+                  <input className="cms-input" value={editForm.paymentMethod} onChange={(e) => setEditForm((prev) => ({ ...prev, paymentMethod: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
               </div>
 
-              {selected.isManual && (
-                <label className="cms-label" style={{ marginBottom: "12px", display: "block" }}>
-                  Сумма заказа (₽)
-                  <input className="cms-input" type="number" value={editTotalAmount} onChange={(e) => setEditTotalAmount(e.target.value)} style={{ marginTop: 4 }} />
-                </label>
-              )}
+              <label className="cms-label" style={{ marginBottom: "12px", display: "block" }}>
+                Сумма заказа (₽)
+                <input className="cms-input" type="number" value={editForm.totalAmount} onChange={(e) => setEditForm((prev) => ({ ...prev, totalAmount: e.target.value }))} style={{ marginTop: 4 }} />
+              </label>
 
               {!selected.isManual && selected.items.length > 0 && (
                 <div style={{ marginBottom: "14px" }}>
@@ -503,23 +673,12 @@ export default function AdminOrdersPage() {
                 </div>
               )}
 
-              <label className="cms-label" style={{ marginBottom: "12px", display: "block" }}>
-                Статус
-                <select className="cms-select" value={editStatus} onChange={(e) => setEditStatus(e.target.value)} style={{ marginTop: 4, width: "100%" }}>
-                  {ALL_STATUSES.map((s) => (
-                    <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label style={{ fontSize: "13px", display: "block" }}>
-                <strong>Заметки:</strong>
-                <textarea className="cms-textarea" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={3} style={{ display: "block", marginTop: "6px", width: "100%" }} />
-              </label>
             </div>
             <div className="cms-modal-actions">
               <button className="cms-btn cms-btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Сохранение..." : "Сохранить"}</button>
-              <button className="cms-btn" onClick={() => openReceipt(selected.id)}>📄 Чек</button>
+              <button className="cms-btn" onClick={() => openReceipt(selected.id)} title="Чек">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </button>
               <button className="cms-btn" onClick={() => setSelected(null)}>Отмена</button>
             </div>
           </div>

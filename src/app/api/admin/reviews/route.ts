@@ -174,6 +174,7 @@ export async function PATCH(req: NextRequest) {
         },
       })
     );
+    reviewsCache.clear();
 
     return NextResponse.json({ success: true, review: updated });
   } catch (error) {

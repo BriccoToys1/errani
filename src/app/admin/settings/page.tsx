@@ -659,6 +659,7 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState("");
   const [activeTab, setActiveTab] = useState("general");
+  const [settingsSearch, setSettingsSearch] = useState("");
   const [dbStats, setDbStats] = useState({ users: 0, orders: 0, products: 0, pageViews: 0 });
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [featuredProductLink, setFeaturedProductLink] = useState("/tenderly-vibe");
@@ -813,6 +814,13 @@ export default function AdminSettingsPage() {
         <div className="cms-header">
           <h1 className="cms-header-title">Настройки</h1>
           <div className="cms-header-actions">
+            <input
+              className="cms-input cms-input-sm"
+              placeholder="Поиск по настройкам..."
+              value={settingsSearch}
+              onChange={(e) => setSettingsSearch(e.target.value)}
+              style={{ width: "220px" }}
+            />
             <button className="cms-btn cms-btn-sm cms-btn-ghost" onClick={handleExportConfig}>Экспорт</button>
             <button className="cms-btn cms-btn-sm cms-btn-ghost" onClick={handleImportConfig}>Импорт</button>
             <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={handleSave} disabled={saving}>

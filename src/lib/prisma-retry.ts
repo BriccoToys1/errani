@@ -1,4 +1,4 @@
-import prisma from './db';
+import { resetPrismaClient } from './db';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,11 +52,13 @@ export async function withPrismaRetry<T>(
       if (!isRetryablePrismaError(error) || attempt === attempts) {
         throw error;
       }
+      // Replace the global Prisma client with a fresh one instead of
+      // calling $disconnect()/$connect() on the singleton, which causes
+      // concurrent-access races that leave the engine permanently broken.
       try {
-        await prisma.$disconnect();
-        await prisma.$connect();
+        await resetPrismaClient();
       } catch {
-        // ignore reconnect errors
+        // ignore
       }
       await sleep(baseDelayMs * attempt);
     }

@@ -183,12 +183,12 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Некорректный путь файла' }, { status: 400 });
     }
 
-    await softDeleteMediaItem(relativePath).catch((dbError) => {
+    const deleted = await softDeleteMediaItem(relativePath).catch((dbError) => {
       console.error('Media DB soft delete warning:', dbError);
+      return false;
     });
-    await fs.unlink(absolutePath).catch(() => undefined);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, archived: deleted });
   } catch (error) {
     console.error('Admin media delete error:', error);
     return NextResponse.json(

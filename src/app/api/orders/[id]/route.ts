@@ -52,11 +52,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
       where: { id },
       data: {
         status: body.status,
-        notes: body.notes,
+        ...(body.notes !== undefined ? { notes: body.notes } : {}),
         ...(body.customerName !== undefined ? { customerName: body.customerName } : {}),
         ...(body.customerEmail !== undefined ? { customerEmail: body.customerEmail } : {}),
         ...(body.customerPhone !== undefined ? { customerPhone: body.customerPhone } : {}),
+        ...(body.country !== undefined ? { country: body.country } : {}),
+        ...(body.oblast !== undefined ? { oblast: body.oblast } : {}),
         ...(body.city !== undefined ? { city: body.city } : {}),
+        ...(body.zipCode !== undefined ? { zipCode: body.zipCode } : {}),
+        ...(body.street !== undefined ? { street: body.street } : {}),
+        ...(body.house !== undefined ? { house: body.house } : {}),
+        ...(body.apartment !== undefined ? { apartment: body.apartment } : {}),
+        ...(body.shippingMethod !== undefined ? { shippingMethod: body.shippingMethod } : {}),
+        ...(body.paymentMethod !== undefined ? { paymentMethod: body.paymentMethod } : {}),
         ...(body.totalAmount !== undefined ? { totalAmount: Number(body.totalAmount) } : {}),
       },
     });
@@ -76,13 +84,14 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
 
-    // Delete order items first (cascade should handle, but explicit)
-    await prisma.orderItem.deleteMany({ where: { orderId: id } });
-    await prisma.order.delete({ where: { id } });
+    await prisma.order.update({
+      where: { id },
+      data: { status: 'archived' },
+    });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, archived: true });
   } catch (error) {
-    console.error('Error deleting order:', error);
-    return NextResponse.json({ error: 'Failed to delete order' }, { status: 500 });
+    console.error('Error archiving order:', error);
+    return NextResponse.json({ error: 'Failed to archive order' }, { status: 500 });
   }
 }

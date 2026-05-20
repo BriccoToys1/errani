@@ -433,17 +433,9 @@ function MultiImageUploader({
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: "11px", color: "#ddd", wordBreak: "break-all", marginBottom: "5px" }}>{img}</div>
                 <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className={`cms-btn cms-btn-xs ${mainImage === img ? "cms-btn-primary" : ""}`}
-                    onClick={() => onMainImageChange(img)}
-                  >
-                    {mainImage === img ? "✓ Главное" : "Сделать главным"}
-                  </button>
                   <button type="button" className="cms-btn cms-btn-xs" onClick={() => openReplace(i)} disabled={uploadingIndex === i}>
                     {uploadingIndex === i ? "Загрузка..." : "Заменить"}
                   </button>
-                  <a className="cms-btn cms-btn-xs cms-btn-ghost" href={img} target="_blank" rel="noreferrer">Открыть</a>
                 </div>
               </div>
               <div style={{ display: "grid", gap: "4px" }}>
@@ -518,7 +510,6 @@ function MultiImageUploader({
             >
               Добавить в галерею
             </button>
-            <a className="cms-btn cms-btn-xs cms-btn-ghost" href={lastUploadedUrl} target="_blank" rel="noreferrer">Открыть изображение</a>
           </div>
         </div>
       )}
@@ -1288,9 +1279,15 @@ export default function AdminProductsPage() {
           <h1 className="cms-header-title">Товары</h1>
           <div className="cms-header-actions">
             <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>{products.length} всего</span>
-            <a href="/api/admin/export?type=products&format=csv" className="cms-btn cms-btn-sm" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> CSV</a>
-            <a href="/api/admin/export?type=products&format=xls" className="cms-btn cms-btn-sm" download><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> XLS</a>
-            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={openNew}>+ Новый товар</button>
+            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={openNew} title="Добавить">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <a href="/api/admin/export?type=products&format=xls" className="cms-btn cms-btn-sm" download title="Импорт/Экспорт">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M16 3h3a2 2 0 012 2v3"/><path d="M8 21H5a2 2 0 01-2-2v-3"/><path d="M16 21h3a2 2 0 002-2v-3"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+            </a>
+            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchProducts(); }} title="Обновить">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            </button>
           </div>
         </div>
 
@@ -1476,17 +1473,17 @@ export default function AdminProductsPage() {
                     </td>
                     <td>
                       <div className="cms-products-row-actions">
-                        <button className="cms-btn cms-btn-xs" onClick={() => openProduct(p)}>Изменить</button>
-                        <button className="cms-btn cms-btn-xs" onClick={() => duplicateProduct(p)}>Дубль</button>
-                        <button className="cms-btn cms-btn-xs" onClick={() => (p.isActive ? toggleActive(p) : restoreFromArchive(p))}>
-                          {p.isActive ? "Скрыть" : "Вернуть"}
+                        <button className="cms-btn cms-btn-xs" onClick={() => openProduct(p)} title="Изменить">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                         </button>
-                        <button className="cms-btn cms-btn-xs" onClick={() => toggleOrderAvailability(p)}>
-                          {p.inStock ? "Закрыть заказ" : "Открыть заказ"}
+                        <button className="cms-btn cms-btn-xs" onClick={() => duplicateProduct(p)} title="Дубль">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><rect x="2" y="2" width="13" height="13" rx="2"/></svg>
                         </button>
-                        <a className="cms-btn cms-btn-xs cms-btn-ghost" href={`/${p.slug}`} target="_blank" rel="noreferrer">Сайт</a>
-                        <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => setDeleteConfirm([p.id])}>
-                          {archiveView === "archived" ? "Удалить" : "В архив"}
+                        <button className="cms-btn cms-btn-xs" onClick={() => (p.isActive ? toggleActive(p) : restoreFromArchive(p))} title={p.isActive ? "Скрыть" : "Вернуть"}>
+                          {p.isActive ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.94 10.94 0 0112 20C7 20 2.73 16.89 1 12c.82-2.33 2.23-4.31 4.06-5.94M9.9 4.24A10.95 10.95 0 0112 4c5 0 9.27 3.11 11 8a11.81 11.81 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg> : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+                        </button>
+                        <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => setDeleteConfirm([p.id])} title={archiveView === "archived" ? "Удалить" : "В архив"}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                         </button>
                       </div>
                     </td>
@@ -1524,7 +1521,6 @@ export default function AdminProductsPage() {
                 <div className="cms-products-row-actions">
                   <button className="cms-btn cms-btn-xs cms-btn-primary" onClick={() => openProduct(p)}>Редактировать</button>
                   <button className="cms-btn cms-btn-xs" onClick={() => duplicateProduct(p)}>Дубль</button>
-                  <button className="cms-btn cms-btn-xs" onClick={() => toggleOrderAvailability(p)}>{p.inStock ? "Закрыть заказ" : "Открыть заказ"}</button>
                   <button className="cms-btn cms-btn-xs" onClick={() => toggleSaleDisabled(p)}>{p.isSaleDisabled ? "Снять «Скоро»" : "Поставить «Скоро»"}</button>
                   <button className="cms-btn cms-btn-xs" onClick={() => toggleSoldOut(p)}>{p.isSoldOut ? "Снять Sold Out" : "Поставить Sold Out"}</button>
                   <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => setDeleteConfirm([p.id])}>

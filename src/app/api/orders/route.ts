@@ -9,25 +9,20 @@ interface OrderItemInput {
   selectedColor?: string;
 }
 
-// DELETE unpaid (pending) orders
+// Archive unpaid orders
 export async function DELETE(req: NextRequest) {
   const denied = adminGuard(req);
   if (denied) return denied;
 
   try {
-    const pendingOrders = await prisma.order.findMany({
-      where: { status: 'pending' },
-      select: { id: true },
+    const archived = await prisma.order.updateMany({
+      where: { status: { in: ['pending', 'unpaid'] } },
+      data: { status: 'archived' },
     });
-    const ids = pendingOrders.map(o => o.id);
-    if (ids.length > 0) {
-      await prisma.orderItem.deleteMany({ where: { orderId: { in: ids } } });
-      await prisma.order.deleteMany({ where: { id: { in: ids } } });
-    }
-    return NextResponse.json({ deleted: ids.length });
+    return NextResponse.json({ archived: archived.count });
   } catch (error) {
-    console.error('Error deleting pending orders:', error);
-    return NextResponse.json({ error: 'Failed to delete pending orders' }, { status: 500 });
+    console.error('Error archiving unpaid orders:', error);
+    return NextResponse.json({ error: 'Failed to archive unpaid orders' }, { status: 500 });
   }
 }
 
@@ -41,15 +36,11 @@ export async function GET(req: NextRequest) {
     const takeRaw = parseInt(searchParams.get('take') || '', 10);
     const take = Number.isFinite(takeRaw) && takeRaw > 0 ? Math.min(takeRaw, 1000) : undefined;
     const light = searchParams.get('light') === '1';
-
-    // Auto-purge pending orders older than 2 hours
-    const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    await prisma.order.deleteMany({
-      where: { status: 'pending', createdAt: { lt: cutoff } },
-    });
+    const includeArchived = searchParams.get('includeArchived') === '1';
 
     const orders = await prisma.order.findMany({
       ...(take ? { take } : {}),
+      ...(includeArchived ? {} : { where: { status: { not: 'archived' } } }),
       select: {
         id: true,
         orderNumber: true,

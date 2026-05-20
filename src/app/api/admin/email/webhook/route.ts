@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     const rawPayload = await req.text();
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const resend = new Resend(process.env.RESEND_API_KEY || 'resend-webhook');
     const signatureHeaders = {
       id: req.headers.get('svix-id') || req.headers.get('x-svix-id') || '',
       timestamp: req.headers.get('svix-timestamp') || req.headers.get('x-svix-timestamp') || '',
@@ -50,11 +50,11 @@ export async function POST(req: NextRequest) {
     console.log('Email webhook received:', JSON.stringify(payload).substring(0, 1000));
 
     // Resend webhook wraps data in { type, data } or sends directly
-    const type = (payload.type as string) || '';
+    const type = String(payload.type || '');
     const data = (payload.data as Record<string, unknown>) || payload;
 
     // Handle Resend inbound email events
-    if (type === 'email.received' || data.from || data.email_id) {
+    if (type === 'email.received' || data.from || data.email_id || data.message_id) {
       const emailData = type ? data : payload;
 
       // Extract from - can be string, object, or array
@@ -81,10 +81,21 @@ export async function POST(req: NextRequest) {
         }).join(', ');
       }
 
-      const subject = (emailData.subject as string) || '(без темы)';
-      const html = (emailData.html as string) || '';
-      const text = (emailData.text as string) || '';
-      const messageId = (emailData.message_id as string) || (emailData.email_id as string) || '';
+      const subject = String(emailData.subject || '(без темы)');
+      const html = String(emailData.html || emailData.body || '');
+      const text = String(emailData.text || emailData.text_body || '');
+      const messageId = String(emailData.message_id || emailData.email_id || emailData.id || '').trim();
+      const inReplyTo = String(emailData.in_reply_to || emailData.reply_to || '').trim();
+
+      if (messageId) {
+        const existing = await prisma.adminEmail.findFirst({
+          where: { direction: 'inbound', resendId: messageId },
+          select: { id: true },
+        });
+        if (existing) {
+          return NextResponse.json({ received: true, duplicate: true });
+        }
+      }
 
       await prisma.adminEmail.create({
         data: {
@@ -92,11 +103,12 @@ export async function POST(req: NextRequest) {
           fromAddr: fromAddr || 'unknown',
           toAddr: toAddr || 'mail@errani.ru',
           subject,
-          body: html || `<pre style="white-space:pre-wrap;font-family:inherit;">${text}</pre>`,
-          textBody: text,
+          body: html || `<pre style="white-space:pre-wrap;font-family:inherit;">${text || '(без текста)'}</pre>`,
+          textBody: text || subject,
           status: 'received',
           isRead: false,
           resendId: messageId,
+          inReplyTo,
         },
       });
 

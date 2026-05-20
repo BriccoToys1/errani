@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
         let receiptPdf: Buffer | undefined;
         let receiptHtml: string | undefined;
         try {
-          receiptHtml = buildReceiptHtml(
+          const receiptHtmlForAdmin = buildReceiptHtml(
             {
               ...order,
               items: order.items.map(i => ({
@@ -82,9 +82,22 @@ export async function POST(req: NextRequest) {
                 product: i.product ? { name: i.product.name } : null,
               })),
             },
-            true // forPdf: no buttons/scripts
+            false
           );
-          receiptPdf = await htmlToPdf(receiptHtml);
+          const receiptHtmlForPdf = buildReceiptHtml(
+            {
+              ...order,
+              items: order.items.map(i => ({
+                quantity: i.quantity,
+                price: i.price,
+                productId: i.productId,
+                product: i.product ? { name: i.product.name } : null,
+              })),
+            },
+            true
+          );
+          receiptHtml = receiptHtmlForAdmin;
+          receiptPdf = await htmlToPdf(receiptHtmlForPdf);
         } catch (pdfErr) {
           console.error('Failed to generate receipt PDF:', pdfErr);
         }

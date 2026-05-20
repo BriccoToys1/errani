@@ -19,27 +19,18 @@ interface SearchResult {
 }
 
 const NAV_ITEMS = [
-  { section: 'Главное' },
   { href: '/admin', icon: 'dashboard', label: 'Дашборд' },
-  { section: 'Управление' },
+  { href: '/admin/email', icon: 'email', label: 'Почта', countKey: 'newEmails' },
+  { section: '' },
   { href: '/admin/orders', icon: 'orders', label: 'Заказы', countKey: 'newOrders' },
   { href: '/admin/products', icon: 'products', label: 'Товары' },
   { href: '/admin/media', icon: 'media', label: 'Медиа' },
   { href: '/admin/inquiries', icon: 'inquiries', label: 'Заявки', countKey: 'newInquiries' },
   { href: '/admin/waitlist', icon: 'waitlist', label: 'В ожидании', countKey: 'newWaitlist' },
-  { href: '/admin/email', icon: 'email', label: 'Почта', countKey: 'newEmails' },
   { href: '/admin/users', icon: 'users', label: 'Клиенты' },
   { href: '/admin/reviews', icon: 'reviews', label: 'Отзывы' },
-  { section: 'Сайт' },
-  { href: '/admin/seo', icon: 'seo', label: 'SEO' },
-  { href: '/admin/content', icon: 'content', label: 'Контент' },
-  { href: '/admin/pages', icon: 'pages', label: 'Страницы' },
-  { section: 'Техническое' },
-  { href: '/admin/technical', icon: 'code', label: 'Техническое' },
   { section: '' },
   { href: '/admin/settings', icon: 'settings', label: 'Настройки' },
-  { href: '/admin/info', icon: 'info', label: 'Информация' },
-  { href: '/admin/account', icon: 'account', label: 'Аккаунт' },
 ];
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -59,7 +50,7 @@ const ICONS: Record<string, React.ReactNode> = {
   database: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>,
   account: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
   users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
-  reviews: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M9 9h.01"/><path d="M12 9h.01"/><path d="M15 9h.01"/></svg>,
+  reviews: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3l2.9 5.88 6.5.95-4.7 4.58 1.1 6.47L12 17.85 6.2 20.88l1.1-6.47-4.7-4.58 6.5-.95L12 3z"/></svg>,
   code: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="14" y1="4" x2="10" y2="20"/></svg>,
   info: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
 };
@@ -349,15 +340,6 @@ export function AdminSidebar() {
       )}
 
       <div className="cms-sidebar-footer">
-        <Link href="/admin/account" className="cms-sidebar-user" style={{ textDecoration: 'none', color: 'inherit' }} title="Аккаунт">
-          <div className="cms-sidebar-avatar">K</div>
-          {!collapsed && (
-            <div className="cms-sidebar-user-info">
-              <div className="cms-sidebar-user-name">Аккаунт</div>
-              <div className="cms-sidebar-user-role">Администратор</div>
-            </div>
-          )}
-        </Link>
         <button
           onClick={handleLogout}
           title="Выйти"

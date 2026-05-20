@@ -4,7 +4,6 @@ import { adminGuard, verifyAdminToken } from '@/lib/admin-auth';
 import { Resend } from 'resend';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 
-const EMAIL_LIST_CACHE_TTL_MS = 15_000;
 const emailListCache = new Map<string, { ts: number; payload: { emails: unknown[]; unreadCount: number } }>();
 
 async function getApiKey(): Promise<string | null> {
@@ -30,11 +29,6 @@ export async function GET(req: NextRequest) {
   const cacheKey = JSON.stringify({ folder, search: search.trim().toLowerCase() });
 
   try {
-    const cached = emailListCache.get(cacheKey);
-    if (cached && Date.now() - cached.ts < EMAIL_LIST_CACHE_TTL_MS) {
-      return NextResponse.json(cached.payload, { headers: { 'X-Email-Cache': 'hit' } });
-    }
-
     const where: Record<string, unknown> = {};
     if (folder === 'inbox') where.direction = 'inbound';
     else if (folder === 'sent') where.direction = 'outbound';
@@ -61,7 +55,12 @@ export async function GET(req: NextRequest) {
 
     const payload = { emails, unreadCount };
     emailListCache.set(cacheKey, { ts: Date.now(), payload });
-    return NextResponse.json(payload, { headers: { 'X-Email-Cache': 'miss' } });
+    return NextResponse.json(payload, {
+      headers: {
+        'X-Email-Cache': 'bypass',
+        'Cache-Control': 'no-store',
+      },
+    });
   } catch (error) {
     console.error('Email list error:', error);
     const stale = emailListCache.get(cacheKey);
