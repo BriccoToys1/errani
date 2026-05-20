@@ -21,10 +21,21 @@ function createFreshClient(): PrismaClient {
   });
 }
 
+function withTimeout<T>(promise: Promise<T>): Promise<T> {
+  const timeoutMs = Number(process.env.FRESH_PRISMA_TIMEOUT_MS || 8_000);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Fresh Prisma operation timeout')), timeoutMs)
+    ),
+  ]);
+}
+
 export async function withFreshPrisma<T>(operation: (db: PrismaClient) => Promise<T>): Promise<T> {
   const db = createFreshClient();
   try {
-    return await operation(db);
+    return await withTimeout(operation(db));
   } finally {
     await db.$disconnect().catch(() => undefined);
   }
