@@ -43,7 +43,7 @@ export default function AdminReviewsPage() {
   const [pendingCount, setPendingCount] = useState(0);
   const [notification, setNotification] = useState('');
 
-  const [status, setStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [status, setStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [productId, setProductId] = useState('');
   const [query, setQuery] = useState('');
 

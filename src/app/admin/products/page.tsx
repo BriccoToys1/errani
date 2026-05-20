@@ -838,7 +838,9 @@ export default function AdminProductsPage() {
   const fetchProducts = useCallback(async () => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
-    const result = await requestJson("/api/products?showAll=true&includeArchived=true");
+    const result = await requestJson("/api/products?showAll=true&includeArchived=true", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     if (result.ok && Array.isArray(result.data)) {
       const next = result.data as Product[];
       setProducts((prev) => {

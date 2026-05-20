@@ -137,10 +137,26 @@ export async function GET(req: NextRequest) {
     let dbItems;
     try {
       dbItems = listActiveMediaItems(await readMediaLibrary());
-      if (dbItems.length === 0) {
-        await syncDbWithFs(baseUrl);
-        dbItems = listActiveMediaItems(await readMediaLibrary());
+      await syncDbWithFs(baseUrl);
+      const fsItems = await listFilesFromFs(baseUrl);
+      const seen = new Set(dbItems.map((item) => item.relativePath));
+      for (const item of fsItems) {
+        if (seen.has(item.relativePath)) continue;
+        dbItems.push({
+          id: item.relativePath,
+          filename: item.filename,
+          relativePath: item.relativePath,
+          url: item.url,
+          size: item.size,
+          width: 0,
+          height: 0,
+          mimeType: 'image/webp',
+          createdAt: item.updatedAt,
+          updatedAt: item.updatedAt,
+          deletedAt: null,
+        });
       }
+      dbItems = listActiveMediaItems(dbItems);
     } catch (dbError) {
       console.error('Media DB read warning, fallback to FS:', dbError);
       const fsItems = await listFilesFromFs(baseUrl);

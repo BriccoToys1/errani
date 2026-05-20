@@ -264,11 +264,12 @@ export default function AdminOrdersPage() {
   const openReceipt = async (orderId: string) => {
     const token = getToken();
     if (!ensureAuthorized(token)) return;
-    const popup = window.open("", "_blank", "noopener,noreferrer");
+    const popup = window.open("", "_blank");
     if (!popup) {
       notify("Браузер заблокировал открытие вкладки");
       return;
     }
+    popup.opener = null;
     popup.document.write("<p style='font-family:Arial,sans-serif;padding:16px'>Загрузка чека...</p>");
 
     try {

@@ -53,20 +53,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(cached.payload, { headers: { 'X-Reviews-Cache': 'hit' } });
     }
 
-    const withTimeout = async <T,>(promise: Promise<T>, fallback: T, ms = 4_000): Promise<T> => {
-      try {
-        return await Promise.race([
-          promise,
-          new Promise<T>((_, reject) => setTimeout(() => reject(new Error('reviews timeout')), ms)),
-        ]);
-      } catch {
-        return fallback;
-      }
+    const withTimeout = async <T,>(promise: Promise<T>, ms = 12_000): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('reviews timeout')), ms)),
+      ]);
     };
 
     const [total, pending, reviews, products] = await Promise.all([
-      withTimeout(withPrismaRetry(() => prisma.review.count({ where }), 2, 80), 0),
-      withTimeout(withPrismaRetry(() => prisma.review.count({ where: { status: 'pending' } }), 2, 80), 0),
+      withTimeout(withPrismaRetry(() => prisma.review.count({ where }), 2, 80)),
+      withTimeout(withPrismaRetry(() => prisma.review.count({ where: { status: 'pending' } }), 2, 80)),
       withTimeout(withPrismaRetry(() =>
         prisma.review.findMany({
           where,
@@ -78,14 +74,14 @@ export async function GET(req: NextRequest) {
             invite: { select: { id: true, sentAt: true, usedAt: true, tokenPreview: true } },
           },
         })
-      , 2, 80), []),
+      , 2, 80)),
       withTimeout(withPrismaRetry(() =>
         prisma.product.findMany({
           select: { id: true, slug: true, name: true, nameRu: true },
           where: { isActive: true },
           orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }],
         })
-      , 2, 80), []),
+      , 2, 80)),
     ]);
 
     const payload = {
@@ -126,15 +122,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(freshest.payload, { headers: { 'X-Reviews-Cache': 'stale' } });
     }
     return NextResponse.json({
-      success: true,
-      total: 0,
-      page: 1,
-      pages: 1,
-      pending: 0,
-      products: [],
-      reviews: [],
-      degraded: true,
-    }, { status: 200 });
+      success: false,
+      message: 'Не удалось загрузить отзывы из базы данных',
+    }, { status: 500 });
   }
 }
 

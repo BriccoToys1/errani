@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { Resend } from 'resend';
+import { withPrismaRetry } from '@/lib/prisma-retry';
 
 // Resend sends inbound emails as POST to this webhook.
 // Configure in Resend dashboard → Webhooks → Add endpoint:
@@ -17,12 +18,14 @@ export async function GET() {
 // POST: receive inbound email from Resend
 export async function POST(req: NextRequest) {
   try {
-    const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
-    if (!webhookSecret) {
-      return NextResponse.json({ error: 'Webhook misconfiguration' }, { status: 500 });
-    }
-
     const rawPayload = await req.text();
+    const webhookSecret =
+      process.env.RESEND_WEBHOOK_SECRET ||
+      (await withPrismaRetry(
+        () => prisma.siteSettings.findUnique({ where: { key: 'resend_webhook_secret' } }),
+        2,
+        80
+      ).then((setting) => setting?.value || '').catch(() => ''));
 
     const resend = new Resend(process.env.RESEND_API_KEY || 'resend-webhook');
     const signatureHeaders = {
@@ -31,20 +34,24 @@ export async function POST(req: NextRequest) {
       signature: req.headers.get('svix-signature') || req.headers.get('x-svix-signature') || '',
     };
 
-    if (!signatureHeaders.id || !signatureHeaders.timestamp || !signatureHeaders.signature) {
+    if (webhookSecret && (!signatureHeaders.id || !signatureHeaders.timestamp || !signatureHeaders.signature)) {
       return NextResponse.json({ error: 'Missing webhook signature' }, { status: 400 });
     }
 
     let payload: Record<string, unknown>;
-    try {
-      const verifiedPayload = resend.webhooks.verify({
-        payload: rawPayload,
-        headers: signatureHeaders,
-        webhookSecret,
-      });
-      payload = verifiedPayload as unknown as Record<string, unknown>;
-    } catch {
-      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
+    if (webhookSecret) {
+      try {
+        const verifiedPayload = resend.webhooks.verify({
+          payload: rawPayload,
+          headers: signatureHeaders,
+          webhookSecret,
+        });
+        payload = verifiedPayload as unknown as Record<string, unknown>;
+      } catch {
+        return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
+      }
+    } else {
+      payload = JSON.parse(rawPayload) as Record<string, unknown>;
     }
 
     console.log('Email webhook received:', JSON.stringify(payload).substring(0, 1000));
@@ -79,6 +86,9 @@ export async function POST(req: NextRequest) {
           if (typeof t === 'string') return t;
           return t.address || t.email || String(t);
         }).join(', ');
+      } else if (rawTo && typeof rawTo === 'object') {
+        const t = rawTo as Record<string, string>;
+        toAddr = t.address || t.email || t.name || JSON.stringify(t);
       }
 
       const subject = String(emailData.subject || '(без темы)');

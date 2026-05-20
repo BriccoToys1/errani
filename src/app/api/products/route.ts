@@ -135,19 +135,23 @@ async function readDiskCache(cacheKey: string): Promise<{ ts: number; data: unkn
 // GET all products
 export async function GET(req: NextRequest) {
   const cacheKey = getProductsCacheKey(req);
+  const { searchParams } = new URL(req.url);
+  const includeArchived = searchParams.get('includeArchived') === 'true';
+  const showAll = searchParams.get('showAll') === 'true';
+  const isAdminDataRequest = includeArchived || showAll;
+  const hasAdminCredentials = Boolean(
+    req.headers.get('authorization')?.startsWith('Bearer ') || req.cookies.get('admin_token')?.value
+  );
   const cached = productsStaleCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < PRODUCTS_FRESH_TTL_MS) {
     return NextResponse.json(cached.data, { headers: { 'X-Products-Cache': 'fresh' } });
   }
   try {
-    const { searchParams } = new URL(req.url);
     const filter = searchParams.get('filter'); // author, discount, preorder, all
-    const showAll = searchParams.get('showAll') === 'true'; // include out of stock
     
     const isAuthor = filter === 'author' || searchParams.get('author') === 'true';
     const isDiscount = filter === 'discount' || searchParams.get('discount') === 'true';
     const isPreorder = filter === 'preorder' || searchParams.get('preorder') === 'true';
-    const includeArchived = searchParams.get('includeArchived') === 'true';
     const summary = searchParams.get('summary') === '1';
 
     let where: Record<string, unknown> = includeArchived ? {} : { isActive: true };
@@ -194,6 +198,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(normalizedProducts, { headers: { 'X-Products-Cache': 'miss' } });
   } catch (error) {
     console.error('Error fetching products:', error);
+    if (isAdminDataRequest && hasAdminCredentials) {
+      return NextResponse.json(
+        { success: false, message: 'Не удалось загрузить товары из базы данных' },
+        { status: 500, headers: { 'X-Products-Cache': 'admin-db-error' } }
+      );
+    }
+
     const stale = productsStaleCache.get(cacheKey);
     if (stale && Date.now() - stale.ts < PRODUCTS_STALE_TTL_MS) {
       return NextResponse.json(stale.data, { headers: { 'X-Products-Cache': 'stale' } });
