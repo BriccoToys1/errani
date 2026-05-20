@@ -4,7 +4,6 @@ import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 
 const DASHBOARD_CACHE_TTL_MS = 20_000;
-const QUERY_TIMEOUT_MS = 3_500;
 
 type DashboardPayload = {
   orderCount: number;
@@ -61,12 +60,9 @@ function fallbackPayload(): DashboardPayload {
   };
 }
 
-async function safeQuery<T>(query: () => Promise<T>, fallback: T, timeoutMs = QUERY_TIMEOUT_MS): Promise<T> {
+async function safeQuery<T>(query: () => Promise<T>, fallback: T): Promise<T> {
   try {
-    return await Promise.race([
-      withPrismaRetry(query, 2, 80),
-      new Promise<T>((resolve) => setTimeout(() => resolve(fallback), timeoutMs)),
-    ]);
+    return await withPrismaRetry(query, 2, 80);
   } catch {
     return fallback;
   }

@@ -53,36 +53,27 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(cached.payload, { headers: { 'X-Reviews-Cache': 'hit' } });
     }
 
-    const withTimeout = async <T,>(promise: Promise<T>, ms = 12_000): Promise<T> => {
-      return Promise.race([
-        promise,
-        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('reviews timeout')), ms)),
-      ]);
-    };
-
-    const [total, pending, reviews, products] = await Promise.all([
-      withTimeout(withPrismaRetry(() => prisma.review.count({ where }), 2, 80)),
-      withTimeout(withPrismaRetry(() => prisma.review.count({ where: { status: 'pending' } }), 2, 80)),
-      withTimeout(withPrismaRetry(() =>
-        prisma.review.findMany({
-          where,
-          orderBy: [{ createdAt: 'desc' }],
-          skip: (page - 1) * PAGE_SIZE,
-          take: PAGE_SIZE,
-          include: {
-            product: { select: { id: true, slug: true, name: true, nameRu: true } },
-            invite: { select: { id: true, sentAt: true, usedAt: true, tokenPreview: true } },
-          },
-        })
-      , 2, 80)),
-      withTimeout(withPrismaRetry(() =>
-        prisma.product.findMany({
-          select: { id: true, slug: true, name: true, nameRu: true },
-          where: { isActive: true },
-          orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }],
-        })
-      , 2, 80)),
-    ]);
+    const total = await withPrismaRetry(() => prisma.review.count({ where }), 2, 80);
+    const pending = await withPrismaRetry(() => prisma.review.count({ where: { status: 'pending' } }), 2, 80);
+    const reviews = await withPrismaRetry(() =>
+      prisma.review.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }],
+        skip: (page - 1) * PAGE_SIZE,
+        take: PAGE_SIZE,
+        include: {
+          product: { select: { id: true, slug: true, name: true, nameRu: true } },
+          invite: { select: { id: true, sentAt: true, usedAt: true, tokenPreview: true } },
+        },
+      })
+    , 2, 80);
+    const products = await withPrismaRetry(() =>
+      prisma.product.findMany({
+        select: { id: true, slug: true, name: true, nameRu: true },
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }],
+      })
+    , 2, 80);
 
     const payload = {
       success: true,
