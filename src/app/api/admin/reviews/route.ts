@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminGuard, verifyAdminToken } from '@/lib/admin-auth';
 import prisma from '@/lib/db';
 import { withPrismaRetry } from '@/lib/prisma-retry';
+import { withFreshPrisma } from '@/lib/fresh-prisma';
 
 const PAGE_SIZE = 30;
 const REVIEW_STATUSES = new Set(['pending', 'approved', 'rejected']);
@@ -53,10 +54,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(cached.payload, { headers: { 'X-Reviews-Cache': 'hit' } });
     }
 
-    const total = await withPrismaRetry(() => prisma.review.count({ where }), 2, 80);
-    const pending = await withPrismaRetry(() => prisma.review.count({ where: { status: 'pending' } }), 2, 80);
-    const reviews = await withPrismaRetry(() =>
-      prisma.review.findMany({
+    const { total, pending, reviews, products } = await withFreshPrisma(async (db) => {
+      const total = await db.review.count({ where });
+      const pending = await db.review.count({ where: { status: 'pending' } });
+      const reviews = await db.review.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }],
         skip: (page - 1) * PAGE_SIZE,
@@ -65,15 +66,14 @@ export async function GET(req: NextRequest) {
           product: { select: { id: true, slug: true, name: true, nameRu: true } },
           invite: { select: { id: true, sentAt: true, usedAt: true, tokenPreview: true } },
         },
-      })
-    , 2, 80);
-    const products = await withPrismaRetry(() =>
-      prisma.product.findMany({
+      });
+      const products = await db.product.findMany({
         select: { id: true, slug: true, name: true, nameRu: true },
         where: { isActive: true },
         orderBy: [{ sortOrder: 'asc' }, { updatedAt: 'desc' }],
-      })
-    , 2, 80);
+      });
+      return { total, pending, reviews, products };
+    });
 
     const payload = {
       success: true,

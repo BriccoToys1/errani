@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import { generateOrderNumber } from '@/lib/utils';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
+import { withFreshPrisma } from '@/lib/fresh-prisma';
 
 interface OrderItemInput {
   productId: string;
@@ -39,56 +40,60 @@ export async function GET(req: NextRequest) {
     const light = searchParams.get('light') === '1';
     const includeArchived = searchParams.get('includeArchived') === '1';
 
-    const orders = await withPrismaRetry(() => prisma.order.findMany({
-      ...(take ? { take } : {}),
-      ...(includeArchived ? {} : { where: { status: { not: 'archived' } } }),
-      select: {
-        id: true,
-        orderNumber: true,
-        customerName: true,
-        customerEmail: true,
-        customerPhone: true,
-        country: true,
-        oblast: true,
-        city: true,
-        zipCode: true,
-        street: true,
-        house: true,
-        apartment: true,
-        shippingMethod: true,
-        status: true,
-        paymentMethod: true,
-        totalAmount: true,
-        currency: true,
-        notes: true,
-        isManual: true,
-        createdAt: true,
-      },
-      orderBy: [{ isManual: 'desc' }, { createdAt: 'desc' }],
-    }), 2, 80);
+    const { orders, items, products } = await withFreshPrisma(async (db) => {
+      const orders = await db.order.findMany({
+        ...(take ? { take } : {}),
+        ...(includeArchived ? {} : { where: { status: { not: 'archived' } } }),
+        select: {
+          id: true,
+          orderNumber: true,
+          customerName: true,
+          customerEmail: true,
+          customerPhone: true,
+          country: true,
+          oblast: true,
+          city: true,
+          zipCode: true,
+          street: true,
+          house: true,
+          apartment: true,
+          shippingMethod: true,
+          status: true,
+          paymentMethod: true,
+          totalAmount: true,
+          currency: true,
+          notes: true,
+          isManual: true,
+          createdAt: true,
+        },
+        orderBy: [{ isManual: 'desc' }, { createdAt: 'desc' }],
+      });
 
-    const orderIds = orders.map((order) => order.id);
-    const items = orderIds.length > 0
-      ? await withPrismaRetry(() => prisma.orderItem.findMany({
-          where: { orderId: { in: orderIds } },
-          select: {
-            id: true,
-            orderId: true,
-            productId: true,
-            quantity: true,
-            price: true,
-            selectedColor: true,
-          },
-        }), 2, 80)
-      : [];
+      const orderIds = orders.map((order) => order.id);
+      const items = orderIds.length > 0
+        ? await db.orderItem.findMany({
+            where: { orderId: { in: orderIds } },
+            select: {
+              id: true,
+              orderId: true,
+              productId: true,
+              quantity: true,
+              price: true,
+              selectedColor: true,
+            },
+          })
+        : [];
 
-    const productIds = [...new Set(items.map((item) => item.productId).filter(Boolean))];
-    const products = productIds.length > 0
-      ? await withPrismaRetry(() => prisma.product.findMany({
-          where: { id: { in: productIds } },
-          select: { id: true, name: true, nameRu: true },
-        }), 2, 80)
-      : [];
+      const productIds = [...new Set(items.map((item) => item.productId).filter(Boolean))];
+      const products = productIds.length > 0
+        ? await db.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, name: true, nameRu: true },
+          })
+        : [];
+
+      return { orders, items, products };
+    });
     const productById = new Map(products.map((product) => [product.id, product]));
     const itemsByOrderId = new Map<string, Array<{
       id: string;

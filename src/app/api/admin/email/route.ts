@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import { adminGuard, verifyAdminToken } from '@/lib/admin-auth';
 import { Resend } from 'resend';
 import { withPrismaRetry } from '@/lib/prisma-retry';
+import { withFreshPrisma } from '@/lib/fresh-prisma';
 
 const emailListCache = new Map<string, { ts: number; payload: { emails: unknown[]; unreadCount: number } }>();
 
@@ -42,14 +43,17 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const emails = await withPrismaRetry(() => prisma.adminEmail.findMany({
+    const { emails, unreadCount } = await withFreshPrisma(async (db) => {
+      const emails = await db.adminEmail.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         take: 100,
-      }), 2, 80);
-    const unreadCount = await withPrismaRetry(() => prisma.adminEmail.count({
-      where: { direction: 'inbound', isRead: false, status: { not: 'archived' } },
-    }), 2, 80);
+      });
+      const unreadCount = await db.adminEmail.count({
+        where: { direction: 'inbound', isRead: false, status: { not: 'archived' } },
+      });
+      return { emails, unreadCount };
+    });
 
     const payload = { emails, unreadCount };
     emailListCache.set(cacheKey, { ts: Date.now(), payload });
