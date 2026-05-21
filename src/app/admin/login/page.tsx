@@ -12,7 +12,7 @@ export default function AdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   
   // Challenge state
-  const [challengeId, setChallengeId] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
   const [challengeQuestion, setChallengeQuestion] = useState("");
   const [challengeAnswer, setChallengeAnswer] = useState("");
   const [challengeLoading, setChallengeLoading] = useState(true);
@@ -23,7 +23,7 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/login");
       if (res.ok) {
         const data = await res.json();
-        setChallengeId(data.challengeId);
+        setChallengeToken(data.challengeToken);
         setChallengeQuestion(data.question);
         setChallengeAnswer("");
       }
@@ -42,7 +42,7 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, challengeId, challengeAnswer }),
+        body: JSON.stringify({ email, password, challengeToken, challengeAnswer }),
       });
 
       const data = await res.json();
