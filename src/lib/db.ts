@@ -9,10 +9,17 @@ function tuneDatabaseUrl(raw: string | undefined): string | undefined {
   if (!raw) return raw;
   try {
     const url = new URL(raw);
-    // Always override to safe values (ignore whatever is in the URL string)
-    url.searchParams.set('connection_limit', '10');
-    url.searchParams.set('pool_timeout', '30');
-    url.searchParams.set('connect_timeout', '15');
+    // On serverless (Vercel) each function instance must use 1 connection
+    // to avoid exhausting Neon's connection limit across concurrent invocations
+    if (!url.searchParams.has('connection_limit')) {
+      url.searchParams.set('connection_limit', '1');
+    }
+    if (!url.searchParams.has('pool_timeout')) {
+      url.searchParams.set('pool_timeout', '10');
+    }
+    if (!url.searchParams.has('connect_timeout')) {
+      url.searchParams.set('connect_timeout', '15');
+    }
     return url.toString();
   } catch {
     return raw;
