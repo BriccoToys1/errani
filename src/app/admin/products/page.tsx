@@ -237,48 +237,60 @@ function CharacteristicsEditor({ value, onChange, lang }: { value: string; onCha
   );
 }
 
-// ─── ColorsEditor (Выбор 3: фото + остатки) ──────────────────────────────────
+// ─── ColorsEditor (Выбор 3: фото из галереи + остатки) ───────────────────────
 
-function ColorsEditor({ value, onChange, token, lang }: { value: string; onChange: (v: string) => void; token: string; lang: Lang }) {
+function ColorsEditor({ value, onChange, lang, galleryPhotos }: { value: string; onChange: (v: string) => void; token: string; lang: Lang; galleryPhotos?: string[] }) {
   const [nameRu, setNameRu] = useState(""); const [nameEn, setNameEn] = useState("");
   const [hex, setHex] = useState("#9b87f5"); const [stock, setStock] = useState<number | "">("");
-  const uploadRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [pickerForIdx, setPickerForIdx] = useState<number | null>(null);
 
   let colors: ColorEntry[] = [];
   try { const p = JSON.parse(value || "[]"); if (Array.isArray(p)) colors = p; } catch { colors = []; }
   const update = (next: ColorEntry[]) => onChange(toJson(next));
-
-  const uploadPhoto = async (i: number, file: File) => {
-    try {
-      const url = await uploadProductImage(file, token);
-      update(colors.map((c, j) => j === i ? { ...c, photo: url } : c));
-    } catch (e) { alert(e instanceof Error ? e.message : "Ошибка"); }
-  };
+  const gallery = galleryPhotos && galleryPhotos.length > 0 ? galleryPhotos : [];
 
   return (
-    <div>
+    <div style={{ position: "relative" }}>
       {colors.length > 0 && (
-        <div style={{ marginBottom: "10px", border: "1px solid var(--cms-border)", borderRadius: "8px", overflow: "hidden" }}>
+        <div style={{ marginBottom: "10px", border: "1px solid var(--cms-border)", borderRadius: "8px", overflow: "visible" }}>
           {colors.map((c, i) => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "auto auto 1fr auto auto", gap: "8px", alignItems: "center", padding: "7px 10px", borderBottom: i < colors.length - 1 ? "1px solid var(--cms-border)" : "none" }}>
+            <div key={i} style={{ position: "relative", display: "grid", gridTemplateColumns: "auto auto 1fr auto auto", gap: "8px", alignItems: "center", padding: "7px 10px", borderBottom: i < colors.length - 1 ? "1px solid var(--cms-border)" : "none" }}>
               <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.hex, border: "1px solid rgba(255,255,255,0.2)", display: "block", flexShrink: 0 }} />
               <span style={{ fontSize: "12px", color: "#ddd", minWidth: 60 }}>{lang === "ru" ? c.name : (c.nameEn || c.name)}</span>
-              {/* Photo per color */}
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {/* Photo from gallery */}
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", position: "relative" }}>
                 {c.photo ? (
                   <div style={{ position: "relative" }}>
-                    <img src={c.photo} alt="" style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 4, display: "block" }} onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }} />
+                    <img src={c.photo} alt="" style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 4, display: "block", cursor: "pointer" }}
+                      onClick={() => setPickerForIdx(pickerForIdx === i ? null : i)}
+                      onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.3"; }} />
                     <button type="button" onClick={() => update(colors.map((x, j) => j === i ? { ...x, photo: undefined } : x))}
                       style={{ position: "absolute", top: -4, right: -4, background: "#333", border: "none", borderRadius: "50%", color: "#f66", cursor: "pointer", width: 14, height: 14, fontSize: 10, lineHeight: 1, padding: 0 }}>×</button>
                   </div>
                 ) : (
-                  <button type="button" className="cms-btn cms-btn-xs" onClick={() => uploadRefs.current[i]?.click()}>
+                  <button type="button" className="cms-btn cms-btn-xs" title="Выбрать фото из галереи" onClick={() => setPickerForIdx(pickerForIdx === i ? null : i)}>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                   </button>
                 )}
-                <input type="file" accept={IMAGE_ACCEPT} style={{ display: "none" }}
-                  ref={el => { uploadRefs.current[i] = el; }}
-                  onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadPhoto(i, f); }} />
+                {pickerForIdx === i && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 50, background: "var(--cms-surface, #1a1d27)", border: "1px solid var(--cms-border)", borderRadius: 8, padding: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.5)", minWidth: 200, maxWidth: 280 }}>
+                    <div style={{ fontSize: 11, color: "var(--cms-text-muted)", marginBottom: 6, fontWeight: 600 }}>Выберите фото из галереи товара</div>
+                    {gallery.length === 0 ? (
+                      <div style={{ fontSize: 12, color: "var(--cms-text-muted)", padding: "8px 0" }}>Сначала добавьте фотографии к товару</div>
+                    ) : (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(56px, 1fr))", gap: 6 }}>
+                        {gallery.map((url, gi) => (
+                          <img key={gi} src={url} alt="" title={url}
+                            style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 4, cursor: "pointer", border: c.photo === url ? "2px solid var(--cms-accent, #9b87f5)" : "2px solid transparent", opacity: 0.9 }}
+                            onClick={() => { update(colors.map((x, j) => j === i ? { ...x, photo: url } : x)); setPickerForIdx(null); }}
+                            onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.2"; }} />
+                        ))}
+                      </div>
+                    )}
+                    <button type="button" onClick={() => setPickerForIdx(null)}
+                      style={{ marginTop: 8, fontSize: 11, color: "var(--cms-text-muted)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>Закрыть</button>
+                  </div>
+                )}
               </div>
               <input type="number" min="0" className="cms-input" value={c.stock ?? ""} placeholder="—"
                 onChange={(e) => update(colors.map((x, j) => j === i ? { ...x, stock: e.target.value === "" ? undefined : Number(e.target.value) } : x))}
@@ -1001,7 +1013,7 @@ export default function AdminProductsPage() {
 
               {/* ── Цвета (Выбор 3) ── */}
               <Section title="Цвета / фото к цветам / остатки">
-                <ColorsEditor value={form.colors} onChange={val => setForm(prev => ({ ...prev, colors: val }))} token={adminToken} lang={lang} />
+                <ColorsEditor value={form.colors} onChange={val => setForm(prev => ({ ...prev, colors: val }))} token={adminToken} lang={lang} galleryPhotos={parseImageList(form.images)} />
               </Section>
 
               {/* ── Плашки ── */}

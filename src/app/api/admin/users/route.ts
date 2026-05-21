@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
@@ -432,5 +434,48 @@ export async function PATCH(req: NextRequest) {
   } catch (e) {
     console.error('Users PATCH error:', e);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
+
+  try {
+    const body = await req.json();
+    const email = normalizeEmail(body.email || '');
+    if (!email) return NextResponse.json({ error: 'Email обязателен' }, { status: 400 });
+    const name = String(body.name || '').trim();
+    if (!name) return NextResponse.json({ error: 'Имя обязательно' }, { status: 400 });
+
+    const existing = await withPrismaRetry(() =>
+      prisma.user.findUnique({ where: { email }, select: { id: true } })
+    , 2, 80);
+    if (existing) return NextResponse.json({ error: 'Клиент с таким email уже существует' }, { status: 409 });
+
+    const tempPassword = await bcrypt.hash(randomUUID(), 10);
+    const user = await withPrismaRetry(() =>
+      prisma.user.create({
+        data: {
+          email,
+          name,
+          password: tempPassword,
+          phone: String(body.phone || ''),
+          country: String(body.country || 'RU'),
+          city: String(body.city || ''),
+          zipCode: String(body.zipCode || ''),
+          street: String(body.street || ''),
+          house: String(body.house || ''),
+          apartment: String(body.apartment || ''),
+        },
+        select: { id: true, email: true, name: true, createdAt: true },
+      })
+    , 2, 80);
+
+    usersCache.clear();
+    return NextResponse.json({ ok: true, user }, { status: 201 });
+  } catch (e) {
+    console.error('Users POST error:', e);
+    return NextResponse.json({ error: 'Ошибка создания клиента' }, { status: 500 });
   }
 }

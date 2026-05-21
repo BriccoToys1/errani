@@ -107,6 +107,9 @@ export default function AdminUsersPage() {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedEmails, setSelectedEmails] = useState<Record<string, boolean>>({});
   const [sendingInvites, setSendingInvites] = useState(false);
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({ name: "", email: "", phone: "", country: "RU", city: "", zipCode: "", street: "", house: "", apartment: "" });
+  const [creatingClient, setCreatingClient] = useState(false);
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
@@ -267,6 +270,31 @@ export default function AdminUsersPage() {
     patchProfile(profile.email, { purge: true }, "Профиль удалён навсегда");
   };
 
+  const handleCreateClient = async () => {
+    if (!newClientForm.name.trim() || !newClientForm.email.trim()) {
+      notify("Имя и email обязательны");
+      return;
+    }
+    const token = getToken();
+    if (!token) return;
+    setCreatingClient(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(newClientForm),
+      });
+      const data = await res.json();
+      if (!res.ok) { notify(data.error || "Ошибка создания"); return; }
+      notify(`Клиент ${newClientForm.email} создан`);
+      setShowNewClient(false);
+      setNewClientForm({ name: "", email: "", phone: "", country: "RU", city: "", zipCode: "", street: "", house: "", apartment: "" });
+      fetchUsers(search, 1, view);
+    } finally {
+      setCreatingClient(false);
+    }
+  };
+
   const selectedRecipientList = users
     .filter((profile) => selectedEmails[profile.email])
     .map((profile) => ({ email: profile.email, name: profile.name || profile.email }));
@@ -279,6 +307,11 @@ export default function AdminUsersPage() {
           <div>
             <h1 className="cms-header-title">Клиенты</h1>
             <p style={{ fontSize: "13px", color: "var(--cms-text-muted)", marginTop: "2px" }}>{total} профилей</p>
+          </div>
+          <div className="cms-header-actions">
+            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={() => setShowNewClient(true)} title="Добавить клиента">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
           </div>
         </div>
 
@@ -508,6 +541,77 @@ export default function AdminUsersPage() {
           )}
         </div>
       </main>
+
+      {/* New Client Modal */}
+      {showNewClient && (
+        <div className="cms-modal-overlay" onClick={() => setShowNewClient(false)}>
+          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <div className="cms-modal-header">
+              <h3>Добавить клиента</h3>
+              <button className="cms-modal-close" onClick={() => setShowNewClient(false)}>&times;</button>
+            </div>
+            <div className="cms-modal-body" style={{ maxHeight: "65vh", overflowY: "auto" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <label className="cms-label" style={{ gridColumn: "span 2" }}>
+                  Имя и фамилия *
+                  <input className="cms-input" value={newClientForm.name} onChange={(e) => setNewClientForm({ ...newClientForm, name: e.target.value })} placeholder="Иван Иванов" style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label" style={{ gridColumn: "span 2" }}>
+                  Email *
+                  <input className="cms-input" type="email" value={newClientForm.email} onChange={(e) => setNewClientForm({ ...newClientForm, email: e.target.value })} placeholder="ivan@example.com" style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Телефон
+                  <input className="cms-input" value={newClientForm.phone} onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })} placeholder="+7 999 000 00 00" style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Страна
+                  <select className="cms-select" value={newClientForm.country} onChange={(e) => setNewClientForm({ ...newClientForm, country: e.target.value })} style={{ marginTop: 4 }}>
+                    <option value="RU">Россия</option>
+                    <option value="BY">Беларусь</option>
+                    <option value="KZ">Казахстан</option>
+                    <option value="UA">Украина</option>
+                    <option value="UZ">Узбекистан</option>
+                    <option value="DE">Германия</option>
+                    <option value="FR">Франция</option>
+                    <option value="US">США</option>
+                    <option value="OTHER">Другая</option>
+                  </select>
+                </label>
+                <label className="cms-label">
+                  Город
+                  <input className="cms-input" value={newClientForm.city} onChange={(e) => setNewClientForm({ ...newClientForm, city: e.target.value })} placeholder="Москва" style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Индекс
+                  <input className="cms-input" value={newClientForm.zipCode} onChange={(e) => setNewClientForm({ ...newClientForm, zipCode: e.target.value })} placeholder="123456" style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label" style={{ gridColumn: "span 2" }}>
+                  Улица
+                  <input className="cms-input" value={newClientForm.street} onChange={(e) => setNewClientForm({ ...newClientForm, street: e.target.value })} placeholder="ул. Ленина" style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Дом
+                  <input className="cms-input" value={newClientForm.house} onChange={(e) => setNewClientForm({ ...newClientForm, house: e.target.value })} placeholder="1А" style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Квартира
+                  <input className="cms-input" value={newClientForm.apartment} onChange={(e) => setNewClientForm({ ...newClientForm, apartment: e.target.value })} placeholder="10" style={{ marginTop: 4 }} />
+                </label>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--cms-text-muted)", marginTop: 12 }}>
+                После создания клиента вы сможете добавить ему заказы вручную на странице «Заказы».
+              </p>
+            </div>
+            <div className="cms-modal-actions">
+              <button className="cms-btn cms-btn-primary" onClick={handleCreateClient} disabled={creatingClient}>
+                {creatingClient ? "Создание..." : "Создать клиента"}
+              </button>
+              <button className="cms-btn" onClick={() => setShowNewClient(false)}>Отмена</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

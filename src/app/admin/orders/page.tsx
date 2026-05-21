@@ -56,7 +56,15 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 };
 
 const ALL_STATUSES = ["pending", "unpaid", "paid", "assembling", "shipped", "in_transit", "delivered", "cancelled", "archived"];
-const PERIOD_OPTIONS = [1, 3, 7, 14, 30, 60, 90, 180, 365];
+const PERIOD_OPTIONS = [0, 1, 3, 7, 14, 30, 60, 90, 180, 365];
+const PERIOD_LABELS: Record<number, string> = { 0: "Всё время", 1: "1 день", 3: "3 дня", 7: "7 дней", 14: "14 дней", 30: "30 дней", 60: "60 дней", 90: "90 дней", 180: "180 дней", 365: "Год" };
+type OrderSortMode = "newest" | "oldest" | "amountDesc" | "amountAsc";
+const ORDER_SORT_OPTIONS: { value: OrderSortMode; label: string }[] = [
+  { value: "newest", label: "Сначала новые" },
+  { value: "oldest", label: "Сначала старые" },
+  { value: "amountDesc", label: "Сумма ↓" },
+  { value: "amountAsc", label: "Сумма ↑" },
+];
 
 const emptyManualForm = {
   customerName: "",
@@ -106,8 +114,11 @@ export default function AdminOrdersPage() {
   const [showNewOrder, setShowNewOrder] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [regionFilter, setRegionFilter] = useState<"all" | "ru" | "foreign">("all");
-  const [periodDays, setPeriodDays] = useState<number>(30);
+  const [periodDays, setPeriodDays] = useState<number>(0);
   const [customRange, setCustomRange] = useState({ from: "", to: "" });
+  const [orderSortMode, setOrderSortMode] = useState<OrderSortMode>("newest");
+  const [showFilterDrop, setShowFilterDrop] = useState(false);
+  const [showSortDrop, setShowSortDrop] = useState(false);
   const [manualForm, setManualForm] = useState<typeof emptyManualForm>(emptyManualForm);
   const [creatingManual, setCreatingManual] = useState(false);
 
@@ -385,15 +396,9 @@ export default function AdminOrdersPage() {
     setCreatingManual(false);
   };
 
-  const dayWord = (days: number) => {
-    if (days === 1) return "день";
-    if (days === 3) return "дня";
-    return "дней";
-  };
-
   const periodLabel = customRange.from && customRange.to
-    ? "от-до"
-    : `${periodDays} ${dayWord(periodDays)}`;
+    ? `${customRange.from} — ${customRange.to}`
+    : (PERIOD_LABELS[periodDays] ?? `${periodDays} дн.`);
 
   const nowMs = Date.now();
   const scopedOrders = orders.filter((o) => {
@@ -404,7 +409,7 @@ export default function AdminOrdersPage() {
       const to = new Date(customRange.to).getTime() + 24 * 60 * 60 * 1000 - 1;
       const ts = new Date(o.createdAt).getTime();
       if (Number.isFinite(from) && Number.isFinite(to) && (ts < from || ts > to)) return false;
-    } else {
+    } else if (periodDays > 0) {
       const cutoff = nowMs - periodDays * 24 * 60 * 60 * 1000;
       if (new Date(o.createdAt).getTime() < cutoff) return false;
     }
@@ -429,6 +434,9 @@ export default function AdminOrdersPage() {
   const sorted = [...filtered].sort((a, b) => {
     if (a.isManual && !b.isManual) return -1;
     if (!a.isManual && b.isManual) return 1;
+    if (orderSortMode === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (orderSortMode === "amountDesc") return b.totalAmount - a.totalAmount;
+    if (orderSortMode === "amountAsc") return a.totalAmount - b.totalAmount;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
@@ -450,9 +458,6 @@ export default function AdminOrdersPage() {
             {newCount > 0 && <span className="cms-badge cms-badge-blue" style={{ marginLeft: "10px", fontSize: "12px" }}>{newCount}</span>}
           </h1>
           <div className="cms-header-actions">
-            <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>
-              За {periodLabel}: {filtered.length}
-            </span>
             <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={() => setShowNewOrder(true)} title="Добавить">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
@@ -478,33 +483,90 @@ export default function AdminOrdersPage() {
 
         <div className="cms-content">
           <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
-            <select className="cms-select cms-input-sm" value={String(periodDays)} onChange={(e) => { setPeriodDays(Number(e.target.value)); setCustomRange({ from: "", to: "" }); }}>
-              {PERIOD_OPTIONS.map((value) => (
-                <option key={value} value={value}>{value}</option>
-              ))}
-            </select>
-            <input className="cms-input cms-input-sm" type="date" value={customRange.from} onChange={(e) => setCustomRange((prev) => ({ ...prev, from: e.target.value }))} />
-            <input className="cms-input cms-input-sm" type="date" value={customRange.to} onChange={(e) => setCustomRange((prev) => ({ ...prev, to: e.target.value }))} />
-            <button className={`cms-btn cms-btn-sm ${regionFilter === "all" ? "cms-btn-primary" : ""}`} onClick={() => setRegionFilter("all")}>Все ({scopedOrders.length})</button>
-            <button className={`cms-btn cms-btn-sm ${regionFilter === "ru" ? "cms-btn-primary" : ""}`} onClick={() => setRegionFilter("ru")}>Россия ({ruCount})</button>
-            <button className={`cms-btn cms-btn-sm ${regionFilter === "foreign" ? "cms-btn-primary" : ""}`} onClick={() => setRegionFilter("foreign")}>Зарубеж ({foreignCount})</button>
-            <button className="cms-btn cms-btn-sm" title="Фильтр">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-            </button>
             <input
               className="cms-input cms-input-sm"
               placeholder="Поиск по номеру, имени, email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "240px" }}
+              style={{ width: "260px" }}
             />
-            <button className={`cms-btn cms-btn-sm ${showArchived ? "cms-btn-primary" : ""}`} onClick={() => setShowArchived((v) => !v)} title="Архив">
+
+            {/* Filter icon + dropdown */}
+            <div style={{ position: "relative" }}>
+              <button
+                className={`cms-btn cms-btn-sm${showFilterDrop ? " cms-btn-primary" : ""}${(periodDays !== 0 || customRange.from || regionFilter !== "all") ? " cms-btn-primary" : ""}`}
+                title="Фильтр"
+                onClick={() => { setShowFilterDrop(v => !v); setShowSortDrop(false); }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              </button>
+              {showFilterDrop && (
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 40, background: "var(--cms-surface, #1a1d27)", border: "1px solid var(--cms-border)", borderRadius: 8, padding: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)", minWidth: 240 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Период</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                    {PERIOD_OPTIONS.map((d) => (
+                      <button key={d} type="button"
+                        className={`cms-btn cms-btn-xs${periodDays === d && !customRange.from ? " cms-btn-primary" : ""}`}
+                        onClick={() => { setPeriodDays(d); setCustomRange({ from: "", to: "" }); }}>
+                        {PERIOD_LABELS[d]}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Диапазон дат</div>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+                    <input className="cms-input cms-input-sm" type="date" value={customRange.from} onChange={(e) => setCustomRange((prev) => ({ ...prev, from: e.target.value }))} style={{ flex: 1 }} />
+                    <input className="cms-input cms-input-sm" type="date" value={customRange.to} onChange={(e) => setCustomRange((prev) => ({ ...prev, to: e.target.value }))} style={{ flex: 1 }} />
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Регион</div>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
+                    <button type="button" className={`cms-btn cms-btn-xs${regionFilter === "all" ? " cms-btn-primary" : ""}`} onClick={() => setRegionFilter("all")}>Все ({scopedOrders.length})</button>
+                    <button type="button" className={`cms-btn cms-btn-xs${regionFilter === "ru" ? " cms-btn-primary" : ""}`} onClick={() => setRegionFilter("ru")}>Россия ({ruCount})</button>
+                    <button type="button" className={`cms-btn cms-btn-xs${regionFilter === "foreign" ? " cms-btn-primary" : ""}`} onClick={() => setRegionFilter("foreign")}>Зарубеж ({foreignCount})</button>
+                  </div>
+                  {(periodDays !== 0 || customRange.from || regionFilter !== "all") && (
+                    <button type="button" className="cms-btn cms-btn-xs" style={{ marginTop: 8 }}
+                      onClick={() => { setPeriodDays(0); setCustomRange({ from: "", to: "" }); setRegionFilter("all"); }}>
+                      Сбросить фильтры
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Sort icon + dropdown */}
+            <div style={{ position: "relative" }}>
+              <button
+                className={`cms-btn cms-btn-sm${showSortDrop ? " cms-btn-primary" : ""}${orderSortMode !== "newest" ? " cms-btn-primary" : ""}`}
+                title="Сортировка"
+                onClick={() => { setShowSortDrop(v => !v); setShowFilterDrop(false); }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/></svg>
+              </button>
+              {showSortDrop && (
+                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 40, background: "var(--cms-surface, #1a1d27)", border: "1px solid var(--cms-border)", borderRadius: 8, padding: "8px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)", minWidth: 180 }}>
+                  {ORDER_SORT_OPTIONS.map((opt) => (
+                    <button key={opt.value} type="button"
+                      onClick={() => { setOrderSortMode(opt.value); setShowSortDrop(false); }}
+                      style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px", background: orderSortMode === opt.value ? "rgba(155,135,245,0.15)" : "none", border: "none", borderRadius: 4, color: orderSortMode === opt.value ? "var(--cms-accent, #9b87f5)" : "var(--cms-text)", fontSize: 13, cursor: "pointer" }}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button className={`cms-btn cms-btn-sm${showArchived ? " cms-btn-primary" : ""}`} onClick={() => setShowArchived((v) => !v)} title="Показать архив">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
             </button>
+
+            <span style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginLeft: "auto" }}>
+              {periodLabel} · {filtered.length} заказов
+            </span>
+
             {sorted.some((o) => o.isManual) && (
               <span style={{ fontSize: "11px", display: "flex", alignItems: "center", gap: 5, color: "var(--cms-text-muted)" }}>
                 <span style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#a78bfa", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>РУЧНОЙ</span>
-                — добавлен вручную, закреплён наверху
+                — закреплён наверху
               </span>
             )}
           </div>
