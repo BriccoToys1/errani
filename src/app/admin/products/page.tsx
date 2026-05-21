@@ -65,7 +65,7 @@ interface Product {
   limitedEditionTextEn?: string;
   noticeText?: string; noticeTextEn?: string;
   shippingConditions?: string;
-  isActive: boolean; isSaleDisabled: boolean; isSoldOut: boolean;
+  isActive: boolean; isAvailable: boolean; isSaleDisabled: boolean; isSoldOut: boolean;
   sortOrder: number; characteristics: string; colors: string; createdAt: string;
 }
 
@@ -86,7 +86,7 @@ const emptyProduct = {
   preorderClosed: false, preorderAvailableDate: "",
   isAuthor: false, isLimited: false, limitedEditionText: "", limitedEditionTextEn: "",
   noticeText: "", noticeTextEn: "", shippingConditions: "[]",
-  isActive: true, isSaleDisabled: false, isSoldOut: false, sortOrder: 0,
+  isActive: true, isAvailable: true, isSaleDisabled: false, isSoldOut: false, sortOrder: 0,
   characteristics: "[]", colors: "[]",
 };
 
@@ -456,7 +456,7 @@ export default function AdminProductsPage() {
       limitedEditionTextEn: p.limitedEditionTextEn || "",
       noticeText: p.noticeText || "", noticeTextEn: p.noticeTextEn || "",
       shippingConditions: p.shippingConditions || "[]",
-      isActive: p.isActive, isSaleDisabled: p.isSaleDisabled || false,
+      isActive: p.isActive, isAvailable: p.isAvailable ?? true, isSaleDisabled: p.isSaleDisabled || false,
       isSoldOut: p.isSoldOut || false, sortOrder: p.sortOrder,
       characteristics: p.characteristics || "[]", colors: p.colors || "[]",
     });
@@ -480,7 +480,7 @@ export default function AdminProductsPage() {
       limitedEditionTextEn: p.limitedEditionTextEn || "",
       noticeText: p.noticeText || "", noticeTextEn: p.noticeTextEn || "",
       shippingConditions: p.shippingConditions || "[]",
-      isActive: false, isSaleDisabled: p.isSaleDisabled || false,
+      isActive: false, isAvailable: true, isSaleDisabled: p.isSaleDisabled || false,
       isSoldOut: false, characteristics: p.characteristics || "[]",
       colors: p.colors || "[]", sortOrder: p.sortOrder,
     });
@@ -510,6 +510,7 @@ export default function AdminProductsPage() {
       preorderAvailableDate: p.preorderAvailableDate || null,
       isAuthor: p.isAuthor, isLimited: p.isLimited || false,
       limitedEditionText: p.limitedEditionText || "", isActive: p.isActive,
+      isAvailable: p.isAvailable ?? true,
       isSaleDisabled: p.isSaleDisabled || false, isSoldOut: p.isSoldOut || false,
       characteristics: p.characteristics || "[]", colors: p.colors || "[]",
       sortOrder: p.sortOrder, ...overrides,
@@ -1008,54 +1009,55 @@ export default function AdminProductsPage() {
                 </div>
               </Section>
 
-              {/* ── Выбор 1: Статус ── */}
-              <Section title="Статус продажи">
-                <div style={{ display: "flex", gap: 8, marginBottom: form.isPreorder ? 12 : 0 }}>
-                  {[
-                    { label: "Активен", value: false },
-                    { label: "Предзаказ", value: true },
-                  ].map(opt => (
-                    <button key={String(opt.value)} type="button"
-                      onClick={() => setForm(prev => ({ ...prev, isPreorder: opt.value, inStock: opt.value ? true : prev.inStock }))}
-                      style={{
-                        padding: "6px 16px", borderRadius: 6, fontSize: 13, border: "1px solid",
-                        borderColor: form.isPreorder === opt.value ? "var(--cms-accent, #9b87f5)" : "var(--cms-border)",
-                        background: form.isPreorder === opt.value ? "rgba(155,135,245,0.15)" : "transparent",
-                        color: form.isPreorder === opt.value ? "var(--cms-accent, #9b87f5)" : "var(--cms-text-muted)",
-                        cursor: "pointer", fontWeight: form.isPreorder === opt.value ? 600 : 400,
-                      }}>{opt.label}</button>
-                  ))}
-                </div>
-                {form.isPreorder && (
-                  <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(232,96,28,0.07)", borderRadius: 8, border: "1px solid rgba(232,96,28,0.2)" }}>
-                    <label className="cms-label">
-                      Ориентировочный срок доставки
-                      <input className="cms-input" type="date" value={form.preorderAvailableDate || ""}
-                        onChange={e => setForm({ ...form, preorderAvailableDate: e.target.value })} style={{ marginTop: 4 }} />
-                    </label>
-                    <label className="cms-checkbox-label" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
-                      <input type="checkbox" checked={form.preorderClosed} onChange={e => setForm({ ...form, preorderClosed: e.target.checked })} />
-                      Предзаказ закрыт
-                    </label>
-                  </div>
-                )}
-              </Section>
-
-              {/* ── Выбор 2: Лимитированный тираж ── */}
-              <Section title="Лимитированный тираж">
-                <label className="cms-checkbox-label" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: form.isLimited ? 10 : 0 }}>
-                  <input type="checkbox" checked={form.isLimited} onChange={e => setForm({ ...form, isLimited: e.target.checked })} />
-                  <span style={{ fontSize: 13 }}>Лимитированный тираж</span>
-                </label>
-                {form.isLimited && (
-                  <div style={{ marginTop: 8 }}>
-                    <div style={{ fontSize: 11, color: "var(--cms-text-muted)", marginBottom: 4 }}>Описание тиража ({lang.toUpperCase()})</div>
-                    <textarea className="cms-textarea" rows={3} style={{ width: "100%" }}
-                      placeholder={lang === "ru" ? "Тираж ограничен..." : "Limited edition..."}
-                      value={lang === "ru" ? form.limitedEditionText : (form.limitedEditionTextEn || "")}
-                      onChange={e => setForm(prev => lang === "ru" ? { ...prev, limitedEditionText: e.target.value } : { ...prev, limitedEditionTextEn: e.target.value })} />
-                  </div>
-                )}
+              {/* ── Статус / Плашки ── */}
+              <Section title="Статус и плашки">
+                {(() => {
+                  const tog = (active: boolean, on: () => void, label: string, colorOn = "var(--cms-accent, #9b87f5)", bgOn = "rgba(155,135,245,0.15)") => (
+                    <button type="button" onClick={on} style={{
+                      padding: "5px 14px", borderRadius: 20, fontSize: 12, border: "1px solid",
+                      borderColor: active ? colorOn : "var(--cms-border)",
+                      background: active ? bgOn : "transparent",
+                      color: active ? colorOn : "var(--cms-text-muted)",
+                      cursor: "pointer", fontWeight: active ? 600 : 400, transition: "all 0.15s",
+                    }}>{label}</button>
+                  );
+                  return (
+                    <>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                        {tog(form.isActive, () => setForm(p => ({ ...p, isActive: !p.isActive })), "Активен")}
+                        {tog(form.isAvailable, () => setForm(p => ({ ...p, isAvailable: !p.isAvailable })), "Доступен", "#16a34a", "rgba(22,163,74,0.12)")}
+                        {tog(form.isPreorder, () => setForm(p => ({ ...p, isPreorder: !p.isPreorder, inStock: !p.isPreorder ? true : p.inStock })), "Предзаказ", "#f59e0b", "rgba(245,158,11,0.12)")}
+                        {tog(form.isLimited, () => setForm(p => ({ ...p, isLimited: !p.isLimited })), "Лимитированный", "#8b5cf6", "rgba(139,92,246,0.12)")}
+                        {tog(form.isAuthor, () => setForm(p => ({ ...p, isAuthor: !p.isAuthor })), "Авторская", "#0ea5e9", "rgba(14,165,233,0.12)")}
+                        {tog(form.isSoldOut, () => setForm(p => ({ ...p, isSoldOut: !p.isSoldOut })), "Sold Out", "#ef4444", "rgba(239,68,68,0.12)")}
+                        {tog(form.inStock, () => setForm(p => ({ ...p, inStock: !p.inStock })), "В наличии", "#16a34a", "rgba(22,163,74,0.12)")}
+                        {tog(form.isSaleDisabled, () => setForm(p => ({ ...p, isSaleDisabled: !p.isSaleDisabled })), "Скоро", "#f59e0b", "rgba(245,158,11,0.12)")}
+                      </div>
+                      {form.isPreorder && (
+                        <div style={{ padding: "10px 12px", background: "rgba(245,158,11,0.07)", borderRadius: 8, border: "1px solid rgba(245,158,11,0.2)", marginBottom: 8 }}>
+                          <label className="cms-label">
+                            Ориентировочный срок доставки
+                            <input className="cms-input" type="date" value={form.preorderAvailableDate || ""}
+                              onChange={e => setForm({ ...form, preorderAvailableDate: e.target.value })} style={{ marginTop: 4 }} />
+                          </label>
+                          <label className="cms-checkbox-label" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                            <input type="checkbox" checked={form.preorderClosed} onChange={e => setForm({ ...form, preorderClosed: e.target.checked })} />
+                            Предзаказ закрыт
+                          </label>
+                        </div>
+                      )}
+                      {form.isLimited && (
+                        <div style={{ padding: "10px 12px", background: "rgba(139,92,246,0.07)", borderRadius: 8, border: "1px solid rgba(139,92,246,0.2)" }}>
+                          <div style={{ fontSize: 11, color: "var(--cms-text-muted)", marginBottom: 4 }}>Описание тиража ({lang.toUpperCase()})</div>
+                          <textarea className="cms-textarea" rows={3} style={{ width: "100%" }}
+                            placeholder={lang === "ru" ? "Тираж ограничен..." : "Limited edition..."}
+                            value={lang === "ru" ? form.limitedEditionText : (form.limitedEditionTextEn || "")}
+                            onChange={e => setForm(prev => lang === "ru" ? { ...prev, limitedEditionText: e.target.value } : { ...prev, limitedEditionTextEn: e.target.value })} />
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </Section>
 
               {/* ── Фотографии ── */}
@@ -1074,28 +1076,6 @@ export default function AdminProductsPage() {
               {/* ── Цвета (Выбор 3) ── */}
               <Section title="Цвета / фото к цветам / остатки">
                 <ColorsEditor value={form.colors} onChange={val => setForm(prev => ({ ...prev, colors: val }))} token={adminToken} lang={lang} galleryPhotos={parseImageList(form.images)} />
-              </Section>
-
-              {/* ── Плашки ── */}
-              <Section title="Плашки">
-                <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                  <label className="cms-checkbox-label" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                    <input type="checkbox" checked={form.isAuthor} onChange={e => setForm({ ...form, isAuthor: e.target.checked })} />
-                    Авторская (Signature)
-                  </label>
-                  <label className="cms-checkbox-label" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                    <input type="checkbox" checked={form.isSoldOut} onChange={e => setForm({ ...form, isSoldOut: e.target.checked })} />
-                    Sold Out
-                  </label>
-                  <label className="cms-checkbox-label" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                    <input type="checkbox" checked={form.inStock} onChange={e => setForm({ ...form, inStock: e.target.checked })} />
-                    В наличии
-                  </label>
-                  <label className="cms-checkbox-label" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
-                    <input type="checkbox" checked={form.isSaleDisabled} onChange={e => setForm({ ...form, isSaleDisabled: e.target.checked })} />
-                    Скоро
-                  </label>
-                </div>
               </Section>
 
               {/* ── Уведомление (плашка) ── */}

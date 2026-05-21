@@ -54,7 +54,7 @@ export default async function ProductPage({ params }: Props) {
 
   if (!product || !product.isActive) notFound();
   const normalizedProduct = await normalizeProductMedia(product);
-  const canBePurchased = product.inStock && !product.isSaleDisabled && product.stock > 0;
+  const canBePurchased = product.inStock && !product.isSaleDisabled && product.stock > 0 && (product.isAvailable ?? true);
 
   return (
     <ProductContent

@@ -61,6 +61,7 @@ model Product {
   noticeTextEn       String         @default("") // Per-product notice/badge text (EN)
   shippingConditions String         @default("[]") // JSON [{fromQty,toQty,price}] tiered shipping
   isActive           Boolean        @default(true) // Show in catalog
+  isAvailable        Boolean        @default(true) // Can be purchased (add to cart enabled)
   isSaleDisabled     Boolean        @default(false) // "Скоро" — товар в каталоге, кнопка "Скоро"
   isSoldOut          Boolean        @default(false) // Плашка "Sold Out" на фото
   characteristics    String         @default("") // JSON array of {key, value} pairs

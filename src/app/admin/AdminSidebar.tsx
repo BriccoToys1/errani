@@ -56,18 +56,12 @@ const ICONS: Record<string, React.ReactNode> = {
   info: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
 };
 
-interface HealthStatus {
-  level: 'green' | 'yellow' | 'red';
-  message: string;
-}
-
 export function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0, newEmails: 0, newWaitlist: 0, newReviews: 0 });
-  const [health, setHealth] = useState<HealthStatus>({ level: 'green', message: 'Всё в порядке' });
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -89,13 +83,8 @@ export function AdminSidebar() {
           newEmails: data.newEmails || 0,
           newReviews: data.newReviews || 0,
         });
-        setHealth({ level: 'green', message: 'Всё в порядке' });
-      } else {
-        setHealth({ level: 'yellow', message: 'Проблема загрузки счётчиков' });
       }
-    } catch {
-      setHealth({ level: 'yellow', message: 'Проблема загрузки счётчиков' });
-    }
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -330,16 +319,6 @@ export function AdminSidebar() {
           );
         })}
       </nav>
-
-      {/* Traffic Light */}
-      {!collapsed && (
-        <div className="cms-traffic-light" title={health.message}>
-          <span className={`cms-traffic-dot ${health.level === 'red' ? 'red' : 'off'}`} />
-          <span className={`cms-traffic-dot ${health.level === 'yellow' ? 'yellow' : 'off'}`} />
-          <span className={`cms-traffic-dot ${health.level === 'green' ? 'green' : 'off'}`} />
-          <span className="cms-traffic-tooltip">{health.message}</span>
-        </div>
-      )}
 
       <div className="cms-sidebar-footer">
         <button

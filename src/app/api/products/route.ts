@@ -280,6 +280,7 @@ export async function POST(req: NextRequest) {
         characteristics: normalizeJsonArrayString(body.characteristics),
         colors: normalizeJsonArrayString(body.colors),
         isActive: body.isActive ?? true,
+        isAvailable: body.isAvailable ?? true,
         isSaleDisabled: body.isSaleDisabled ?? false,
         isSoldOut: body.isSoldOut ?? false,
         sortOrder: Number(body.sortOrder) || 0,

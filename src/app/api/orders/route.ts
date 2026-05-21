@@ -162,8 +162,8 @@ export async function POST(req: NextRequest) {
     const metaSetting = await prisma.siteSettings.findUnique({ where: { key: 'customer_profiles_meta_v1' } });
     if (metaSetting?.value) {
       try {
-        const meta = JSON.parse(metaSetting.value) as Record<string, { blocked?: boolean }>;
-        if (meta[normalizedEmail]?.blocked) {
+        const meta = JSON.parse(metaSetting.value) as Record<string, { badges?: string[] }>;
+        if (meta[normalizedEmail]?.badges?.includes('__blocked__')) {
           return NextResponse.json({ error: 'Проверка по идентичности ФИО и номера телефона' }, { status: 403 });
         }
       } catch { /* ignore */ }

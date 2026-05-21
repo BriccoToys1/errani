@@ -99,6 +99,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         noticeTextEn: body.noticeTextEn ?? '',
         shippingConditions: normalizeJsonArrayString(body.shippingConditions),
         isActive: body.isActive ?? true,
+        isAvailable: body.isAvailable ?? true,
         isSaleDisabled: body.isSaleDisabled ?? false,
         isSoldOut: body.isSoldOut ?? false,
         characteristics: normalizeJsonArrayString(body.characteristics),
