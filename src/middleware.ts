@@ -1,19 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
-import { getJwtSecret } from '@/lib/jwt-secret';
-
-async function verifyToken(token: string): Promise<boolean> {
-  try {
-    const jwtSecret = getJwtSecret();
-    if (!jwtSecret) return false;
-    const secret = new TextEncoder().encode(jwtSecret);
-    await jwtVerify(token, secret);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const host = req.headers.get('x-forwarded-host') || req.headers.get('host') || '';
@@ -42,13 +27,6 @@ export async function middleware(req: NextRequest) {
         // Redirect to login
         const loginUrl = new URL('/admin/login', req.url);
         return NextResponse.redirect(loginUrl);
-      }
-      const valid = await verifyToken(token);
-      if (!valid) {
-        const loginUrl = new URL('/admin/login', req.url);
-        const response = NextResponse.redirect(loginUrl);
-        response.cookies.delete('admin_token');
-        return response;
       }
     }
   }
