@@ -25,7 +25,8 @@ echo "Локальная сборка..."
 ./node_modules/.bin/next build --webpack
 
 echo "Деплой на Vercel production..."
-"$NODE_22_NPX" vercel@latest deploy --prod --yes
+"$NODE_22_NPX" vercel@latest link --yes --scope briccotoys1s-projects --project errani
+"$NODE_22_NPX" vercel@latest deploy --prod --yes --scope briccotoys1s-projects
 
 echo "Проверка доменов..."
 for url in \

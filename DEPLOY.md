@@ -5,7 +5,7 @@
 ## Production
 
 - Platform: `Vercel`
-- Project: `briccotoys1s-projects/errani-site`
+- Project: `briccotoys1s-projects/errani`
 - Domains:
   - `https://errani.ru`
   - `https://www.errani.ru`
@@ -32,6 +32,7 @@
 - Не запускать `prisma db push` автоматически во время деплоя.
 - Секреты должны жить в Vercel Environment Variables, а не в git.
 - Если Vercel CLI просит login, пройти device-flow и повторить `./deploy.sh`.
+- Локальная `.vercel/project.json` должна быть привязана к `briccotoys1s-projects/errani`, потому что custom domains висят на этом проекте.
 
 ## Проверка После Деплоя
 
