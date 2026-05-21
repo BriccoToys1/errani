@@ -55,7 +55,8 @@ model Product {
   preorderAvailableDate DateTime?                   // дата открытия продажи (отображается в сообщении)
   isAuthor      Boolean        @default(false) // авторская колода
   isLimited          Boolean        @default(false) // лимитированный тираж
-  limitedEditionText String         @default("") // editable limited edition description
+  limitedEditionText   String         @default("")
+  limitedEditionTextEn String         @default("")
   isActive           Boolean        @default(true) // Show in catalog
   isSaleDisabled     Boolean        @default(false) // "Скоро" — товар в каталоге, кнопка "Скоро"
   isSoldOut          Boolean        @default(false) // Плашка "Sold Out" на фото

@@ -94,6 +94,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         isAuthor: Boolean(body.isAuthor),
         isLimited: Boolean(body.isLimited),
         limitedEditionText: body.limitedEditionText ?? '',
+        limitedEditionTextEn: body.limitedEditionTextEn ?? '',
         isActive: body.isActive ?? true,
         isSaleDisabled: body.isSaleDisabled ?? false,
         isSoldOut: body.isSoldOut ?? false,
