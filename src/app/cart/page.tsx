@@ -39,6 +39,8 @@ export default function CartPage() {
   const [consentData, setConsentData] = useState(false);
   const [unavailableProductIds, setUnavailableProductIds] = useState<Set<string>>(new Set());
   const [availabilityChecked, setAvailabilityChecked] = useState(false);
+  type ProductData = { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean; shippingFee?: number; shippingConditions?: string; noticeText?: string; noticeTextEn?: string };
+  const [productMap, setProductMap] = useState<Map<string, ProductData>>(new Map());
 
   const [deliveryEstimate, setDeliveryEstimate] = useState('Ориентировочный срок доставки ~ начало Мая');
 
@@ -70,8 +72,9 @@ export default function CartPage() {
           return;
         }
 
-        const byId = new Map<string, { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean }>(
-          products.map((p: { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean }) => [p.id, p])
+        type ProductData = { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean; shippingFee?: number; shippingConditions?: string; noticeText?: string; noticeTextEn?: string };
+        const byId = new Map<string, ProductData>(
+          products.map((p: ProductData) => [p.id, p])
         );
 
         const blocked = new Set<string>();
@@ -82,6 +85,7 @@ export default function CartPage() {
           }
         }
         setUnavailableProductIds(blocked);
+        setProductMap(byId);
       } catch {
         // If check fails, keep existing state and avoid false-negative ordering.
       } finally {
@@ -114,12 +118,32 @@ export default function CartPage() {
   const total = getCartTotal(cart);
   const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
   const hasLegacyItemsWithoutShippingFee = cart.some((item) => typeof item.shippingFee !== 'number');
+
+  const getEffectiveShippingForItem = (item: CartItem): number => {
+    const pData = productMap.get(item.productId);
+    if (pData?.shippingConditions) {
+      try {
+        const conds: Array<{fromQty: number; toQty: number; price: number}> = JSON.parse(pData.shippingConditions);
+        const match = conds.find(c => item.quantity >= c.fromQty && item.quantity <= c.toQty);
+        if (match) return match.price;
+      } catch { /* ignore */ }
+    }
+    return Number(item.shippingFee || 0);
+  };
+
   const perProductShippingCost = cart.reduce(
-    (sum, item) => sum + (Number(item.shippingFee || 0) * item.quantity),
+    (sum, item) => sum + getEffectiveShippingForItem(item),
     0
   );
   const fallbackShippingCost = isRussia ? getShippingCost(itemCount) : 0;
   const shippingCost = hasLegacyItemsWithoutShippingFee ? fallbackShippingCost : perProductShippingCost;
+
+  const cartNotices = cart
+    .map(item => {
+      const pData = productMap.get(item.productId);
+      return lang === 'ru' ? (pData?.noticeText || '') : (pData?.noticeTextEn || pData?.noticeText || '');
+    })
+    .filter((t, i, arr) => t && arr.indexOf(t) === i);
   const grandTotal = total + shippingCost;
   const unavailableItems = cart.filter(item => unavailableProductIds.has(item.productId));
   const hasUnavailableItems = unavailableItems.length > 0;
@@ -534,6 +558,15 @@ export default function CartPage() {
                   <span>Способ оплаты</span>
                   <span>ЮKassa</span>
                 </div>
+                {cartNotices.length > 0 && (
+                  <div style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    {cartNotices.map((n, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', color: '#ffb400', fontSize: '0.78rem', fontWeight: 600, lineHeight: 1.5 }}>
+                        <span style={{ flexShrink: 0 }}>⚠️</span><span>{n}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>}

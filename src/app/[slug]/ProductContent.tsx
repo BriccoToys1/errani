@@ -16,6 +16,7 @@ interface Product {
   descriptionRu: string | null;
   price: number;
   shippingFee?: number;
+  shippingConditions?: string;
   oldPrice: number | null;
   discount: number;
   image: string;
@@ -26,6 +27,9 @@ interface Product {
   preorderAvailableDate?: string | null;
   isLimited: boolean;
   limitedEditionText: string;
+  limitedEditionTextEn?: string;
+  noticeText?: string;
+  noticeTextEn?: string;
   isAuthor: boolean;
   characteristics: string;
   colors?: string;
@@ -47,6 +51,7 @@ export function ProductContent({ product }: { product: Product }) {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [inCart, setInCart] = useState(false);
   const [selectedColor, setSelectedColor] = useState<string>('');
+  const [colorOverrideImage, setColorOverrideImage] = useState<string | null>(null);
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [waitlistName, setWaitlistName] = useState('');
   const [waitlistEmail, setWaitlistEmail] = useState('');
@@ -73,6 +78,7 @@ export function ProductContent({ product }: { product: Product }) {
   })();
   const heroImage = product.image || galleryImages[0] || '';
   const allImages = heroImage ? [heroImage, ...galleryImages.filter(img => img !== heroImage)] : galleryImages;
+  const displayedImage = colorOverrideImage || allImages[carouselIndex] || '';
 
   const openLightbox = (index: number) => setLightboxIndex(index);
   const closeLightbox = () => setLightboxIndex(null);
@@ -107,8 +113,10 @@ export function ProductContent({ product }: { product: Product }) {
     ? (product.descriptionRu || product.description)
     : (product.description || product.descriptionRu || '');
   const price = product.price;
-  const hidePrice = product.slug === 'tenderly-vibe';
   const canJoinWaitlist = !product.inStock && !product.isPreorder;
+  const noticeText = lang === 'ru'
+    ? (product.noticeText || '')
+    : (product.noticeTextEn || product.noticeText || '');
 
   const formatPreorderDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -121,7 +129,7 @@ export function ProductContent({ product }: { product: Product }) {
     try { return JSON.parse(product.characteristics || '[]'); } catch { return []; }
   })();
 
-  const colorOptions: Array<{name: string; nameEn?: string; hex: string}> = (() => {
+  const colorOptions: Array<{name: string; nameEn?: string; hex: string; stock?: number; photo?: string}> = (() => {
     try {
       const parsed = JSON.parse(product.colors || '[]');
       if (!Array.isArray(parsed)) return [];
@@ -130,12 +138,21 @@ export function ProductContent({ product }: { product: Product }) {
           name: String(item?.name || '').trim(),
           nameEn: String(item?.nameEn || '').trim() || undefined,
           hex: String(item?.hex || '#ffffff'),
+          stock: typeof item?.stock === 'number' ? item.stock : undefined,
+          photo: typeof item?.photo === 'string' && item.photo ? item.photo : undefined,
         }))
         .filter((item) => item.name && item.hex);
     } catch {
       return [];
     }
   })();
+
+  const selectedColorObj = colorOptions.find(c => c.name === selectedColor);
+  const hasPerColorStock = colorOptions.some(c => typeof c.stock === 'number');
+  const selectedColorOutOfStock = Boolean(
+    selectedColor && selectedColorObj && hasPerColorStock &&
+    typeof selectedColorObj.stock === 'number' && selectedColorObj.stock <= 0
+  );
 
   const handleAddOrGoToCart = () => {
     if (inCart) {
@@ -185,7 +202,7 @@ export function ProductContent({ product }: { product: Product }) {
           {allImages.length > 0 && (
             <div className="product-carousel">
               <Image
-                src={allImages[carouselIndex]}
+                src={displayedImage || allImages[0]}
                 alt={displayName}
                 fill
                 className="object-contain"
@@ -241,7 +258,7 @@ export function ProductContent({ product }: { product: Product }) {
 
           <h1 className="product-title anim-fade-up anim-fade-up-d1">{displayName}</h1>
 
-          {!hidePrice && (
+          {price > 0 && (
             <div className="product-price anim-fade-up anim-fade-up-d3">
               <span className="product-current-price">{`${price.toLocaleString('ru-RU')} ₽`}</span>
               {product.oldPrice && (
@@ -260,49 +277,100 @@ export function ProductContent({ product }: { product: Product }) {
                 {lang === 'ru' ? 'Цвет' : 'Color'}
                 {selectedColor
                   ? `: ${(() => {
-                      const selected = colorOptions.find((c) => c.name === selectedColor);
-                      if (!selected) return selectedColor;
-                      return lang === 'ru' ? selected.name : (selected.nameEn || selected.name);
+                      if (!selectedColorObj) return selectedColor;
+                      return lang === 'ru' ? selectedColorObj.name : (selectedColorObj.nameEn || selectedColorObj.name);
                     })()}`
                   : ''}
               </p>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {colorOptions.map((c) => (
-                  <button
-                    key={c.name}
-                    type="button"
-                    title={c.name}
-                    onClick={() => setSelectedColor(selectedColor === c.name ? '' : c.name)}
-                    style={{
-                      width: '32px', height: '32px', borderRadius: '50%',
-                      background: c.hex, border: selectedColor === c.name ? '3px solid #fff' : '3px solid transparent',
-                      outline: selectedColor === c.name ? '2px solid rgba(255,255,255,0.5)' : '2px solid transparent',
-                      cursor: 'pointer', transition: 'all 0.15s',
-                    }}
-                  />
-                ))}
+                {colorOptions.map((c) => {
+                  const outOfStock = hasPerColorStock && typeof c.stock === 'number' && c.stock <= 0;
+                  const isSelected = selectedColor === c.name;
+                  return (
+                    <button
+                      key={c.name}
+                      type="button"
+                      title={outOfStock ? (lang === 'ru' ? `${c.name} — нет в наличии` : `${c.nameEn || c.name} — out of stock`) : (lang === 'ru' ? c.name : (c.nameEn || c.name))}
+                      onClick={() => {
+                        const next = isSelected ? '' : c.name;
+                        setSelectedColor(next);
+                        const photo = colorOptions.find(x => x.name === next)?.photo;
+                        setColorOverrideImage(photo || null);
+                        if (!photo) {
+                          const idx = allImages.findIndex(img => img === (next ? c.photo : ''));
+                          if (idx >= 0) setCarouselIndex(idx); else setCarouselIndex(0);
+                        }
+                      }}
+                      style={{
+                        position: 'relative',
+                        width: '32px', height: '32px', borderRadius: '50%',
+                        background: c.hex,
+                        border: isSelected ? '3px solid #fff' : '3px solid transparent',
+                        outline: isSelected ? '2px solid rgba(255,255,255,0.5)' : '2px solid transparent',
+                        cursor: 'pointer', transition: 'all 0.15s',
+                        opacity: outOfStock ? 0.4 : 1,
+                      }}
+                    >
+                      {outOfStock && (
+                        <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2.5">
+                            <line x1="4" y1="4" x2="20" y2="20" /><line x1="20" y1="4" x2="4" y2="20" />
+                          </svg>
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
+              {hasPerColorStock && !selectedColor && (
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 8 }}>
+                  {lang === 'ru' ? 'Выберите цвет для заказа' : 'Select a color to order'}
+                </p>
+              )}
             </div>
           )}
 
-          {/* Delivery disclaimer */}
-          <div className="anim-fade-up anim-fade-up-d3" style={{
-            margin: '12px 0 4px',
-            padding: '10px 14px',
-            background: 'rgba(255, 180, 0, 0.10)',
-            border: '1px solid rgba(255, 180, 0, 0.35)',
-            borderRadius: '8px',
-            color: '#ffb400',
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            lineHeight: 1.5,
-          }}>
-            ⚠️&nbsp;{lang === 'ru' ? 'Ориентировочная дата доставок — начало мая' : 'Estimated delivery — early May'}
-          </div>
+          {/* Per-product notice badge */}
+          {noticeText && (
+            <div className="anim-fade-up anim-fade-up-d3" style={{
+              margin: '12px 0 4px',
+              padding: '10px 14px',
+              background: 'rgba(255, 180, 0, 0.10)',
+              border: '1px solid rgba(255, 180, 0, 0.35)',
+              borderRadius: '8px',
+              color: '#ffb400',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              lineHeight: 1.5,
+            }}>
+              ⚠️&nbsp;{noticeText}
+            </div>
+          )}
 
           {/* Single add-to-cart / go-to-cart button */}
           <div className="product-actions anim-fade-up anim-fade-up-d4">
-            {!product.inStock ? (
+            {/* Color must be selected when colors have per-color stock */}
+            {product.inStock && hasPerColorStock && !selectedColor ? (
+              <div style={{ padding: '14px 20px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                {lang === 'ru' ? 'Выберите цвет для добавления в корзину' : 'Select a color to add to cart'}
+              </div>
+            ) : product.inStock && selectedColorOutOfStock ? (
+              /* Selected color is out of stock — show notify */
+              <div style={{ padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>
+                  {lang === 'ru' ? `Цвет "${selectedColorObj?.name || selectedColor}" нет в наличии.` : `Color "${selectedColorObj?.nameEn || selectedColorObj?.name || selectedColor}" is out of stock.`}
+                </strong>
+                {lang === 'ru' ? 'Оставьте заявку, и мы сообщим, когда появится.' : 'Join the waitlist and we will notify you when it is back.'}
+                <button
+                  type="button"
+                  className="product-btn"
+                  style={{ marginTop: '14px', width: '100%', borderColor: 'rgba(255,255,255,0.18)' }}
+                  onClick={() => { setShowWaitlistModal(true); setWaitlistError(''); setWaitlistSuccess(''); }}
+                >
+                  {lang === 'ru' ? 'Уведомить о поступлении' : 'Notify me when restocked'}
+                </button>
+              </div>
+            ) : !product.inStock ? (
               <div style={{
                 padding: '14px 20px',
                 background: 'rgba(255,255,255,0.05)',
@@ -531,7 +599,7 @@ export function ProductContent({ product }: { product: Product }) {
       {/* Characteristics — shown regardless of whether description exists */}
       {characteristics.length > 0 && (
         <section className="description-section" style={{ paddingTop: '3rem' }}>
-          <h2 className="description-heading" style={{ fontSize: '0.85rem', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+          <h2 className="description-heading">
             {lang === 'ru' ? 'Характеристики' : 'Specifications'}
           </h2>
           <div style={{ display: 'grid', gap: '0' }}>

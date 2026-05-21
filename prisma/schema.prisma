@@ -57,6 +57,9 @@ model Product {
   isLimited          Boolean        @default(false) // лимитированный тираж
   limitedEditionText   String         @default("")
   limitedEditionTextEn String         @default("")
+  noticeText         String         @default("") // Per-product notice/badge text (RU)
+  noticeTextEn       String         @default("") // Per-product notice/badge text (EN)
+  shippingConditions String         @default("[]") // JSON [{fromQty,toQty,price}] tiered shipping
   isActive           Boolean        @default(true) // Show in catalog
   isSaleDisabled     Boolean        @default(false) // "Скоро" — товар в каталоге, кнопка "Скоро"
   isSoldOut          Boolean        @default(false) // Плашка "Sold Out" на фото

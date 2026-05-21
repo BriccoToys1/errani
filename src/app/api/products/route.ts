@@ -274,6 +274,9 @@ export async function POST(req: NextRequest) {
         isLimited: body.isLimited ?? false,
         limitedEditionText: body.limitedEditionText ?? '',
         limitedEditionTextEn: body.limitedEditionTextEn ?? '',
+        noticeText: body.noticeText ?? '',
+        noticeTextEn: body.noticeTextEn ?? '',
+        shippingConditions: normalizeJsonArrayString(body.shippingConditions),
         characteristics: normalizeJsonArrayString(body.characteristics),
         colors: normalizeJsonArrayString(body.colors),
         isActive: body.isActive ?? true,
@@ -283,7 +286,7 @@ export async function POST(req: NextRequest) {
         },
       })
     );
-    
+
     productsStaleCache.clear();
     return NextResponse.json(product, { status: 201 });
   } catch (error: unknown) {

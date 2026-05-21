@@ -63,6 +63,8 @@ interface Product {
   preorderAvailableDate: string | null;
   isAuthor: boolean; isLimited: boolean; limitedEditionText: string;
   limitedEditionTextEn?: string;
+  noticeText?: string; noticeTextEn?: string;
+  shippingConditions?: string;
   isActive: boolean; isSaleDisabled: boolean; isSoldOut: boolean;
   sortOrder: number; characteristics: string; colors: string; createdAt: string;
 }
@@ -83,6 +85,7 @@ const emptyProduct = {
   currency: "RUB", image: "", images: "[]", inStock: true, isPreorder: false,
   preorderClosed: false, preorderAvailableDate: "",
   isAuthor: false, isLimited: false, limitedEditionText: "", limitedEditionTextEn: "",
+  noticeText: "", noticeTextEn: "", shippingConditions: "[]",
   isActive: true, isSaleDisabled: false, isSoldOut: false, sortOrder: 0,
   characteristics: "[]", colors: "[]",
 };
@@ -436,7 +439,9 @@ export default function AdminProductsPage() {
       preorderAvailableDate: p.preorderAvailableDate ? new Date(p.preorderAvailableDate).toISOString().split("T")[0] : "",
       isAuthor: p.isAuthor, isLimited: p.isLimited || false,
       limitedEditionText: p.limitedEditionText || "",
-      limitedEditionTextEn: (p as unknown as Record<string,string>).limitedEditionTextEn || "",
+      limitedEditionTextEn: p.limitedEditionTextEn || "",
+      noticeText: p.noticeText || "", noticeTextEn: p.noticeTextEn || "",
+      shippingConditions: p.shippingConditions || "[]",
       isActive: p.isActive, isSaleDisabled: p.isSaleDisabled || false,
       isSoldOut: p.isSoldOut || false, sortOrder: p.sortOrder,
       characteristics: p.characteristics || "[]", colors: p.colors || "[]",
@@ -458,7 +463,9 @@ export default function AdminProductsPage() {
       preorderAvailableDate: "",
       isAuthor: p.isAuthor, isLimited: p.isLimited || false,
       limitedEditionText: p.limitedEditionText || "",
-      limitedEditionTextEn: (p as unknown as Record<string,string>).limitedEditionTextEn || "",
+      limitedEditionTextEn: p.limitedEditionTextEn || "",
+      noticeText: p.noticeText || "", noticeTextEn: p.noticeTextEn || "",
+      shippingConditions: p.shippingConditions || "[]",
       isActive: false, isSaleDisabled: p.isSaleDisabled || false,
       isSoldOut: false, characteristics: p.characteristics || "[]",
       colors: p.colors || "[]", sortOrder: p.sortOrder,
@@ -946,6 +953,45 @@ export default function AdminProductsPage() {
                     <input className="cms-input" type="number" value={form.sortOrder} onChange={e => setForm({ ...form, sortOrder: Number(e.target.value) })} />
                   </label>
                 </div>
+                {/* Shipping conditions */}
+                <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(155,135,245,0.05)", border: "1px solid rgba(155,135,245,0.15)", borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+                    Условия доставки по кол-ву (до 10)
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--cms-text-muted)", marginBottom: 8 }}>
+                    Если заказ от X до Y шт. → цена доставки. Если не попадает в условие — используется базовая цена выше.
+                  </div>
+                  {(() => {
+                    let conds: Array<{fromQty: number; toQty: number; price: number}> = [];
+                    try { conds = JSON.parse(form.shippingConditions || "[]"); } catch { conds = []; }
+                    const updateConds = (next: typeof conds) => setForm(prev => ({ ...prev, shippingConditions: JSON.stringify(next) }));
+                    return (
+                      <>
+                        {conds.map((c, i) => (
+                          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 28px", gap: 6, marginBottom: 6, alignItems: "center" }}>
+                            <input className="cms-input" type="number" min="1" placeholder="От (шт.)" value={c.fromQty}
+                              onChange={e => updateConds(conds.map((x, j) => j === i ? { ...x, fromQty: Number(e.target.value) } : x))}
+                              style={{ fontSize: 12 }} />
+                            <input className="cms-input" type="number" min="1" placeholder="До (шт.)" value={c.toQty}
+                              onChange={e => updateConds(conds.map((x, j) => j === i ? { ...x, toQty: Number(e.target.value) } : x))}
+                              style={{ fontSize: 12 }} />
+                            <input className="cms-input" type="number" min="0" placeholder="Цена (₽)" value={c.price}
+                              onChange={e => updateConds(conds.map((x, j) => j === i ? { ...x, price: Number(e.target.value) } : x))}
+                              style={{ fontSize: 12 }} />
+                            <button type="button" onClick={() => updateConds(conds.filter((_, j) => j !== i))}
+                              style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 16, padding: 0 }}>×</button>
+                          </div>
+                        ))}
+                        {conds.length < 10 && (
+                          <button type="button" className="cms-btn cms-btn-xs"
+                            onClick={() => updateConds([...conds, { fromQty: 1, toQty: 9, price: 0 }])}>
+                            + Добавить условие
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
               </Section>
 
               {/* ── Выбор 1: Статус ── */}
@@ -1035,6 +1081,24 @@ export default function AdminProductsPage() {
                     <input type="checkbox" checked={form.isSaleDisabled} onChange={e => setForm({ ...form, isSaleDisabled: e.target.checked })} />
                     Скоро
                   </label>
+                </div>
+              </Section>
+
+              {/* ── Уведомление (плашка) ── */}
+              <Section title="Уведомление / Плашка">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--cms-text-muted)", marginBottom: 4 }}>Текст (RU)</div>
+                    <input className="cms-input" placeholder="Например: ⚠️ Ориентировочная дата доставок — начало июня"
+                      value={form.noticeText || ""}
+                      onChange={e => setForm(prev => ({ ...prev, noticeText: e.target.value }))} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "var(--cms-text-muted)", marginBottom: 4 }}>Текст (EN)</div>
+                    <input className="cms-input" placeholder="E.g.: ⚠️ Estimated delivery — early June"
+                      value={form.noticeTextEn || ""}
+                      onChange={e => setForm(prev => ({ ...prev, noticeTextEn: e.target.value }))} />
+                  </div>
                 </div>
               </Section>
 
