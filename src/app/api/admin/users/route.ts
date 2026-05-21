@@ -15,6 +15,7 @@ type CustomerMetaEntry = {
   badges: string[];
   archived?: boolean;
   archivedAt?: string | null;
+  blocked?: boolean;
 };
 
 type CustomerMetaMap = Record<string, CustomerMetaEntry>;
@@ -403,6 +404,14 @@ export async function PATCH(req: NextRequest) {
     if (typeof body.archived === 'boolean') {
       existing.archived = body.archived;
       existing.archivedAt = body.archived ? new Date().toISOString() : null;
+    }
+
+    if (typeof body.blocked === 'boolean') {
+      const BLOCKED_TAG = '__blocked__';
+      const badges = Array.isArray(existing.badges) ? existing.badges : [];
+      existing.badges = body.blocked
+        ? Array.from(new Set([...badges, BLOCKED_TAG]))
+        : badges.filter((b) => b !== BLOCKED_TAG);
     }
 
     if (body.purge === true) {

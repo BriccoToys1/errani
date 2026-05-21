@@ -257,6 +257,7 @@ model WaitlistRequest {
   name        String
   email       String
   consentPersonalData Boolean @default(false)
+  selectedColor String  @default("")
   status      String   @default("pending")
   notifiedAt  DateTime?
   createdAt   DateTime @default(now())

@@ -174,7 +174,7 @@ function PhotoGallery({
 
       <div
         className={`cms-uploader-zone${dragging ? " dragging" : ""}`}
-        onDrop={(e) => { e.preventDefault(); setDragging(false); Array.from(e.dataTransfer.files).forEach(upload); }}
+        onDrop={async (e) => { e.preventDefault(); setDragging(false); const files = Array.from(e.dataTransfer.files); if (!files.length) return; setUploading(true); const newUrls: string[] = []; for (const f of files) { try { newUrls.push(await uploadProductImage(f, token)); } catch (err) { alert(err instanceof Error ? err.message : "Ошибка"); } } setUploading(false); if (newUrls.length > 0) onChange(toJson([...parseImageList(galleryJson), ...newUrls].slice(0, MAX_IMAGES))); }}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onClick={() => fileRef.current?.click()}
@@ -187,7 +187,21 @@ function PhotoGallery({
           </>
         )}
         <input ref={fileRef} type="file" accept={IMAGE_ACCEPT} multiple style={{ display: "none" }}
-          onChange={(e) => { Array.from(e.target.files || []).forEach(upload); e.target.value = ""; }} />
+          onChange={async (e) => {
+            const files = Array.from(e.target.files || []);
+            e.target.value = "";
+            if (!files.length) return;
+            setUploading(true);
+            const newUrls: string[] = [];
+            for (const file of files) {
+              try { newUrls.push(await uploadProductImage(file, token)); }
+              catch (err) { alert(err instanceof Error ? err.message : "Ошибка загрузки"); }
+            }
+            setUploading(false);
+            if (newUrls.length > 0) {
+              onChange(toJson([...parseImageList(galleryJson), ...newUrls].slice(0, MAX_IMAGES)));
+            }
+          }} />
       </div>
 
       <button type="button" className="cms-btn cms-btn-xs" style={{ marginTop: "6px" }} onClick={onOpenMedia}>

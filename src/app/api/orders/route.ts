@@ -157,6 +157,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Check if user is blocked
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const metaSetting = await prisma.siteSettings.findUnique({ where: { key: 'customer_profiles_meta_v1' } });
+    if (metaSetting?.value) {
+      try {
+        const meta = JSON.parse(metaSetting.value) as Record<string, { blocked?: boolean }>;
+        if (meta[normalizedEmail]?.blocked) {
+          return NextResponse.json({ error: 'Проверка по идентичности ФИО и номера телефона' }, { status: 403 });
+        }
+      } catch { /* ignore */ }
+    }
+
     const normalizedItems = items
       .map((item) => ({
         productId: String(item.productId || ''),

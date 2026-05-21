@@ -339,51 +339,6 @@ export default function AdminUsersPage() {
             )}
           </form>
 
-          <div className="cms-card" style={{ marginBottom: "14px", padding: "12px", border: "1px solid var(--cms-border)" }}>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-              <strong style={{ fontSize: "13px" }}>Ссылки на отзыв:</strong>
-              <select
-                className="cms-select"
-                value={selectedProductId}
-                onChange={(e) => setSelectedProductId(e.target.value)}
-                style={{ minWidth: "220px" }}
-              >
-                <option value="">Выберите товар</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.nameRu || product.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="cms-btn cms-btn-sm"
-                disabled={sendingInvites || selectedRecipientList.length === 0 || !selectedProductId}
-                onClick={() => void sendReviewInvites(selectedRecipientList)}
-              >
-                {sendingInvites ? "Отправка..." : `Отправить выбранным (${selectedRecipientList.length})`}
-              </button>
-              <button
-                type="button"
-                className="cms-btn cms-btn-sm cms-btn-ghost"
-                onClick={() => {
-                  const all: Record<string, boolean> = {};
-                  for (const u of users) all[u.email] = true;
-                  setSelectedEmails(all);
-                }}
-              >
-                Выбрать всех на странице
-              </button>
-              <button
-                type="button"
-                className="cms-btn cms-btn-sm cms-btn-ghost"
-                onClick={() => setSelectedEmails({})}
-              >
-                Снять выбор
-              </button>
-            </div>
-          </div>
-
           {loading ? (
             <div style={{ padding: "48px", textAlign: "center", color: "var(--cms-text-muted)" }}>
               <div className="cms-spinner" style={{ margin: "0 auto 12px" }} />
@@ -401,18 +356,13 @@ export default function AdminUsersPage() {
                 return (
                   <div key={profile.id} className="cms-card" style={{ border: "1px solid var(--cms-border)", padding: "14px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(selectedEmails[profile.email])}
-                        onChange={(e) => toggleSelectedEmail(profile.email, e.target.checked)}
-                        title="Выбрать для массовой отправки ссылки на отзыв"
-                      />
                       <UserAvatar name={profile.name || profile.email} />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.name || "Без имени"}</div>
                         <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.email}</div>
                       </div>
                       {profile.archived && <span className="cms-badge">Архив</span>}
+                      {profile.badges?.includes('__blocked__') && <span className="cms-badge cms-badge-red">Заблокирован</span>}
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px", fontSize: "12px" }}>
@@ -506,24 +456,33 @@ export default function AdminUsersPage() {
                       )}
                     </div>
 
-                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                      {/* Archive / Restore */}
                       <button
-                        className="cms-btn cms-btn-xs cms-btn-secondary"
-                        disabled={sendingInvites || !selectedProductId}
-                        onClick={() => void sendReviewInvites([{ email: profile.email, name: profile.name || profile.email }])}
+                        className="cms-btn cms-btn-xs cms-btn-ghost"
+                        onClick={() => toggleArchive(profile)}
+                        disabled={pending === profile.email}
+                        title={profile.archived ? "Восстановить из архива" : "В архив"}
                       >
-                        Ссылка на отзыв
+                        {profile.archived ? (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                        )}
                       </button>
-                      <button className="cms-btn cms-btn-xs" onClick={() => toggleArchive(profile)} disabled={pending === profile.email}>
-                        {profile.archived ? "Восстановить" : "В архив"}
-                      </button>
+                      {/* Block / Unblock */}
                       <button
-                        className="cms-btn cms-btn-xs cms-btn-danger"
-                        onClick={() => purgeProfile(profile)}
-                        disabled={pending === profile.email || !profile.archived}
-                        title="Полное удаление доступно только из архива"
+                        className="cms-btn cms-btn-xs cms-btn-ghost"
+                        onClick={() => patchProfile(profile.email, { blocked: !profile.badges?.includes('__blocked__') }, profile.badges?.includes('__blocked__') ? "Клиент разблокирован" : "Клиент заблокирован")}
+                        disabled={pending === profile.email}
+                        title={profile.badges?.includes('__blocked__') ? "Разблокировать клиента" : "Заблокировать клиента"}
+                        style={{ color: profile.badges?.includes('__blocked__') ? 'var(--cms-danger)' : undefined }}
                       >
-                        Удалить навсегда
+                        {profile.badges?.includes('__blocked__') ? (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>
+                        )}
                       </button>
                     </div>
                   </div>

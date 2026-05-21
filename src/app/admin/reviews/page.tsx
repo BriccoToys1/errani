@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation';
 
 import { AdminSidebar } from '../AdminSidebar';
 
+// ─── Получить отзыв tab types ──────────────────────────────────────────────
+type CandidateItem = { productId: string; productName: string; hasActiveInvite: boolean };
+type CandidateOrder = { orderId: string; orderNumber: string; items: CandidateItem[] };
+type Candidate = { email: string; name: string; orders: CandidateOrder[] };
+
 type ProductOption = { id: string; slug: string; name: string; nameRu: string | null };
 
 type ReviewRow = {
@@ -51,6 +56,12 @@ export default function AdminReviewsPage() {
   const [pages, setPages] = useState(1);
 
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [tab, setTab] = useState<'reviews' | 'send'>('reviews');
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
+  const [sendingKey, setSendingKey] = useState<string | null>(null); // "email:productId"
+  const [confirmKey, setConfirmKey] = useState<string | null>(null);
 
   const token = useMemo(() => {
     if (typeof window === 'undefined') return null;
@@ -143,6 +154,49 @@ export default function AdminReviewsPage() {
     }
   };
 
+  const loadCandidates = useCallback(async () => {
+    const adminToken = localStorage.getItem('admin_token');
+    if (!adminToken) return;
+    setCandidatesLoading(true);
+    try {
+      const res = await fetch('/api/admin/reviews/candidates', { headers: { Authorization: `Bearer ${adminToken}` } });
+      if (res.ok) setCandidates(await res.json());
+    } catch { /* ignore */ } finally { setCandidatesLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'send' && candidates.length === 0) void loadCandidates();
+  }, [tab, candidates.length, loadCandidates]);
+
+  const sendInvite = async (email: string, name: string, productId: string, productName: string) => {
+    const adminToken = localStorage.getItem('admin_token');
+    if (!adminToken) return;
+    const key = `${email}:${productId}`;
+    setSendingKey(key);
+    setConfirmKey(null);
+    try {
+      const res = await fetch('/api/admin/reviews/invites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ productId, recipients: [{ email, name }] }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        notify(`Ссылка отправлена: ${email}`);
+        // mark as sent locally
+        setCandidates(prev => prev.map(c => c.email === email ? {
+          ...c,
+          orders: c.orders.map(o => ({
+            ...o,
+            items: o.items.map(i => i.productId === productId ? { ...i, hasActiveInvite: true } : i),
+          })),
+        } : c));
+      } else {
+        notify(data.message || data.failed?.[0]?.reason || 'Ошибка отправки');
+      }
+    } catch { notify('Ошибка сети'); } finally { setSendingKey(null); }
+  };
+
   return (
     <div className="cms-root">
       <AdminSidebar />
@@ -158,7 +212,83 @@ export default function AdminReviewsPage() {
 
         {notification && <div className="cms-notification">{notification}</div>}
 
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--cms-border)', marginBottom: 0, padding: '0 24px' }}>
+          {(['reviews', 'send'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{
+              padding: '10px 18px', border: 'none', background: 'none', cursor: 'pointer',
+              fontWeight: 600, fontSize: 13, color: tab === t ? 'var(--cms-accent)' : 'var(--cms-text-muted)',
+              borderBottom: tab === t ? '2px solid var(--cms-accent)' : '2px solid transparent',
+              transition: 'all 0.15s',
+            }}>
+              {t === 'reviews' ? 'Все отзывы' : 'Получить отзыв'}
+            </button>
+          ))}
+        </div>
+
         <div className="cms-content">
+          {tab === 'send' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                <button className="cms-btn cms-btn-sm cms-btn-ghost" onClick={() => void loadCandidates()}>Обновить</button>
+              </div>
+              {candidatesLoading ? (
+                <div style={{ padding: 40, textAlign: 'center', color: 'var(--cms-text-muted)' }}>Загрузка...</div>
+              ) : candidates.length === 0 ? (
+                <div className="cms-card" style={{ padding: 32, textAlign: 'center', color: 'var(--cms-text-muted)' }}>Нет клиентов с заказами</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  {candidates.map(c => (
+                    <div key={c.email} className="cms-card" style={{ border: '1px solid var(--cms-border)', padding: 14 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>{c.name || c.email}</div>
+                      <div style={{ fontSize: 12, color: 'var(--cms-text-muted)', marginBottom: 10 }}>{c.email}</div>
+                      {c.orders.map(o => (
+                        <div key={o.orderId} style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--cms-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                            Заказ #{o.orderNumber}
+                          </div>
+                          {o.items.map(item => {
+                            const key = `${c.email}:${item.productId}`;
+                            const busy = sendingKey === key;
+                            return (
+                              <div key={item.productId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '6px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, marginBottom: 4, border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <span style={{ fontSize: 13 }}>{item.productName}</span>
+                                {confirmKey === key ? (
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <button className="cms-btn cms-btn-xs cms-btn-primary" disabled={busy}
+                                      onClick={() => void sendInvite(c.email, c.name, item.productId, item.productName)}>
+                                      {busy ? '...' : 'Отправить'}
+                                    </button>
+                                    <button className="cms-btn cms-btn-xs" onClick={() => setConfirmKey(null)}>Отмена</button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    className="cms-btn cms-btn-xs"
+                                    disabled={busy}
+                                    onClick={() => setConfirmKey(key)}
+                                    title={item.hasActiveInvite ? 'Переотправить ссылку' : 'Отправить ссылку на отзыв'}
+                                    style={{ color: item.hasActiveInvite ? 'var(--cms-text-muted)' : undefined }}
+                                  >
+                                    {item.hasActiveInvite ? (
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                                    ) : (
+                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'reviews' && (<>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
             <select className="cms-select" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
               <option value="all">Все</option>
@@ -243,22 +373,23 @@ export default function AdminReviewsPage() {
                       className="cms-btn cms-btn-sm"
                       disabled={busyId === review.id || review.status === 'approved'}
                       onClick={() => void moderate(review.id, 'approve')}
+                      style={{ background: review.status !== 'approved' ? '#16a34a' : undefined, color: review.status !== 'approved' ? '#fff' : undefined, border: 'none' }}
                     >
                       Одобрить
                     </button>
                     <button
-                      className="cms-btn cms-btn-sm cms-btn-ghost"
+                      className="cms-btn cms-btn-sm cms-btn-danger"
                       disabled={busyId === review.id || review.status === 'rejected'}
                       onClick={() => void moderate(review.id, 'reject')}
                     >
                       Отклонить
                     </button>
                     <button
-                      className="cms-btn cms-btn-sm cms-btn-secondary"
+                      className="cms-btn cms-btn-sm cms-btn-ghost"
                       disabled={busyId === review.id || review.status === 'pending'}
                       onClick={() => void moderate(review.id, 'pending')}
                     >
-                      Вернуть на модерацию
+                      Вернуть
                     </button>
                   </div>
                 </div>
@@ -277,6 +408,7 @@ export default function AdminReviewsPage() {
               </button>
             </div>
           )}
+          </>)}
         </div>
       </main>
     </div>

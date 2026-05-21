@@ -7,7 +7,7 @@ import { withFreshPrisma } from '@/lib/fresh-prisma';
 const COUNTS_CACHE_TTL_MS = 20_000;
 let countsCache: {
   expiresAt: number;
-  payload: { newOrders: number; newInquiries: number; newWaitlist: number; newEmails: number };
+  payload: { newOrders: number; newInquiries: number; newWaitlist: number; newEmails: number; newReviews: number };
 } | null = null;
 
 export async function GET(req: NextRequest) {
@@ -22,12 +22,13 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const [newOrders, newInquiries, newWaitlist, newEmails] = await withFreshPrisma((db) =>
+    const [newOrders, newInquiries, newWaitlist, newEmails, newReviews] = await withFreshPrisma((db) =>
       db.$transaction([
         db.order.count({ where: { status: { in: ['paid', 'assembling'] } } }),
         db.inquiry.count({ where: { status: 'new' } }),
         db.waitlistRequest.count({ where: { status: 'pending' } }),
         db.adminEmail.count({ where: { direction: 'inbound', isRead: false, status: { not: 'archived' } } }),
+        db.review.count({ where: { status: 'pending' } }),
       ])
     );
 
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
       newInquiries,
       newWaitlist,
       newEmails,
+      newReviews,
     };
 
     countsCache = { expiresAt: now + COUNTS_CACHE_TTL_MS, payload };
@@ -50,7 +52,7 @@ export async function GET(req: NextRequest) {
       });
     }
     return NextResponse.json(
-      { newOrders: 0, newInquiries: 0, newWaitlist: 0, newEmails: 0, degraded: true },
+      { newOrders: 0, newInquiries: 0, newWaitlist: 0, newEmails: 0, newReviews: 0, degraded: true },
       { headers: { 'X-Admin-Counts-Cache': 'degraded' } }
     );
   }

@@ -13,6 +13,7 @@ interface WaitlistRequest {
   name: string;
   email: string;
   consentPersonalData: boolean;
+  selectedColor: string;
   status: string;
   createdAt: string;
   notifiedAt: string | null;
@@ -242,6 +243,7 @@ export default function AdminWaitlistPage() {
                         <th>Тег</th>
                         <th>Имя</th>
                         <th>Email</th>
+                        <th>Цвет</th>
                         <th>Согласие</th>
                         <th>Статус</th>
                         <th>Дата</th>
@@ -255,6 +257,7 @@ export default function AdminWaitlistPage() {
                           <td style={{ fontFamily: "monospace", fontSize: "12px" }}>{item.requestTag || `WaitlistRequest_${item.productSlug}`}</td>
                           <td className="cms-td-bold">{item.name}</td>
                           <td><a href={`mailto:${item.email}`} style={{ color: "var(--cms-accent)" }}>{item.email}</a></td>
+                          <td>{item.selectedColor || "—"}</td>
                           <td>{item.consentPersonalData ? "Да" : "Нет"}</td>
                           <td><span className={`cms-badge ${STATUS_MAP[item.status]?.cls || "cms-badge"}`}>{STATUS_MAP[item.status]?.label || item.status}</span></td>
                           <td>{new Date(item.createdAt).toLocaleDateString("ru-RU")}</td>

@@ -9,6 +9,7 @@ interface Counts {
   newInquiries: number;
   newEmails: number;
   newWaitlist: number;
+  newReviews: number;
 }
 
 interface SearchResult {
@@ -28,7 +29,7 @@ const NAV_ITEMS = [
   { href: '/admin/inquiries', icon: 'inquiries', label: 'Заявки', countKey: 'newInquiries' },
   { href: '/admin/waitlist', icon: 'waitlist', label: 'В ожидании', countKey: 'newWaitlist' },
   { href: '/admin/users', icon: 'users', label: 'Клиенты' },
-  { href: '/admin/reviews', icon: 'reviews', label: 'Отзывы' },
+  { href: '/admin/reviews', icon: 'reviews', label: 'Отзывы', countKey: 'newReviews' },
   { section: '' },
   { href: '/admin/settings', icon: 'settings', label: 'Настройки' },
 ];
@@ -65,7 +66,7 @@ export function AdminSidebar() {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0, newEmails: 0, newWaitlist: 0 });
+  const [counts, setCounts] = useState<Counts>({ newOrders: 0, newInquiries: 0, newEmails: 0, newWaitlist: 0, newReviews: 0 });
   const [health, setHealth] = useState<HealthStatus>({ level: 'green', message: 'Всё в порядке' });
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -86,6 +87,7 @@ export function AdminSidebar() {
           newInquiries: data.newInquiries || 0,
           newWaitlist: data.newWaitlist || 0,
           newEmails: data.newEmails || 0,
+          newReviews: data.newReviews || 0,
         });
         setHealth({ level: 'green', message: 'Всё в порядке' });
       } else {

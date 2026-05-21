@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     const productSlug = String(body.productSlug || '').trim();
     const productName = String(body.productName || '').trim();
     const consentPersonalData = body.consentPersonalData === true;
+    const selectedColor = String(body.selectedColor || '').trim();
     const requestTag = `WaitlistRequest_${productSlug}`;
 
     if (!name || !email || !productSlug || !productName) {
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
         name,
         email,
         consentPersonalData: true,
+        selectedColor,
       },
     });
 

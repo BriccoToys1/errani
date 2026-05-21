@@ -78,7 +78,7 @@ export default function ReviewForm({ token }: { token: string }) {
   const [error, setError] = useState('');
 
   const [customerName, setCustomerName] = useState('');
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState(0);
   const [text, setText] = useState('');
 
   const [media, setMedia] = useState<string[]>([]);
@@ -130,7 +130,7 @@ export default function ReviewForm({ token }: { token: string }) {
   const canSubmit = useMemo(() => {
     if (!state?.valid) return false;
     if (submitting || uploading) return false;
-    if (rating < 1 || rating > 5) return false;
+    if (rating < 0.5 || rating > 5) return false;
     return text.trim().length > 0 || media.length > 0;
   }, [state?.valid, submitting, uploading, rating, text, media.length]);
 
@@ -198,9 +198,9 @@ export default function ReviewForm({ token }: { token: string }) {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'center',
-      padding: '40px 16px',
-      background: 'radial-gradient(ellipse at 50% 0%, rgba(155,135,245,0.08) 0%, #0a0a0f 60%)',
+      justifyContent: 'flex-start',
+      padding: '96px 16px 48px',
+      background: 'radial-gradient(ellipse at 50% 0%, rgba(232,114,42,0.06) 0%, #0a0a0f 60%)',
     }}>
       <div style={{
         width: '100%',
@@ -213,14 +213,8 @@ export default function ReviewForm({ token }: { token: string }) {
       }}>
         {/* Header */}
         <div style={{ padding: '32px 32px 24px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-          {productImage && (
-            <img src={productImage} alt={title}
-              style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover', display: 'block', marginBottom: 16, border: '1px solid rgba(255,255,255,0.1)' }}
-              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-            />
-          )}
           <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', color: '#fff' }}>
-            {T.title} <span style={{ color: 'rgba(155,135,245,0.9)' }}>{title}</span>
+            {T.title} <span style={{ color: '#E8722A' }}>{title}</span>
           </h1>
           <p style={{ margin: '8px 0 0', color: 'rgba(255,255,255,0.45)', fontSize: '13px', lineHeight: 1.6 }}>
             {T.subtitle}
@@ -310,11 +304,14 @@ export default function ReviewForm({ token }: { token: string }) {
                     {media.map((url) => {
                       const isVideo = /\.(mp4|webm|mov)$/i.test(url);
                       return (
-                        <div key={url} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div key={url} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
                           {isVideo ? (
-                            <video src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <>
+                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#E8722A" strokeWidth="1.5"><rect x="2" y="2" width="20" height="20" rx="3"/><path d="M10 8l6 4-6 4V8z" fill="#E8722A" stroke="none"/></svg>
+                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '0 4px', lineHeight: 1.3 }}>{url.split('/').pop()?.slice(0, 16)}</span>
+                            </>
                           ) : (
-                            <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} />
                           )}
                           <button
                             type="button"
@@ -334,9 +331,9 @@ export default function ReviewForm({ token }: { token: string }) {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: '11px 18px', borderRadius: 12,
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px dashed rgba(255,255,255,0.18)',
-                    color: 'rgba(255,255,255,0.6)', cursor: uploading ? 'wait' : 'pointer',
+                    background: 'rgba(232,114,42,0.06)',
+                    border: '1px dashed rgba(232,114,42,0.4)',
+                    color: '#E8722A', cursor: uploading ? 'wait' : 'pointer',
                     fontSize: 14, fontFamily: 'inherit', transition: 'all 0.2s',
                     opacity: media.length >= 8 ? 0.4 : 1,
                   }}
@@ -379,13 +376,13 @@ export default function ReviewForm({ token }: { token: string }) {
                   borderRadius: 14,
                   border: 'none',
                   background: canSubmit
-                    ? 'linear-gradient(135deg, #9b87f5 0%, #7c6de0 100%)'
+                    ? 'linear-gradient(135deg, #E8722A 0%, #C45A1A 100%)'
                     : 'rgba(255,255,255,0.07)',
                   color: canSubmit ? '#fff' : 'rgba(255,255,255,0.3)',
                   fontSize: 15, fontWeight: 700,
                   cursor: canSubmit ? 'pointer' : 'not-allowed',
                   transition: 'all 0.2s',
-                  boxShadow: canSubmit ? '0 4px 20px rgba(155,135,245,0.4)' : 'none',
+                  boxShadow: canSubmit ? '0 4px 20px rgba(232,114,42,0.4)' : 'none',
                   fontFamily: 'inherit',
                 }}
               >

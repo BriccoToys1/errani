@@ -350,11 +350,11 @@ export function ProductContent({ product }: { product: Product }) {
           {/* Single add-to-cart / go-to-cart button */}
           <div className="product-actions anim-fade-up anim-fade-up-d4">
             {/* Color must be selected when colors have per-color stock */}
-            {product.inStock && hasPerColorStock && !selectedColor ? (
+            {hasPerColorStock && !selectedColor ? (
               <div style={{ padding: '14px 20px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'center' }}>
                 {lang === 'ru' ? 'Выберите цвет для добавления в корзину' : 'Select a color to add to cart'}
               </div>
-            ) : product.inStock && selectedColorOutOfStock ? (
+            ) : hasPerColorStock && selectedColorOutOfStock ? (
               /* Selected color is out of stock — show notify */
               <div style={{ padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
                 <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>
@@ -370,6 +370,15 @@ export function ProductContent({ product }: { product: Product }) {
                   {lang === 'ru' ? 'Уведомить о поступлении' : 'Notify me when restocked'}
                 </button>
               </div>
+            ) : hasPerColorStock && selectedColor && !selectedColorOutOfStock ? (
+              /* Color selected and in stock — allow add to cart regardless of product.inStock */
+              <button
+                type="button"
+                className={`product-btn ${inCart ? 'in-cart' : ''}`}
+                onClick={handleAddOrGoToCart}
+              >
+                {inCart ? t(lang, 'product.goToCart') : t(lang, 'product.addToCart')}
+              </button>
             ) : !product.inStock ? (
               <div style={{
                 padding: '14px 20px',
@@ -529,6 +538,7 @@ export function ProductContent({ product }: { product: Product }) {
                           name: waitlistName.trim(),
                           email: waitlistEmail.trim(),
                           consentPersonalData: true,
+                          selectedColor: selectedColor || '',
                         }),
                       });
                       const data = await res.json();
