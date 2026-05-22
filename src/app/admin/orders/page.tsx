@@ -249,16 +249,23 @@ export default function AdminOrdersPage() {
                 zone: (x.zone === 'green' || x.zone === 'red' || x.zone === 'neutral') ? x.zone : undefined,
               })) as KanbanStage[];
             const missingDefaults = DEFAULT_KANBAN_STAGES.filter((def) => !normalizedBase.some((item) => item.key === def.key));
-            const normalized = [
-              ...normalizedBase.map((stage) => ({
-                ...stage,
-                zone: stage.zone || DEFAULT_STAGE_BY_KEY[stage.key]?.zone || resolveStageZone(stage),
-              })),
-              ...missingDefaults,
-            ];
-            if (normalized.length > 0) {
-              setKanbanStages(normalized);
-              setStageEdits(normalized);
+            const base = normalizedBase.map((stage) => ({
+              ...stage,
+              zone: stage.zone || DEFAULT_STAGE_BY_KEY[stage.key]?.zone || resolveStageZone(stage),
+            }));
+            const result = [...base];
+            for (const def of missingDefaults) {
+              const defIdx = DEFAULT_KANBAN_STAGES.findIndex(d => d.key === def.key);
+              let insertAt = result.length;
+              for (let i = defIdx + 1; i < DEFAULT_KANBAN_STAGES.length; i++) {
+                const existingIdx = result.findIndex(s => s.key === DEFAULT_KANBAN_STAGES[i].key);
+                if (existingIdx !== -1) { insertAt = existingIdx; break; }
+              }
+              result.splice(insertAt, 0, { ...def });
+            }
+            if (result.length > 0) {
+              setKanbanStages(result);
+              setStageEdits(result);
             }
           }
         }
