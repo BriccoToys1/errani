@@ -190,7 +190,7 @@ export function AdminSidebar() {
         </svg>
         {!collapsed && (
           <div className="cms-sidebar-brand-text">
-            errani<span>CMS</span>
+            CMS
           </div>
         )}
         <button

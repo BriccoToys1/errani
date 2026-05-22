@@ -482,9 +482,11 @@ export default function AdminOrdersPage() {
 
   const nowMs = Date.now();
   const scopedOrders = orders.filter((o) => {
-    if (orderView === 'active' && ['delivered', 'unpaid', 'cancelled', 'archived'].includes(o.status)) return false;
-    if (orderView === 'done' && o.status !== 'delivered') return false;
-    if (orderView === 'archive' && !['unpaid', 'cancelled', 'archived'].includes(o.status)) return false;
+    if (viewMode === 'list') {
+      if (orderView === 'active' && ['delivered', 'unpaid', 'cancelled', 'archived'].includes(o.status)) return false;
+      if (orderView === 'done' && o.status !== 'delivered') return false;
+      if (orderView === 'archive' && !['unpaid', 'cancelled', 'archived'].includes(o.status)) return false;
+    }
 
     if (customRange.from && customRange.to) {
       const from = new Date(customRange.from).getTime();
@@ -646,11 +648,13 @@ export default function AdminOrdersPage() {
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3 }}>
-              <button className={`cms-btn cms-btn-sm${orderView === 'active' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('active')} style={{ fontSize: 12 }}>Действующие</button>
-              <button className={`cms-btn cms-btn-sm${orderView === 'done' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('done')} style={{ fontSize: 12 }}>Завершенные</button>
-              <button className={`cms-btn cms-btn-sm${orderView === 'archive' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('archive')} style={{ fontSize: 12 }}>Архив</button>
-            </div>
+            {viewMode === 'list' && (
+              <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3 }}>
+                <button className={`cms-btn cms-btn-sm${orderView === 'active' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('active')} style={{ fontSize: 12 }}>Действующие</button>
+                <button className={`cms-btn cms-btn-sm${orderView === 'done' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('done')} style={{ fontSize: 12 }}>Завершенные</button>
+                <button className={`cms-btn cms-btn-sm${orderView === 'archive' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('archive')} style={{ fontSize: 12 }}>Архив</button>
+              </div>
+            )}
             {viewMode === 'kanban' && (
               <button className="cms-btn cms-btn-sm" onClick={() => { setStageEdits(kanbanStages); setShowStageManager(true); }} title="Управление стадиями">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
@@ -688,6 +692,11 @@ export default function AdminOrdersPage() {
                 {kanbanStages.map(stage => {
                   const stageOrders = sorted.filter(o => o.status === stage.key);
                   const stageColor = STATUS_BORDER[stage.key] || 'var(--cms-border)';
+                  const zoneTint = stage.key === 'delivered'
+                    ? 'rgba(16,185,129,0.07)'
+                    : ['unpaid', 'cancelled', 'archived'].includes(stage.key)
+                      ? 'rgba(244,63,94,0.08)'
+                      : 'rgba(255,255,255,0.01)';
                   const isOver = dragOverStage === stage.key;
                   return (
                     <div
@@ -698,8 +707,9 @@ export default function AdminOrdersPage() {
                       onDrop={(e) => {
                         e.preventDefault();
                         setDragOverStage(null);
-                        if (draggingOrderId) {
-                          const o = orders.find(x => x.id === draggingOrderId);
+                        const droppedOrderId = draggingOrderId || e.dataTransfer.getData('text/plain');
+                        if (droppedOrderId) {
+                          const o = orders.find(x => x.id === droppedOrderId);
                           if (o && o.status !== stage.key) updateOrderStatus(o, stage.key);
                           setDraggingOrderId(null);
                         }
@@ -709,12 +719,16 @@ export default function AdminOrdersPage() {
                         <span style={{ fontWeight: 700, fontSize: 13 }}>{stage.name}</span>
                         <span style={{ fontSize: 11, background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '1px 7px', color: 'var(--cms-text-muted)' }}>{stageOrders.length}</span>
                       </div>
-                      <div style={{ border: '1px solid var(--cms-border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px', minHeight: 80, background: isOver ? 'rgba(232,114,42,0.07)' : 'rgba(255,255,255,0.01)', transition: 'background 0.15s', boxShadow: isOver ? `inset 0 0 0 2px ${stageColor}40` : 'none' }}>
+                      <div style={{ border: '1px solid var(--cms-border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px', minHeight: 80, background: isOver ? 'rgba(232,114,42,0.07)' : zoneTint, transition: 'background 0.15s', boxShadow: isOver ? `inset 0 0 0 2px ${stageColor}40` : 'none' }}>
                         {stageOrders.map(order => (
                           <div
                             key={order.id}
                             draggable
-                            onDragStart={() => setDraggingOrderId(order.id)}
+                            onDragStart={(e) => {
+                              setDraggingOrderId(order.id);
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.dataTransfer.setData('text/plain', order.id);
+                            }}
                             onDragEnd={() => { setDraggingOrderId(null); setDragOverStage(null); }}
                             style={{ background: 'var(--cms-surface)', border: `1px solid ${draggingOrderId === order.id ? 'var(--cms-accent)' : 'var(--cms-border)'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 8, cursor: 'grab', opacity: draggingOrderId === order.id ? 0.45 : 1, transition: 'opacity 0.15s, border-color 0.15s' }}
                           >
