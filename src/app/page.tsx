@@ -123,6 +123,7 @@ export default function HomePage() {
                 className="preorder-img"
                 priority
                 sizes="(max-width: 768px) 80vw, 42vw"
+                quality={65}
               />
               <div className="preorder-img-overlay" />
             </div>
