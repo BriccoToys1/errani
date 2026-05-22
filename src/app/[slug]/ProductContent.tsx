@@ -33,6 +33,7 @@ interface Product {
   isAuthor: boolean;
   characteristics: string;
   colors?: string;
+  customBadges?: string;
 }
 
 interface PublicReview {
@@ -245,7 +246,7 @@ export function ProductContent({ product }: { product: Product }) {
           <div className="product-badges anim-fade-up">
             {product.isAuthor && (
               <span className="product-badge product-badge-author">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }}><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 000-4H8a2 2 0 000 4h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17z"/></svg>
                 {lang === 'ru' ? 'Авторская колода' : 'Author deck'}
               </span>
             )}
@@ -254,6 +255,16 @@ export function ProductContent({ product }: { product: Product }) {
                 {lang === 'ru' ? 'ПРЕДЗАКАЗ' : 'PRE-ORDER'}
               </span>
             )}
+            {(() => {
+              try {
+                const bs: Array<{text:string;textEn?:string;icon:string;color:string}> = JSON.parse(product.customBadges || '[]');
+                return bs.map((b, bi) => (
+                  <span key={bi} style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: 20, fontSize: '11px', fontWeight: 700, background: b.color + '20', color: b.color, border: `1px solid ${b.color}55` }}>
+                    {b.text}
+                  </span>
+                ));
+              } catch { return null; }
+            })()}
           </div>
 
           <h1 className="product-title anim-fade-up anim-fade-up-d1">{displayName}</h1>

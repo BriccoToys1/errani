@@ -66,6 +66,7 @@ model Product {
   isSoldOut          Boolean        @default(false) // Плашка "Sold Out" на фото
   characteristics    String         @default("") // JSON array of {key, value} pairs
   colors            String         @default("[]") // JSON array of {name, hex} color options
+  customBadges      String         @default("[]") // JSON array of {text,textEn,icon,color} custom badges
   avitoUrl      String         @default("") // link to avito listing if parsed
   sortOrder     Int            @default(0)
   createdAt     DateTime       @default(now())
