@@ -9,8 +9,18 @@ interface OrderItem {
   productId: string;
   quantity: number;
   price: number;
+  selectedColor: string;
   product: { name: string };
 }
+
+const DEFAULT_KANBAN_STAGES = [
+  { key: 'pending', name: 'Ожидает оплаты' },
+  { key: 'paid', name: 'Оплачен' },
+  { key: 'assembling', name: 'Сборка' },
+  { key: 'shipped', name: 'Отправлен' },
+  { key: 'in_transit', name: 'В пути' },
+  { key: 'delivered', name: 'Доставлен' },
+];
 
 interface Order {
   id: string;
@@ -135,6 +145,10 @@ export default function AdminOrdersPage() {
   const [showSortDrop, setShowSortDrop] = useState(false);
   const [manualForm, setManualForm] = useState<typeof emptyManualForm>(emptyManualForm);
   const [creatingManual, setCreatingManual] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [kanbanStages, setKanbanStages] = useState(DEFAULT_KANBAN_STAGES);
+  const [showStageManager, setShowStageManager] = useState(false);
+  const [stageEdits, setStageEdits] = useState(DEFAULT_KANBAN_STAGES);
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
@@ -167,6 +181,33 @@ export default function AdminOrdersPage() {
   }, []);
 
   useEffect(() => { fetchOrders(); fetchProducts(); }, [fetchOrders, fetchProducts]);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    fetch('/api/admin/settings?key=order_kanban_stages_v1', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.value) {
+          const s = JSON.parse(d.value);
+          if (Array.isArray(s) && s.length > 0) { setKanbanStages(s); setStageEdits(s); }
+        }
+      })
+      .catch(() => {});
+  }, [getToken]);
+
+  const saveKanbanStages = async (stages: typeof kanbanStages) => {
+    const token = getToken();
+    if (!token) return;
+    await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ key: 'order_kanban_stages_v1', value: JSON.stringify(stages) }),
+    });
+    setKanbanStages(stages);
+    setStageEdits(stages);
+    setShowStageManager(false);
+  };
 
   const openOrder = (order: Order) => {
     setSelected(order);
@@ -499,12 +540,21 @@ export default function AdminOrdersPage() {
 
         <div className="cms-content">
           <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
+            {/* List / Kanban toggle */}
+            <div style={{ display: 'flex', border: '1px solid var(--cms-border)', borderRadius: 6, overflow: 'hidden' }}>
+              <button className={`cms-btn cms-btn-xs${viewMode === 'list' ? ' cms-btn-primary' : ''}`} onClick={() => setViewMode('list')} title="Список" style={{ borderRadius: 0, border: 'none' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              </button>
+              <button className={`cms-btn cms-btn-xs${viewMode === 'kanban' ? ' cms-btn-primary' : ''}`} onClick={() => setViewMode('kanban')} title="Канбан" style={{ borderRadius: 0, border: 'none', borderLeft: '1px solid var(--cms-border)' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>
+              </button>
+            </div>
             <input
               className="cms-input cms-input-sm"
               placeholder="Поиск по номеру, имени, email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "260px" }}
+              style={{ width: "240px" }}
             />
 
             {/* Filter icon + dropdown */}
@@ -576,6 +626,11 @@ export default function AdminOrdersPage() {
               <button className={`cms-btn cms-btn-sm${orderView === 'done' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('done')} style={{ fontSize: 12 }}>Завершенные</button>
               <button className={`cms-btn cms-btn-sm${orderView === 'archive' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('archive')} style={{ fontSize: 12 }}>Архив</button>
             </div>
+            {viewMode === 'kanban' && (
+              <button className="cms-btn cms-btn-sm" onClick={() => { setStageEdits(kanbanStages); setShowStageManager(true); }} title="Управление стадиями">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+              </button>
+            )}
 
             <span style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginLeft: "auto" }}>
               {periodLabel} · {filtered.length} заказов
@@ -589,7 +644,78 @@ export default function AdminOrdersPage() {
             )}
           </div>
 
-          <div className="cms-table-wrap">
+          {viewMode === 'kanban' && (
+            <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 16, alignItems: 'flex-start' }}>
+              {kanbanStages.map(stage => {
+                const stageOrders = sorted.filter(o => o.status === stage.key);
+                const stageColor = STATUS_BORDER[stage.key] || 'var(--cms-border)';
+                return (
+                  <div key={stage.key} style={{ minWidth: 250, maxWidth: 280, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--cms-surface)', borderRadius: '8px 8px 0 0', border: '1px solid var(--cms-border)', borderBottom: `2px solid ${stageColor}` }}>
+                      <span style={{ fontWeight: 700, fontSize: 13 }}>{stage.name}</span>
+                      <span style={{ fontSize: 11, background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '1px 7px', color: 'var(--cms-text-muted)' }}>{stageOrders.length}</span>
+                    </div>
+                    <div style={{ border: '1px solid var(--cms-border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px', minHeight: 80, background: 'rgba(255,255,255,0.01)' }}>
+                      {stageOrders.map(order => (
+                        <div key={order.id} style={{ background: 'var(--cms-surface)', border: '1px solid var(--cms-border)', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
+                          {/* Header: order# + amount */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, color: 'var(--cms-text-muted)', fontFamily: 'monospace' }}>#{order.orderNumber}</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cms-accent)' }}>{formatPrice(order.totalAmount)}</span>
+                          </div>
+                          {/* Client name */}
+                          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{order.customerName}</div>
+                          {/* Items */}
+                          {order.items.length > 0 && (
+                            <div style={{ fontSize: 11, color: 'var(--cms-text-muted)', marginBottom: 6 }}>
+                              {order.items.map((item, idx) => (
+                                <div key={idx}>{item.product?.name} ×{item.quantity}{item.selectedColor ? ` · ${item.selectedColor}` : ''}</div>
+                              ))}
+                            </div>
+                          )}
+                          {/* Date */}
+                          <div style={{ fontSize: 10, color: 'var(--cms-text-muted)', marginBottom: 8 }}>{new Date(order.createdAt).toLocaleDateString('ru-RU')}</div>
+                          {/* Stage selector */}
+                          <select
+                            className="cms-select"
+                            value={order.status}
+                            onChange={(e) => updateOrderStatus(order, e.target.value)}
+                            style={{ width: '100%', fontSize: 11, padding: '3px 6px', marginBottom: 6, borderLeft: `3px solid ${STATUS_BORDER[order.status] || 'transparent'}` }}
+                          >
+                            {kanbanStages.map(s => <option key={s.key} value={s.key}>{s.name}</option>)}
+                            {ALL_STATUSES.filter(s => !kanbanStages.find(k => k.key === s)).map(s => (
+                              <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>
+                            ))}
+                          </select>
+                          {/* Actions */}
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {order.customerPhone && (
+                              <a href={`tel:${order.customerPhone}`} className="cms-btn cms-btn-xs cms-btn-ghost" title={order.customerPhone}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 011 1.18 2 2 0 013 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 7a16 16 0 006.91 6.91l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14.92z"/></svg>
+                              </a>
+                            )}
+                            {order.customerEmail && (
+                              <a href={`mailto:${order.customerEmail}`} className="cms-btn cms-btn-xs cms-btn-ghost" title={order.customerEmail}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                              </a>
+                            )}
+                            <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openOrder(order)} title="Изменить">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {stageOrders.length === 0 && (
+                        <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 12, color: 'var(--cms-text-muted)' }}>—</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {viewMode === 'list' && <div className="cms-table-wrap">
             <table className="cms-table">
               <thead>
                 <tr>
@@ -665,7 +791,7 @@ export default function AdminOrdersPage() {
                 )}
               </tbody>
             </table>
-          </div>
+          </div>}
         </div>
       </main>
 
@@ -931,6 +1057,46 @@ export default function AdminOrdersPage() {
       )}
 
       {notification && <div className="cms-toast">{notification}</div>}
+
+      {/* Stage Manager Modal */}
+      {showStageManager && (
+        <div className="cms-modal-overlay" onClick={() => setShowStageManager(false)}>
+          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 480 }}>
+            <div className="cms-modal-header">
+              <h3>Управление стадиями</h3>
+              <button className="cms-modal-close" onClick={() => setShowStageManager(false)}>&times;</button>
+            </div>
+            <div className="cms-modal-body">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {stageEdits.map((stage, idx) => (
+                  <div key={stage.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      className="cms-input"
+                      value={stage.name}
+                      onChange={(e) => setStageEdits(prev => prev.map((s, i) => i === idx ? { ...s, name: e.target.value } : s))}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      className="cms-btn cms-btn-xs cms-btn-danger"
+                      onClick={() => setStageEdits(prev => prev.filter((_, i) => i !== idx))}
+                      title="Удалить стадию"
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+              <button
+                className="cms-btn cms-btn-sm"
+                onClick={() => setStageEdits(prev => [...prev, { key: `stage_${Date.now()}`, name: 'Новая стадия' }])}
+              >+ Добавить стадию</button>
+            </div>
+            <div className="cms-modal-actions">
+              <button className="cms-btn cms-btn-primary" onClick={() => void saveKanbanStages(stageEdits)}>Сохранить</button>
+              <button className="cms-btn" onClick={() => { setStageEdits(kanbanStages); setShowStageManager(false); }}>Отмена</button>
+              <button className="cms-btn cms-btn-ghost" onClick={() => setStageEdits(DEFAULT_KANBAN_STAGES)} style={{ marginLeft: 'auto' }}>Сбросить</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

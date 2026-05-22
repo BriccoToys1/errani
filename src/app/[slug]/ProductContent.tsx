@@ -270,6 +270,23 @@ export function ProductContent({ product }: { product: Product }) {
             </div>
           )}
 
+          {/* Per-product notice badge — under price */}
+          {noticeText && (
+            <div className="anim-fade-up anim-fade-up-d3" style={{
+              margin: '10px 0 4px',
+              padding: '10px 14px',
+              background: 'rgba(255, 180, 0, 0.10)',
+              border: '1px solid rgba(255, 180, 0, 0.35)',
+              borderRadius: '8px',
+              color: '#ffb400',
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              lineHeight: 1.5,
+            }}>
+              ⚠️&nbsp;{noticeText}
+            </div>
+          )}
+
           {/* Color selector */}
           {colorOptions.length > 0 && (
             <div className="product-colors anim-fade-up anim-fade-up-d3" style={{ margin: '16px 0' }}>
@@ -327,23 +344,6 @@ export function ProductContent({ product }: { product: Product }) {
                   {lang === 'ru' ? 'Выберите цвет для заказа' : 'Select a color to order'}
                 </p>
               )}
-            </div>
-          )}
-
-          {/* Per-product notice badge */}
-          {noticeText && (
-            <div className="anim-fade-up anim-fade-up-d3" style={{
-              margin: '12px 0 4px',
-              padding: '10px 14px',
-              background: 'rgba(255, 180, 0, 0.10)',
-              border: '1px solid rgba(255, 180, 0, 0.35)',
-              borderRadius: '8px',
-              color: '#ffb400',
-              fontSize: '0.82rem',
-              fontWeight: 700,
-              lineHeight: 1.5,
-            }}>
-              ⚠️&nbsp;{noticeText}
             </div>
           )}
 

@@ -371,6 +371,7 @@ export default function CartPage() {
                     {lang === 'ru' ? 'Цвет' : 'Color'}: {item.selectedColor}
                   </div>
                 )}
+                {(() => { const pData = productMap.get(item.productId); const notice = lang === 'ru' ? pData?.noticeText : (pData?.noticeTextEn || pData?.noticeText); return notice ? <div style={{ fontSize: '0.75rem', color: '#ffb400', fontWeight: 600, marginTop: 4 }}>⚠ {notice}</div> : null; })()}
                 {item.isPreorder && <span className="cart-item-tag">{t(lang, 'cart.preorder')}</span>}
                 {unavailableProductIds.has(item.productId) && (
                   <span className="cart-item-tag" style={{ background: 'rgba(239,68,68,0.18)', color: '#fda4af' }}>

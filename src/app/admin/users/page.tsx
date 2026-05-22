@@ -99,7 +99,7 @@ export default function AdminUsersPage() {
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"active" | "archived" | "all">("active");
+  const [view, setView] = useState<"active" | "archived" | "all" | "blocked">("active");
   const [notification, setNotification] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [badgeInputs, setBadgeInputs] = useState<Record<string, string>>({});
@@ -118,7 +118,7 @@ export default function AdminUsersPage() {
     setTimeout(() => setNotification(""), 3500);
   };
 
-  const fetchUsers = useCallback(async (q = "", p = 1, v: "active" | "archived" | "all" = view) => {
+  const fetchUsers = useCallback(async (q = "", p = 1, v: "active" | "archived" | "all" | "blocked" = view) => {
     const token = getToken();
     if (!token) {
       router.push("/admin/login");
@@ -126,7 +126,8 @@ export default function AdminUsersPage() {
     }
 
     setLoading(true);
-    const res = await fetch(`/api/admin/users?search=${encodeURIComponent(q)}&page=${p}&view=${v}`, {
+    const apiView = v === "blocked" ? "all" : v;
+    const res = await fetch(`/api/admin/users?search=${encodeURIComponent(q)}&page=${p}&view=${apiView}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -137,10 +138,12 @@ export default function AdminUsersPage() {
     }
 
     const data = await res.json();
-    setUsers(data.users || []);
-    setTotal(data.total || 0);
+    const allUsers: CustomerProfile[] = data.users || [];
+    const filtered = v === "blocked" ? allUsers.filter(u => u.badges?.includes("__blocked__")) : allUsers;
+    setUsers(filtered);
+    setTotal(v === "blocked" ? filtered.length : (data.total || 0));
     setPage(data.page || 1);
-    setPages(data.pages || 1);
+    setPages(v === "blocked" ? 1 : (data.pages || 1));
     setLoading(false);
   }, [getToken, router, view]);
 
@@ -326,8 +329,9 @@ export default function AdminUsersPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <select className="cms-select" value={view} onChange={(e) => setView(e.target.value as "active" | "archived" | "all")}>
+            <select className="cms-select" value={view} onChange={(e) => setView(e.target.value as "active" | "archived" | "all" | "blocked")}>
               <option value="active">Активные</option>
+              <option value="blocked">Заблокированные</option>
               <option value="archived">Архив</option>
               <option value="all">Все</option>
             </select>
@@ -473,7 +477,11 @@ export default function AdminUsersPage() {
                       {/* Block / Unblock */}
                       <button
                         className="cms-btn cms-btn-xs cms-btn-ghost"
-                        onClick={() => patchProfile(profile.email, { blocked: !profile.badges?.includes('__blocked__') }, profile.badges?.includes('__blocked__') ? "Клиент разблокирован" : "Клиент заблокирован")}
+                        onClick={() => {
+                          const isBlocked = profile.badges?.includes('__blocked__');
+                          if (!confirm(isBlocked ? `Разблокировать клиента ${profile.email}?` : `Заблокировать клиента ${profile.email}?`)) return;
+                          patchProfile(profile.email, { blocked: !isBlocked }, isBlocked ? "Клиент разблокирован" : "Клиент заблокирован");
+                        }}
                         disabled={pending === profile.email}
                         title={profile.badges?.includes('__blocked__') ? "Разблокировать клиента" : "Заблокировать клиента"}
                         style={{ color: profile.badges?.includes('__blocked__') ? 'var(--cms-danger)' : undefined }}
