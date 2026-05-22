@@ -297,7 +297,7 @@ export default function CartPage() {
   if (step === 'done') {
     return (
       <main className="cart-section" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', textAlign: 'center' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '1.5rem' }}><i className="fi fi-rr-check" style={{ color: '#22c55e' }} /></div>
+        <div style={{ fontSize: '3rem', marginBottom: '1.5rem' }}><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
         <h1 className="cart-heading" style={{ marginBottom: '0.75rem' }}>{t(lang, 'cart.success.title')}</h1>
         {orderNumber && (
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '0.5rem' }}>
@@ -336,7 +336,7 @@ export default function CartPage() {
       <div className="checkout-steps">
         <div className={`checkout-step ${step === 'cart' ? 'active' : 'completed'}`}>
           <span className="checkout-step-number">
-            {step === 'cart' ? '1' : <i className="fi fi-rr-check" style={{ fontSize: 13, display: 'flex' }} />}
+            {step === 'cart' ? '1' : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
           </span>
           <span>{t(lang, 'cart.title')}</span>
         </div>
@@ -386,7 +386,7 @@ export default function CartPage() {
                   <button onClick={() => handleQty(item.productId, item.quantity + 1)}>+</button>
                 </div>
                 <button className="cart-remove-btn" onClick={() => handleRemove(item.productId)}>
-                  <i className="fi fi-rr-trash" style={{ fontSize: 16 }} />
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
                 </button>
               </div>
             </div>

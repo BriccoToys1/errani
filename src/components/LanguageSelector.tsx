@@ -27,7 +27,7 @@ export function LanguageSelector() {
         onClick={() => setOpen((o) => !o)}
         aria-label="Language"
       >
-        <i className="fi fi-rr-globe" style={{ fontSize: 22 }} />
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/><path d="M2 12h20"/></svg>
       </button>
 
       {open && (

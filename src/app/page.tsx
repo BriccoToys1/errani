@@ -64,8 +64,8 @@ export default function HomePage() {
                 fill
                 className="preorder-img"
                 priority
-                unoptimized
                 sizes="(max-width: 768px) 80vw, 42vw"
+                quality={85}
               />
               <div className="preorder-img-overlay" />
             </div>

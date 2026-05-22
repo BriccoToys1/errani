@@ -195,7 +195,7 @@ export function CatalogContent() {
                       <span className="catalog-sold-out-badge">Sold Out</span>
                     )}
                     <div className="catalog-card-badges">
-                      {product.isAuthor && <span className="badge badge-author"><i className="fi fi-rr-thumbtack" style={{ fontSize: 10, marginRight: 4 }} />{lang === 'ru' ? 'Авторская' : 'Author'}</span>}
+                      {product.isAuthor && <span className="badge badge-author"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>{lang === 'ru' ? 'Авторская' : 'Author'}</span>}
                       {product.discount > 0 && <span className="badge badge-discount">-{product.discount}%</span>}
                       {product.isPreorder && <span className="badge badge-preorder">{lang === 'ru' ? 'Предзаказ' : 'Preorder'}</span>}
                     </div>
