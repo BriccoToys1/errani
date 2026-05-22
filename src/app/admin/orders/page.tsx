@@ -728,18 +728,59 @@ export default function AdminOrdersPage() {
                   </div>
                 </div>
               )}
-              <div
-                ref={kanbanRef}
-                style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 16, alignItems: 'flex-start' }}
-                onMouseMove={handleKanbanMouseMove}
-                onDragOver={handleKanbanDragOver}
-                onMouseLeave={stopKanbanScroll}
-                onDrop={stopKanbanScroll}
-              >
-                {kanbanStages.map(stage => {
+              <div style={{ position: 'relative' }}>
+                <div
+                  onMouseEnter={() => {
+                    const el = kanbanRef.current;
+                    if (!el) return;
+                    stopKanbanScroll();
+                    scrollTimerRef.current = setInterval(() => { el.scrollLeft -= 16; }, 16);
+                  }}
+                  onMouseLeave={stopKanbanScroll}
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    bottom: 16,
+                    width: 34,
+                    zIndex: 30,
+                    background: 'linear-gradient(90deg, rgba(11,11,16,0.58), rgba(11,11,16,0))',
+                  }}
+                />
+                <div
+                  onMouseEnter={() => {
+                    const el = kanbanRef.current;
+                    if (!el) return;
+                    stopKanbanScroll();
+                    scrollTimerRef.current = setInterval(() => { el.scrollLeft += 16; }, 16);
+                  }}
+                  onMouseLeave={stopKanbanScroll}
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 0,
+                    bottom: 16,
+                    width: 34,
+                    zIndex: 30,
+                    background: 'linear-gradient(270deg, rgba(11,11,16,0.58), rgba(11,11,16,0))',
+                  }}
+                />
+                <div
+                  ref={kanbanRef}
+                  style={{ display: 'flex', gap: 12, overflowX: 'auto', padding: '0 38px 16px', alignItems: 'flex-start', scrollBehavior: 'smooth' }}
+                  onMouseMove={handleKanbanMouseMove}
+                  onDragOver={handleKanbanDragOver}
+                  onMouseLeave={stopKanbanScroll}
+                  onDrop={stopKanbanScroll}
+                >
+                  {kanbanStages.map(stage => {
                   const stageOrders = sorted.filter(o => o.status === stage.key);
-                  const stageColor = STATUS_BORDER[stage.key] || 'var(--cms-border)';
                   const zone = resolveStageZone(stage);
+                  const stageColor = zone === 'green'
+                    ? '#22c55e'
+                    : zone === 'red'
+                      ? '#ef4444'
+                      : (STATUS_BORDER[stage.key] || 'var(--cms-border)');
                   const zoneTint = zone === 'green'
                     ? 'rgba(16,185,129,0.07)'
                     : zone === 'red'
@@ -820,7 +861,8 @@ export default function AdminOrdersPage() {
                       </div>
                     </div>
                   );
-                })}
+                  })}
+                </div>
               </div>
             </>
           )}
