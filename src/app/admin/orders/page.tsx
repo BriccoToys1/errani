@@ -569,6 +569,34 @@ export default function AdminOrdersPage() {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
+  const getOrderAgeBucket = (order: Order): "3" | "7" | "14" | "30" | "rest" => {
+    const days = Math.floor((nowMs - new Date(order.createdAt).getTime()) / (24 * 60 * 60 * 1000));
+    if (days <= 3) return "3";
+    if (days <= 7) return "7";
+    if (days <= 14) return "14";
+    if (days <= 30) return "30";
+    return "rest";
+  };
+  const BUCKET_LABEL: Record<"3" | "7" | "14" | "30" | "rest", string> = {
+    "3": "За 3 дня",
+    "7": "За 7 дней",
+    "14": "За 14 дней",
+    "30": "За 30 дней",
+    "rest": "Остальные",
+  };
+  const rowsWithDividers: Array<{ type: "divider"; bucket: "3" | "7" | "14" | "30" | "rest" } | { type: "order"; order: Order }> = [];
+  if (viewMode === "list") {
+    let prevBucket: "3" | "7" | "14" | "30" | "rest" | null = null;
+    for (const order of sorted) {
+      const bucket = getOrderAgeBucket(order);
+      if (bucket !== prevBucket) {
+        rowsWithDividers.push({ type: "divider", bucket });
+        prevBucket = bucket;
+      }
+      rowsWithDividers.push({ type: "order", order });
+    }
+  }
+
   const totalItems = filtered.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0);
   const totalSum = filtered.reduce((sum, o) => sum + o.totalAmount, 0);
   const hasUnpaid = scopedOrders.some((o) => o.status === "pending" || o.status === "unpaid");
@@ -742,11 +770,18 @@ export default function AdminOrdersPage() {
                     left: 0,
                     top: 0,
                     bottom: 16,
-                    width: 34,
+                    width: 28,
                     zIndex: 30,
-                    background: 'linear-gradient(90deg, rgba(11,11,16,0.58), rgba(11,11,16,0))',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'w-resize',
                   }}
-                />
+                >
+                  <button className="cms-btn cms-btn-xs cms-btn-ghost" style={{ width: 22, height: 22, padding: 0, borderRadius: 999 }} aria-label="Влево">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+                  </button>
+                </div>
                 <div
                   onMouseEnter={() => {
                     const el = kanbanRef.current;
@@ -760,14 +795,31 @@ export default function AdminOrdersPage() {
                     right: 0,
                     top: 0,
                     bottom: 16,
-                    width: 34,
+                    width: 28,
                     zIndex: 30,
-                    background: 'linear-gradient(270deg, rgba(11,11,16,0.58), rgba(11,11,16,0))',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'e-resize',
                   }}
-                />
+                >
+                  <button className="cms-btn cms-btn-xs cms-btn-ghost" style={{ width: 22, height: 22, padding: 0, borderRadius: 999 }} aria-label="Вправо">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                </div>
                 <div
                   ref={kanbanRef}
-                  style={{ display: 'flex', gap: 12, overflowX: 'auto', padding: '0 38px 16px', alignItems: 'flex-start', scrollBehavior: 'smooth' }}
+                  style={{
+                    display: 'flex',
+                    gap: 12,
+                    overflowX: 'auto',
+                    padding: '0 28px 16px',
+                    alignItems: 'flex-start',
+                    scrollBehavior: 'smooth',
+                    maxWidth: '100%',
+                    border: '1px solid var(--cms-border)',
+                    borderRadius: 10,
+                  }}
                   onMouseMove={handleKanbanMouseMove}
                   onDragOver={handleKanbanDragOver}
                   onMouseLeave={stopKanbanScroll}
@@ -882,7 +934,20 @@ export default function AdminOrdersPage() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((order) => (
+                {(rowsWithDividers.length > 0 ? rowsWithDividers : sorted.map((order) => ({ type: "order" as const, order }))).map((row, idx) => {
+                  if (row.type === "divider") {
+                    return (
+                      <tr key={`divider-${row.bucket}-${idx}`}>
+                        <td colSpan={8} style={{ padding: "10px 8px 6px" }}>
+                          <div style={{ borderTop: "1px solid var(--cms-border-light)", paddingTop: 6, fontSize: 11, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                            {BUCKET_LABEL[row.bucket]}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  const order = row.order;
+                  return (
                   <tr
                     key={order.id}
                     style={order.isManual ? { background: "rgba(139,92,246,0.06)", borderLeft: "3px solid rgba(139,92,246,0.5)" } : undefined}
@@ -937,7 +1002,7 @@ export default function AdminOrdersPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )})}
                 {sorted.length === 0 && (
                   <tr><td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Заказы не найдены</td></tr>
                 )}
