@@ -182,12 +182,14 @@ export default function AdminOrdersPage() {
     if (!el) return;
     const rect = el.getBoundingClientRect();
     const x = clientX - rect.left;
-    const zone = Math.min(120, rect.width * 0.2);
+    const zone = Math.max(100, rect.width * 0.15);
     stopKanbanScroll();
-    if (x < zone) {
-      scrollTimerRef.current = setInterval(() => { el.scrollLeft -= 16; }, 16);
-    } else if (x > rect.width - zone) {
-      scrollTimerRef.current = setInterval(() => { el.scrollLeft += 16; }, 16);
+    if (x >= 0 && x < zone) {
+      const speed = Math.round(10 + 20 * (1 - x / zone));
+      scrollTimerRef.current = setInterval(() => { el.scrollLeft -= speed; }, 16);
+    } else if (x > rect.width - zone && x <= rect.width) {
+      const speed = Math.round(10 + 20 * (1 - (rect.width - x) / zone));
+      scrollTimerRef.current = setInterval(() => { el.scrollLeft += speed; }, 16);
     }
   };
 
@@ -276,11 +278,13 @@ export default function AdminOrdersPage() {
   const saveKanbanStages = async (stages: KanbanStage[]) => {
     const token = getToken();
     if (!token) return;
-    await fetch('/api/admin/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ key: 'order_kanban_stages_v1', value: JSON.stringify(stages) }),
-    });
+    try {
+      await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ key: 'order_kanban_stages_v1', value: JSON.stringify(stages) }),
+      });
+    } catch { /* network error — still update UI */ }
     setKanbanStages(stages);
     setStageEdits(stages);
     setShowStageManager(false);
@@ -763,69 +767,18 @@ export default function AdminOrdersPage() {
                   </div>
                 </div>
               )}
-              <div style={{ position: 'relative' }}>
-                <div
-                  onMouseEnter={() => {
-                    const el = kanbanRef.current;
-                    if (!el) return;
-                    stopKanbanScroll();
-                    scrollTimerRef.current = setInterval(() => { el.scrollLeft -= 16; }, 16);
-                  }}
-                  onMouseLeave={stopKanbanScroll}
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    top: 0,
-                    bottom: 16,
-                    width: 28,
-                    zIndex: 30,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'w-resize',
-                  }}
-                >
-                  <button className="cms-btn cms-btn-xs cms-btn-ghost" style={{ width: 22, height: 22, padding: 0, borderRadius: 999 }} aria-label="Влево">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
-                  </button>
-                </div>
-                <div
-                  onMouseEnter={() => {
-                    const el = kanbanRef.current;
-                    if (!el) return;
-                    stopKanbanScroll();
-                    scrollTimerRef.current = setInterval(() => { el.scrollLeft += 16; }, 16);
-                  }}
-                  onMouseLeave={stopKanbanScroll}
-                  style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: 0,
-                    bottom: 16,
-                    width: 28,
-                    zIndex: 30,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'e-resize',
-                  }}
-                >
-                  <button className="cms-btn cms-btn-xs cms-btn-ghost" style={{ width: 22, height: 22, padding: 0, borderRadius: 999 }} aria-label="Вправо">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
-                  </button>
-                </div>
+              <div style={{ position: 'relative', width: '100%' }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 60, zIndex: 10, background: 'linear-gradient(to right, rgba(0,0,0,0.07), transparent)', pointerEvents: 'none', borderRadius: '10px 0 0 10px' }} />
+                <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 60, zIndex: 10, background: 'linear-gradient(to left, rgba(0,0,0,0.07), transparent)', pointerEvents: 'none', borderRadius: '0 10px 10px 0' }} />
                 <div
                   ref={kanbanRef}
+                  className="kanban-board"
                   style={{
                     display: 'flex',
                     gap: 12,
-                    overflowX: 'auto',
-                    padding: '0 28px 16px',
+                    padding: '4px 2px 4px',
                     alignItems: 'flex-start',
-                    scrollBehavior: 'smooth',
-                    maxWidth: '100%',
-                    border: '1px solid var(--cms-border)',
-                    borderRadius: 10,
+                    width: '100%',
                   }}
                   onMouseMove={handleKanbanMouseMove}
                   onDragOver={handleKanbanDragOver}

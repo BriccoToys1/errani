@@ -671,7 +671,6 @@ export function ProductContent({ product }: { product: Product }) {
       {/* Gallery */}
       {allImages.length > 1 && (
         <section className="gallery-section">
-          <h2 className="gallery-heading">{lang === 'ru' ? 'Галерея' : 'Gallery'}</h2>
           <div className="gallery-grid">
             {allImages.slice(1).map((src, i) => (
               <div key={i} className="gallery-item" onClick={() => openLightbox(i + 1)}>

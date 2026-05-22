@@ -714,6 +714,14 @@ input[type="checkbox"] { accent-color: var(--cms-accent); width: 15px; height: 1
 .cms-content::-webkit-scrollbar-thumb { background: var(--cms-border); border-radius: 4px; }
 .cms-content::-webkit-scrollbar-track { background: transparent; }
 
+/* ── Kanban board (Bitrix24-style, no scrollbar) ── */
+.kanban-board {
+  overflow-x: scroll;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.kanban-board::-webkit-scrollbar { display: none; }
+
 /* ═══════════════════════════════════════════════════════════
    Animations
    ═══════════════════════════════════════════════════════════ */

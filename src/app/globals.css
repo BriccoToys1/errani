@@ -912,8 +912,8 @@ select.form-field {
 }
 
 .product-badge-author {
-  background: rgba(155, 89, 182, 0.15);
-  color: #9b59b6;
+  background: rgba(232, 114, 42, 0.12);
+  color: var(--orange);
 }
 
 .product-badge-preorder {
@@ -1588,10 +1588,9 @@ select.form-field {
 }
 
 .badge-author {
-  background: rgba(0,0,0,0.65);
-  color: #fff;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(232, 114, 42, 0.18);
+  color: var(--orange);
+  border: 1px solid rgba(232, 114, 42, 0.45);
 }
 
 .badge-preorder {

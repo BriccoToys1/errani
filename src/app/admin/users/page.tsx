@@ -497,6 +497,13 @@ export default function AdminUsersPage() {
                         onClick={() => {
                           const isBlocked = profile.badges?.includes('__blocked__');
                           if (!confirm(isBlocked ? `Подтвердите разблокировку клиента ${profile.email}` : `Подтвердите блокировку клиента ${profile.email}`)) return;
+                          setUsers(prev => prev.map(u => {
+                            if (u.email !== profile.email) return u;
+                            const badges = isBlocked
+                              ? (u.badges || []).filter(b => b !== '__blocked__')
+                              : [...(u.badges || []).filter(b => b !== '__blocked__'), '__blocked__'];
+                            return { ...u, badges };
+                          }));
                           patchProfile(profile.email, { blocked: !isBlocked }, isBlocked ? "Клиент разблокирован" : "Клиент заблокирован");
                         }}
                         disabled={pending === profile.email}
