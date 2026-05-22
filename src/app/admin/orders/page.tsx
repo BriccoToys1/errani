@@ -15,9 +15,6 @@ interface OrderItem {
 
 type StageZone = 'neutral' | 'green' | 'red';
 type KanbanStage = { key: string; name: string; zone?: StageZone };
-const DEFAULT_STAGE_BY_KEY: Record<string, KanbanStage> = Object.fromEntries(
-  DEFAULT_KANBAN_STAGES.map((s) => [s.key, s])
-) as Record<string, KanbanStage>;
 
 const DEFAULT_KANBAN_STAGES = [
   { key: 'pending', name: 'Ожидает оплаты', zone: 'neutral' },
@@ -30,6 +27,9 @@ const DEFAULT_KANBAN_STAGES = [
   { key: 'cancelled', name: 'Отменён', zone: 'red' },
   { key: 'archived', name: 'В архиве', zone: 'red' },
 ] as KanbanStage[];
+const DEFAULT_STAGE_BY_KEY: Record<string, KanbanStage> = Object.fromEntries(
+  DEFAULT_KANBAN_STAGES.map((s) => [s.key, s])
+) as Record<string, KanbanStage>;
 
 interface Order {
   id: string;
