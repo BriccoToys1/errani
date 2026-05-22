@@ -15,6 +15,9 @@ interface OrderItem {
 
 type StageZone = 'neutral' | 'green' | 'red';
 type KanbanStage = { key: string; name: string; zone?: StageZone };
+const DEFAULT_STAGE_BY_KEY: Record<string, KanbanStage> = Object.fromEntries(
+  DEFAULT_KANBAN_STAGES.map((s) => [s.key, s])
+) as Record<string, KanbanStage>;
 
 const DEFAULT_KANBAN_STAGES = [
   { key: 'pending', name: 'Ожидает оплаты', zone: 'neutral' },
@@ -174,33 +177,27 @@ export default function AdminOrdersPage() {
     return 'neutral';
   };
 
-  const handleKanbanMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const startKanbanAutoScroll = (clientX: number) => {
     const el = kanbanRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const zone = Math.min(80, rect.width * 0.12);
+    const x = clientX - rect.left;
+    const zone = Math.min(120, rect.width * 0.2);
     stopKanbanScroll();
     if (x < zone) {
-      scrollTimerRef.current = setInterval(() => { el.scrollLeft -= 10; }, 16);
+      scrollTimerRef.current = setInterval(() => { el.scrollLeft -= 16; }, 16);
     } else if (x > rect.width - zone) {
-      scrollTimerRef.current = setInterval(() => { el.scrollLeft += 10; }, 16);
+      scrollTimerRef.current = setInterval(() => { el.scrollLeft += 16; }, 16);
     }
+  };
+
+  const handleKanbanMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    startKanbanAutoScroll(e.clientX);
   };
 
   const handleKanbanDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const el = kanbanRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const zone = Math.min(110, rect.width * 0.18);
-    stopKanbanScroll();
-    if (x < zone) {
-      scrollTimerRef.current = setInterval(() => { el.scrollLeft -= 14; }, 16);
-    } else if (x > rect.width - zone) {
-      scrollTimerRef.current = setInterval(() => { el.scrollLeft += 14; }, 16);
-    }
+    startKanbanAutoScroll(e.clientX);
   };
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
@@ -244,13 +241,21 @@ export default function AdminOrdersPage() {
         if (d.value) {
           const s = JSON.parse(d.value);
           if (Array.isArray(s) && s.length > 0) {
-            const normalized = s
+            const normalizedBase = s
               .filter((x: unknown) => Boolean(x && typeof x === 'object' && 'key' in (x as Record<string, unknown>) && 'name' in (x as Record<string, unknown>)))
               .map((x: Record<string, unknown>) => ({
                 key: String(x.key),
                 name: String(x.name),
                 zone: (x.zone === 'green' || x.zone === 'red' || x.zone === 'neutral') ? x.zone : undefined,
               })) as KanbanStage[];
+            const missingDefaults = DEFAULT_KANBAN_STAGES.filter((def) => !normalizedBase.some((item) => item.key === def.key));
+            const normalized = [
+              ...normalizedBase.map((stage) => ({
+                ...stage,
+                zone: stage.zone || DEFAULT_STAGE_BY_KEY[stage.key]?.zone || resolveStageZone(stage),
+              })),
+              ...missingDefaults,
+            ];
             if (normalized.length > 0) {
               setKanbanStages(normalized);
               setStageEdits(normalized);
@@ -745,7 +750,8 @@ export default function AdminOrdersPage() {
                     <div
                       key={stage.key}
                       style={{ minWidth: 250, maxWidth: 280, flexShrink: 0 }}
-                      onDragOver={(e) => { e.preventDefault(); setDragOverStage(stage.key); }}
+                      onDragOver={(e) => { e.preventDefault(); startKanbanAutoScroll(e.clientX); setDragOverStage(stage.key); }}
+                      onDragEnter={(e) => { e.preventDefault(); startKanbanAutoScroll(e.clientX); setDragOverStage(stage.key); }}
                       onDragLeave={() => setDragOverStage(null)}
                       onDrop={(e) => {
                         e.preventDefault();
