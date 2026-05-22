@@ -81,7 +81,7 @@ export default function HomePage() {
         <div className="preorder-content">
           <div className="preorder-text">
             <div className="preorder-eyebrow anim-fade-up">
-              {lang === 'ru' ? 'Авторская колода Таро' : 'Original Tarot Deck'}
+              {lang === 'ru' ? 'Авторская' : 'Original'}
             </div>
 
             <h1 className="preorder-title anim-fade-up anim-fade-up-d2">

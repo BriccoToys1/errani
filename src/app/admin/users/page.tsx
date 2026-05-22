@@ -369,7 +369,17 @@ export default function AdminUsersPage() {
                       </div>
                       {profile.archived && <span className="cms-badge">Архив</span>}
                       {profile.badges?.includes('__blocked__') && (
-                        <span className="cms-badge cms-badge-red" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span
+                          className="cms-badge cms-badge-red"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            background: 'rgba(239,68,68,0.16)',
+                            border: '1px solid rgba(239,68,68,0.45)',
+                            color: '#fda4af',
+                          }}
+                        >
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                           Заблокирован
                         </span>
@@ -486,17 +496,24 @@ export default function AdminUsersPage() {
                         className="cms-btn cms-btn-xs cms-btn-ghost"
                         onClick={() => {
                           const isBlocked = profile.badges?.includes('__blocked__');
-                          if (!confirm(isBlocked ? `Разблокировать клиента ${profile.email}?` : `Заблокировать клиента ${profile.email}?`)) return;
+                          if (!confirm(isBlocked ? `Подтвердите разблокировку клиента ${profile.email}` : `Подтвердите блокировку клиента ${profile.email}`)) return;
                           patchProfile(profile.email, { blocked: !isBlocked }, isBlocked ? "Клиент разблокирован" : "Клиент заблокирован");
                         }}
                         disabled={pending === profile.email}
                         title={profile.badges?.includes('__blocked__') ? "Разблокировать клиента" : "Заблокировать клиента"}
-                        style={{ color: profile.badges?.includes('__blocked__') ? 'var(--cms-danger)' : undefined }}
+                        style={{
+                          color: profile.badges?.includes('__blocked__') ? '#f87171' : undefined,
+                          borderColor: profile.badges?.includes('__blocked__') ? 'rgba(239,68,68,0.45)' : undefined,
+                          background: profile.badges?.includes('__blocked__') ? 'rgba(239,68,68,0.12)' : undefined,
+                        }}
                       >
                         {profile.badges?.includes('__blocked__') ? (
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
                         ) : (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2"/>
+                            <path d="M16 11V7a4 4 0 00-8 0"/>
+                          </svg>
                         )}
                       </button>
                     </div>
