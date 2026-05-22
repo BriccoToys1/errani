@@ -13,14 +13,20 @@ interface OrderItem {
   product: { name: string };
 }
 
+type StageZone = 'neutral' | 'green' | 'red';
+type KanbanStage = { key: string; name: string; zone?: StageZone };
+
 const DEFAULT_KANBAN_STAGES = [
-  { key: 'pending', name: 'Ожидает оплаты' },
-  { key: 'paid', name: 'Оплачен' },
-  { key: 'assembling', name: 'Сборка' },
-  { key: 'shipped', name: 'Отправлен' },
-  { key: 'in_transit', name: 'В пути' },
-  { key: 'delivered', name: 'Доставлен' },
-];
+  { key: 'pending', name: 'Ожидает оплаты', zone: 'neutral' },
+  { key: 'paid', name: 'Оплачен', zone: 'neutral' },
+  { key: 'assembling', name: 'Сборка', zone: 'neutral' },
+  { key: 'shipped', name: 'Отправлен', zone: 'neutral' },
+  { key: 'in_transit', name: 'В пути', zone: 'neutral' },
+  { key: 'delivered', name: 'Доставлен', zone: 'green' },
+  { key: 'unpaid', name: 'Не оплачен', zone: 'red' },
+  { key: 'cancelled', name: 'Отменён', zone: 'red' },
+  { key: 'archived', name: 'В архиве', zone: 'red' },
+] as KanbanStage[];
 
 interface Order {
   id: string;
@@ -146,9 +152,9 @@ export default function AdminOrdersPage() {
   const [manualForm, setManualForm] = useState<typeof emptyManualForm>(emptyManualForm);
   const [creatingManual, setCreatingManual] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
-  const [kanbanStages, setKanbanStages] = useState(DEFAULT_KANBAN_STAGES);
+  const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
   const [showStageManager, setShowStageManager] = useState(false);
-  const [stageEdits, setStageEdits] = useState(DEFAULT_KANBAN_STAGES);
+  const [stageEdits, setStageEdits] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
   const [draggingOrderId, setDraggingOrderId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [showContact, setShowContact] = useState<{ orderId: string; type: 'phone' | 'email'; value: string } | null>(null);
@@ -159,6 +165,13 @@ export default function AdminOrdersPage() {
 
   const stopKanbanScroll = () => {
     if (scrollTimerRef.current) { clearInterval(scrollTimerRef.current); scrollTimerRef.current = null; }
+  };
+
+  const resolveStageZone = (stage: KanbanStage): StageZone => {
+    if (stage.zone) return stage.zone;
+    if (stage.key === 'delivered') return 'green';
+    if (['unpaid', 'cancelled', 'archived'].includes(stage.key)) return 'red';
+    return 'neutral';
   };
 
   const handleKanbanMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -172,6 +185,21 @@ export default function AdminOrdersPage() {
       scrollTimerRef.current = setInterval(() => { el.scrollLeft -= 10; }, 16);
     } else if (x > rect.width - zone) {
       scrollTimerRef.current = setInterval(() => { el.scrollLeft += 10; }, 16);
+    }
+  };
+
+  const handleKanbanDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const el = kanbanRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const zone = Math.min(110, rect.width * 0.18);
+    stopKanbanScroll();
+    if (x < zone) {
+      scrollTimerRef.current = setInterval(() => { el.scrollLeft -= 14; }, 16);
+    } else if (x > rect.width - zone) {
+      scrollTimerRef.current = setInterval(() => { el.scrollLeft += 14; }, 16);
     }
   };
 
@@ -215,13 +243,25 @@ export default function AdminOrdersPage() {
       .then(d => {
         if (d.value) {
           const s = JSON.parse(d.value);
-          if (Array.isArray(s) && s.length > 0) { setKanbanStages(s); setStageEdits(s); }
+          if (Array.isArray(s) && s.length > 0) {
+            const normalized = s
+              .filter((x: unknown) => Boolean(x && typeof x === 'object' && 'key' in (x as Record<string, unknown>) && 'name' in (x as Record<string, unknown>)))
+              .map((x: Record<string, unknown>) => ({
+                key: String(x.key),
+                name: String(x.name),
+                zone: (x.zone === 'green' || x.zone === 'red' || x.zone === 'neutral') ? x.zone : undefined,
+              })) as KanbanStage[];
+            if (normalized.length > 0) {
+              setKanbanStages(normalized);
+              setStageEdits(normalized);
+            }
+          }
         }
       })
       .catch(() => {});
   }, [getToken]);
 
-  const saveKanbanStages = async (stages: typeof kanbanStages) => {
+  const saveKanbanStages = async (stages: KanbanStage[]) => {
     const token = getToken();
     if (!token) return;
     await fetch('/api/admin/settings', {
@@ -687,14 +727,17 @@ export default function AdminOrdersPage() {
                 ref={kanbanRef}
                 style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 16, alignItems: 'flex-start' }}
                 onMouseMove={handleKanbanMouseMove}
+                onDragOver={handleKanbanDragOver}
                 onMouseLeave={stopKanbanScroll}
+                onDrop={stopKanbanScroll}
               >
                 {kanbanStages.map(stage => {
                   const stageOrders = sorted.filter(o => o.status === stage.key);
                   const stageColor = STATUS_BORDER[stage.key] || 'var(--cms-border)';
-                  const zoneTint = stage.key === 'delivered'
+                  const zone = resolveStageZone(stage);
+                  const zoneTint = zone === 'green'
                     ? 'rgba(16,185,129,0.07)'
-                    : ['unpaid', 'cancelled', 'archived'].includes(stage.key)
+                    : zone === 'red'
                       ? 'rgba(244,63,94,0.08)'
                       : 'rgba(255,255,255,0.01)';
                   const isOver = dragOverStage === stage.key;
@@ -729,7 +772,7 @@ export default function AdminOrdersPage() {
                               e.dataTransfer.effectAllowed = 'move';
                               e.dataTransfer.setData('text/plain', order.id);
                             }}
-                            onDragEnd={() => { setDraggingOrderId(null); setDragOverStage(null); }}
+                            onDragEnd={() => { setDraggingOrderId(null); setDragOverStage(null); stopKanbanScroll(); }}
                             style={{ background: 'var(--cms-surface)', border: `1px solid ${draggingOrderId === order.id ? 'var(--cms-accent)' : 'var(--cms-border)'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 8, cursor: 'grab', opacity: draggingOrderId === order.id ? 0.45 : 1, transition: 'opacity 0.15s, border-color 0.15s' }}
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -1130,13 +1173,42 @@ export default function AdminOrdersPage() {
             <div className="cms-modal-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                 {stageEdits.map((stage, idx) => (
-                  <div key={stage.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <div key={stage.key} style={{ display: 'grid', gridTemplateColumns: '1fr 136px auto auto auto', gap: 6, alignItems: 'center' }}>
                     <input
                       className="cms-input"
                       value={stage.name}
                       onChange={(e) => setStageEdits(prev => prev.map((s, i) => i === idx ? { ...s, name: e.target.value } : s))}
                       style={{ flex: 1 }}
                     />
+                    <select
+                      className="cms-select"
+                      value={resolveStageZone(stage)}
+                      onChange={(e) => setStageEdits(prev => prev.map((s, i) => i === idx ? { ...s, zone: e.target.value as StageZone } : s))}
+                    >
+                      <option value="neutral">Бесцветная</option>
+                      <option value="green">Зелёная</option>
+                      <option value="red">Красная</option>
+                    </select>
+                    <button
+                      className="cms-btn cms-btn-xs"
+                      onClick={() => setStageEdits(prev => {
+                        if (idx === 0) return prev;
+                        const copy = [...prev];
+                        [copy[idx - 1], copy[idx]] = [copy[idx], copy[idx - 1]];
+                        return copy;
+                      })}
+                      title="Вверх"
+                    >↑</button>
+                    <button
+                      className="cms-btn cms-btn-xs"
+                      onClick={() => setStageEdits(prev => {
+                        if (idx === prev.length - 1) return prev;
+                        const copy = [...prev];
+                        [copy[idx], copy[idx + 1]] = [copy[idx + 1], copy[idx]];
+                        return copy;
+                      })}
+                      title="Вниз"
+                    >↓</button>
                     <button
                       className="cms-btn cms-btn-xs cms-btn-danger"
                       onClick={() => setStageEdits(prev => prev.filter((_, i) => i !== idx))}
@@ -1147,7 +1219,7 @@ export default function AdminOrdersPage() {
               </div>
               <button
                 className="cms-btn cms-btn-sm"
-                onClick={() => setStageEdits(prev => [...prev, { key: `stage_${Date.now()}`, name: 'Новая стадия' }])}
+                onClick={() => setStageEdits(prev => [...prev, { key: `stage_${Date.now()}`, name: 'Новая стадия', zone: 'neutral' }])}
               >+ Добавить стадию</button>
             </div>
             <div className="cms-modal-actions">
