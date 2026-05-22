@@ -185,7 +185,8 @@ model Review {
   customerName String       @default("")
   rating       Float
   text         String       @default("")
-  media        String       @default("[]") // JSON array of images/videos
+  media        String       @default("[]") // JSON array of images/videos (submitted)
+  approvedMedia String      @default("[]") // JSON array of individually approved media URLs
   status       String       @default("pending") // pending, approved, rejected
   ip           String       @default("")
   userAgent    String       @default("")

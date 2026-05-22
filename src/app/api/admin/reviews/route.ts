@@ -91,6 +91,7 @@ export async function GET(req: NextRequest) {
         rating: review.rating,
         text: review.text,
         media: parseMedia(review.media),
+        approvedMedia: parseMedia(review.approvedMedia),
         status: review.status,
         createdAt: review.createdAt,
         updatedAt: review.updatedAt,
@@ -130,6 +131,26 @@ export async function PATCH(req: NextRequest) {
 
     if (!reviewId) {
       return NextResponse.json({ success: false, message: 'reviewId обязателен' }, { status: 400 });
+    }
+
+    // Per-media approval
+    if (action === 'approveMedia' || action === 'rejectMedia') {
+      const mediaUrl = String(body?.mediaUrl || '').trim();
+      if (!mediaUrl) return NextResponse.json({ success: false, message: 'mediaUrl обязателен' }, { status: 400 });
+
+      const review = await withPrismaRetry(() => prisma.review.findUnique({ where: { id: reviewId }, select: { approvedMedia: true } }));
+      if (!review) return NextResponse.json({ success: false, message: 'Отзыв не найден' }, { status: 404 });
+
+      let approved = parseMedia(review.approvedMedia);
+      if (action === 'approveMedia') {
+        if (!approved.includes(mediaUrl)) approved = [...approved, mediaUrl];
+      } else {
+        approved = approved.filter((u) => u !== mediaUrl);
+      }
+
+      await withPrismaRetry(() => prisma.review.update({ where: { id: reviewId }, data: { approvedMedia: JSON.stringify(approved) } }));
+      reviewsCache.clear();
+      return NextResponse.json({ success: true, approvedMedia: approved });
     }
 
     let status: 'pending' | 'approved' | 'rejected';

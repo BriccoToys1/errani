@@ -25,6 +25,8 @@ interface Product {
   isAuthor: boolean;
   isPreorder: boolean;
   isActive: boolean;
+  noticeText: string | null;
+  noticeTextEn: string | null;
   createdAt: string;
 }
 
@@ -202,6 +204,7 @@ export function CatalogContent() {
                   </div>
                   <div className="catalog-card-info">
                     <p className="catalog-card-name">{displayName}</p>
+                    {(() => { const notice = lang === 'ru' ? product.noticeText : product.noticeTextEn; return notice ? <p style={{ fontSize: '0.72rem', color: '#ffb400', fontWeight: 600, margin: '2px 0 0', lineHeight: 1.4 }}>⚠ {notice}</p> : null; })()}
                     <p className="catalog-card-price">{product.isSaleDisabled ? 'Скоро' : `${price.toLocaleString('ru-RU')} ₽`}</p>
                   </div>
                 </Link>

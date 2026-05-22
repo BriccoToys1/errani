@@ -96,7 +96,7 @@ export default function ReviewForm({ token }: { token: string }) {
     alreadyUsed: lang === 'ru' ? 'Эта ссылка уже использована.' : 'This link has already been used.',
     expired: lang === 'ru' ? 'Срок действия ссылки истёк.' : 'This link has expired.',
     invalid: lang === 'ru' ? 'Ссылка недействительна.' : 'The link is invalid.',
-    successMsg: lang === 'ru' ? 'Спасибо! Отзыв отправлен на модерацию.' : 'Thank you! Your review has been submitted for moderation.',
+    successMsg: lang === 'ru' ? 'Спасибо! Отзыв отправлен' : 'Thank you! Your review has been submitted!',
     yourName: lang === 'ru' ? 'Ваше имя' : 'Your name',
     rating: lang === 'ru' ? 'Оценка' : 'Rating',
     reviewText: lang === 'ru' ? 'Текст отзыва' : 'Review text',

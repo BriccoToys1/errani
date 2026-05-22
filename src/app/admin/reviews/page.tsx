@@ -21,6 +21,7 @@ type ReviewRow = {
   rating: number;
   text: string;
   media: string[];
+  approvedMedia: string[];
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   approvedAt: string | null;
@@ -124,6 +125,26 @@ export default function AdminReviewsPage() {
     }
     void load(1);
   }, [load, router, token]);
+
+  const moderateMedia = async (reviewId: string, mediaUrl: string, action: 'approveMedia' | 'rejectMedia') => {
+    const adminToken = localStorage.getItem('admin_token');
+    if (!adminToken) return;
+    try {
+      const res = await fetch('/api/admin/reviews', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ reviewId, action, mediaUrl }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setReviews((prev) => prev.map((r) => r.id === reviewId ? { ...r, approvedMedia: data.approvedMedia } : r));
+      } else {
+        notify(data.message || 'Ошибка');
+      }
+    } catch {
+      notify('Ошибка сети');
+    }
+  };
 
   const moderate = async (reviewId: string, action: 'approve' | 'reject' | 'pending') => {
     const adminToken = localStorage.getItem('admin_token');
@@ -356,15 +377,37 @@ export default function AdminReviewsPage() {
                   )}
 
                   {review.media.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', marginTop: '10px' }}>
-                      {review.media.map((url) => {
-                        const isVideo = /\.(mp4|webm|mov)$/i.test(url);
-                        return isVideo ? (
-                          <video key={url} src={url} controls style={{ width: '100%', borderRadius: '10px', background: '#111' }} />
-                        ) : (
-                          <img key={url} src={url} alt="review media" style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px' }} />
-                        );
-                      })}
+                    <div style={{ marginTop: '10px' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cms-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                        Медиа ({review.media.length}) — одобрено: {review.approvedMedia.length}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '8px' }}>
+                        {review.media.map((url) => {
+                          const isApproved = review.approvedMedia.includes(url);
+                          const isVideo = /\.(mp4|webm|mov)$/i.test(url) || url.includes('video');
+                          return (
+                            <div key={url} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', border: `2px solid ${isApproved ? '#22c55e' : 'rgba(255,255,255,0.08)'}` }}>
+                              {isVideo ? (
+                                <video src={url} controls style={{ width: '100%', display: 'block', background: '#111' }} />
+                              ) : (
+                                <img src={url} alt="review media" style={{ width: '100%', height: '120px', objectFit: 'cover', display: 'block' }} />
+                              )}
+                              <div style={{ display: 'flex', gap: 4, padding: '4px 6px', background: 'rgba(0,0,0,0.7)' }}>
+                                <button
+                                  onClick={() => void moderateMedia(review.id, url, 'approveMedia')}
+                                  disabled={isApproved}
+                                  style={{ flex: 1, fontSize: 11, padding: '3px 0', background: isApproved ? 'rgba(34,197,94,0.3)' : '#16a34a', color: '#fff', border: 'none', borderRadius: 4, cursor: isApproved ? 'default' : 'pointer', fontWeight: 600 }}
+                                >✓</button>
+                                <button
+                                  onClick={() => void moderateMedia(review.id, url, 'rejectMedia')}
+                                  disabled={!isApproved}
+                                  style={{ flex: 1, fontSize: 11, padding: '3px 0', background: !isApproved ? 'rgba(239,68,68,0.3)' : '#dc2626', color: '#fff', border: 'none', borderRadius: 4, cursor: !isApproved ? 'default' : 'pointer', fontWeight: 600 }}
+                                >✕</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 

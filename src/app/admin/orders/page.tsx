@@ -48,12 +48,26 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   unpaid:     { label: "Не оплачен",  cls: "cms-badge-red" },
   paid:       { label: "Оплачен",     cls: "cms-badge-green" },
   assembling: { label: "Сборка",      cls: "cms-badge-yellow" },
-  shipped:    { label: "Отправлен",   cls: "cms-badge-blue" },
+  shipped:    { label: "Отправлен",   cls: "cms-badge-green" },
   in_transit: { label: "В пути",      cls: "cms-badge-blue" },
   delivered:  { label: "Доставлен",   cls: "cms-badge-green" },
   cancelled:  { label: "Отменён",     cls: "cms-badge-red" },
-  archived:   { label: "В архиве",    cls: "cms-badge-blue" },
+  archived:   { label: "В архиве",    cls: "cms-badge" },
 };
+
+const STATUS_BORDER: Record<string, string> = {
+  pending:    '#f59e0b',
+  unpaid:     '#ef4444',
+  paid:       '#22c55e',
+  assembling: '#f59e0b',
+  shipped:    '#22c55e',
+  in_transit: '#3b82f6',
+  delivered:  '#22c55e',
+  cancelled:  '#ef4444',
+  archived:   '#6b7280',
+};
+
+type OrderView = 'active' | 'done' | 'archive';
 
 const ALL_STATUSES = ["pending", "unpaid", "paid", "assembling", "shipped", "in_transit", "delivered", "cancelled", "archived"];
 const PERIOD_OPTIONS = [0, 1, 3, 7, 14, 30, 60, 90, 180, 365];
@@ -112,7 +126,7 @@ export default function AdminOrdersPage() {
   const [search, setSearch] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [showNewOrder, setShowNewOrder] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
+  const [orderView, setOrderView] = useState<OrderView>('active');
   const [regionFilter, setRegionFilter] = useState<"all" | "ru" | "foreign">("all");
   const [periodDays, setPeriodDays] = useState<number>(0);
   const [customRange, setCustomRange] = useState({ from: "", to: "" });
@@ -402,7 +416,9 @@ export default function AdminOrdersPage() {
 
   const nowMs = Date.now();
   const scopedOrders = orders.filter((o) => {
-    if (!showArchived && o.status === "archived") return false;
+    if (orderView === 'active' && ['delivered', 'unpaid', 'cancelled', 'archived'].includes(o.status)) return false;
+    if (orderView === 'done' && o.status !== 'delivered') return false;
+    if (orderView === 'archive' && !['unpaid', 'cancelled', 'archived'].includes(o.status)) return false;
 
     if (customRange.from && customRange.to) {
       const from = new Date(customRange.from).getTime();
@@ -555,9 +571,11 @@ export default function AdminOrdersPage() {
               )}
             </div>
 
-            <button className={`cms-btn cms-btn-sm${showArchived ? " cms-btn-primary" : ""}`} onClick={() => setShowArchived((v) => !v)} title="Показать архив">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-            </button>
+            <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3 }}>
+              <button className={`cms-btn cms-btn-sm${orderView === 'active' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('active')} style={{ fontSize: 12 }}>Действующие</button>
+              <button className={`cms-btn cms-btn-sm${orderView === 'done' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('done')} style={{ fontSize: 12 }}>Завершенные</button>
+              <button className={`cms-btn cms-btn-sm${orderView === 'archive' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('archive')} style={{ fontSize: 12 }}>Архив</button>
+            </div>
 
             <span style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginLeft: "auto" }}>
               {periodLabel} · {filtered.length} заказов
@@ -616,7 +634,7 @@ export default function AdminOrdersPage() {
                         className="cms-select"
                         value={order.status}
                         onChange={(e) => updateOrderStatus(order, e.target.value)}
-                        style={{ minWidth: "132px" }}
+                        style={{ minWidth: "132px", borderLeft: `3px solid ${STATUS_BORDER[order.status] || 'transparent'}` }}
                       >
                         {ALL_STATUSES.map((s) => (
                           <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>

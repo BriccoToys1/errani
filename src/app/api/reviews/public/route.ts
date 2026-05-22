@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
           rating: true,
           text: true,
           media: true,
+          approvedMedia: true,
           approvedAt: true,
           createdAt: true,
         },
@@ -56,15 +57,20 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      reviews: reviews.map((review) => ({
-        id: review.id,
-        customerName: review.customerName,
-        rating: review.rating,
-        text: review.text,
-        media: parseMedia(review.media),
-        approvedAt: review.approvedAt,
-        createdAt: review.createdAt,
-      })),
+      reviews: reviews.map((review) => {
+        const allMedia = parseMedia(review.media);
+        const approved = parseMedia(review.approvedMedia);
+        const displayMedia = approved.length > 0 ? approved : allMedia;
+        return {
+          id: review.id,
+          customerName: review.customerName,
+          rating: review.rating,
+          text: review.text,
+          media: displayMedia,
+          approvedAt: review.approvedAt,
+          createdAt: review.createdAt,
+        };
+      }),
     });
   } catch (error) {
     console.error('Public reviews error:', error);

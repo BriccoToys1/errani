@@ -8,7 +8,7 @@ function parseMedia(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   return input
     .map((item) => String(item || '').trim())
-    .filter((url) => url.startsWith('/media/reviews/'))
+    .filter((url) => url.startsWith('/api/media/') || url.startsWith('/media/reviews/'))
     .slice(0, 8);
 }
 

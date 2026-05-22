@@ -252,7 +252,7 @@ export default function AdminWaitlistPage() {
                     </thead>
                     <tbody>
                       {group.requests.map((item) => (
-                        <tr key={item.id} className={checkedIds.has(item.id) ? "cms-row-selected" : ""}>
+                        <tr key={item.id} className={checkedIds.has(item.id) ? "cms-row-selected" : ""} style={item.selectedColor === "под заказ" ? { background: 'rgba(232,114,42,0.13)', borderLeft: '3px solid #E8722A' } : {}}>
                           <td><input type="checkbox" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} /></td>
                           <td style={{ fontFamily: "monospace", fontSize: "12px" }}>{item.requestTag || `WaitlistRequest_${item.productSlug}`}</td>
                           <td className="cms-td-bold">{item.name}</td>
