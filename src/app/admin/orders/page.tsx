@@ -261,7 +261,7 @@ export default function AdminOrdersPage() {
                 const existingIdx = result.findIndex(s => s.key === DEFAULT_KANBAN_STAGES[i].key);
                 if (existingIdx !== -1) { insertAt = existingIdx; break; }
               }
-              result.splice(insertAt, 0, { ...def });
+              result.splice(insertAt, 0, { ...def, zone: def.zone ?? 'neutral' });
             }
             if (result.length > 0) {
               setKanbanStages(result);
