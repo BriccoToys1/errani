@@ -329,12 +329,14 @@ export default function AdminUsersPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <select className="cms-select" value={view} onChange={(e) => setView(e.target.value as "active" | "archived" | "all" | "blocked")}>
-              <option value="active">Активные</option>
-              <option value="blocked">Заблокированные</option>
-              <option value="archived">Архив</option>
-              <option value="all">Все</option>
-            </select>
+            <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3 }}>
+              <button className={`cms-btn cms-btn-sm${view === 'active' ? ' cms-btn-primary' : ''}`} onClick={() => setView('active')} style={{ fontSize: 12 }}>Все</button>
+              <button className={`cms-btn cms-btn-sm${view === 'blocked' ? ' cms-btn-primary' : ''}`} onClick={() => setView('blocked')} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                Заблокированные
+              </button>
+              <button className={`cms-btn cms-btn-sm${view === 'archived' ? ' cms-btn-primary' : ''}`} onClick={() => setView('archived')} style={{ fontSize: 12 }}>Архив</button>
+            </div>
             <button type="submit" className="cms-btn cms-btn-sm cms-btn-secondary">Найти</button>
             {search && (
               <button type="button" className="cms-btn cms-btn-sm cms-btn-ghost" onClick={() => { setSearch(""); fetchUsers("", 1, view); }}>
@@ -366,7 +368,12 @@ export default function AdminUsersPage() {
                         <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.email}</div>
                       </div>
                       {profile.archived && <span className="cms-badge">Архив</span>}
-                      {profile.badges?.includes('__blocked__') && <span className="cms-badge cms-badge-red">Заблокирован</span>}
+                      {profile.badges?.includes('__blocked__') && (
+                        <span className="cms-badge cms-badge-red" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                          Заблокирован
+                        </span>
+                      )}
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px", fontSize: "12px" }}>
@@ -385,7 +392,7 @@ export default function AdminUsersPage() {
                     <div style={{ marginBottom: "10px" }}>
                       <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Бейджи</div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
-                        {(profile.badges || []).length > 0 ? profile.badges.map((badge) => (
+                        {(profile.badges || []).filter(b => b !== '__blocked__').length > 0 ? profile.badges.filter(b => b !== '__blocked__').map((badge) => (
                           <span key={badge} className="cms-badge cms-badge-blue" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                             {badge}
                             <button onClick={() => removeBadge(profile, badge)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", lineHeight: 1 }}>×</button>
