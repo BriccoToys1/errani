@@ -258,8 +258,8 @@ export default function CartPage() {
       clearCart();
       setCart([]);
       setStep('done');
-    } catch {
-      alert('Ошибка при оформлении заказа. Попробуйте ещё раз.');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Ошибка при оформлении заказа. Попробуйте ещё раз.');
     } finally {
       setSubmitting(false);
     }

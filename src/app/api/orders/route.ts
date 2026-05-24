@@ -369,7 +369,7 @@ async function createYukassaPayment(order: { id: string; orderNumber: string; to
         },
         confirmation: {
           type: 'redirect',
-          return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/cart/success?order=${order.orderNumber}`,
+          return_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://errani.ru'}/cart/success?order=${order.orderNumber}`,
         },
         capture: true,
         description: `Заказ ${order.orderNumber}`,
