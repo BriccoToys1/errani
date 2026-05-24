@@ -1593,6 +1593,12 @@ select.form-field {
   border: 1px solid rgba(232, 114, 42, 0.45);
 }
 
+.catalog-card-badges .badge-author {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+
 .badge-preorder {
   background: rgba(0,0,0,0.55);
   color: #fff;

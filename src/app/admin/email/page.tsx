@@ -44,6 +44,8 @@ export default function AdminEmailPage() {
   const [compSubject, setCompSubject] = useState("");
   const [compBody, setCompBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string>('');
 
   // Newsletter state
   const [showNewsletter, setShowNewsletter] = useState(false);
@@ -76,15 +78,23 @@ export default function AdminEmailPage() {
     setLoading(false);
   }, [getToken, router, folder, search]);
 
-  const syncEmails = useCallback(async () => {
+  const syncEmails = useCallback(async (showResult = false) => {
     const token = getToken();
     if (!token) return;
+    if (showResult) setSyncing(true);
     try {
-      await fetch('/api/admin/email/sync', {
+      const res = await fetch('/api/admin/email/sync', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
-    } catch { /* ignore */ }
+      const data = await res.json();
+      if (showResult) {
+        if (data.error) setSyncResult(`Ошибка: ${data.error}`);
+        else setSyncResult(`Синхронизировано: +${data.synced} из ${data.total} писем`);
+        setTimeout(() => setSyncResult(''), 5000);
+      }
+    } catch { if (showResult) setSyncResult('Ошибка сети'); }
+    if (showResult) setSyncing(false);
   }, [getToken]);
 
   useEffect(() => {
@@ -287,13 +297,21 @@ export default function AdminEmailPage() {
             <button className="cms-btn cms-btn-sm" onClick={markAllRead} title="Отметить все как прочитанные">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
-            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); syncEmails().then(() => fetchEmails()); }} title="Обновить">
+            <button className="cms-btn cms-btn-sm" onClick={() => { setSyncing(true); syncEmails(true).then(() => { setLoading(true); fetchEmails(); }); }} title="Синхронизировать с Resend" disabled={syncing}>
+              {syncing ? <span style={{ fontSize: 11 }}>...</span> : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>}
+            </button>
+            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchEmails(); }} title="Обновить">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
             </button>
           </div>
         </div>
 
         <div className="cms-content">
+          {syncResult && (
+            <div style={{ marginBottom: 10, padding: '7px 12px', background: syncResult.startsWith('Ошибка') ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)', border: `1px solid ${syncResult.startsWith('Ошибка') ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`, borderRadius: 8, fontSize: 12, color: syncResult.startsWith('Ошибка') ? '#fca5a5' : '#6ee7b7' }}>
+              {syncResult}
+            </div>
+          )}
           {/* Toolbar */}
           <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" }}>
             <div style={{ display: "flex", gap: "4px" }}>

@@ -45,14 +45,21 @@ export async function POST(req: NextRequest) {
     const resend = new Resend(apiKey);
     const result = await resend.emails.receiving.list();
 
-    if (result.error || !result.data) {
-      console.error('Resend receiving.list error:', result.error);
-      return NextResponse.json({ error: String(result.error?.message || 'no data'), synced: 0 }, { status: 200 });
+    console.log('Resend receiving.list raw:', JSON.stringify(result).substring(0, 500));
+
+    if (result.error) {
+      return NextResponse.json({ error: String(result.error?.message || 'API error'), synced: 0, debug: result.error }, { status: 200 });
+    }
+
+    if (!result.data) {
+      return NextResponse.json({ error: 'no data returned', synced: 0 }, { status: 200 });
     }
 
     const emails: Record<string, unknown>[] = Array.isArray(result.data)
       ? (result.data as Record<string, unknown>[])
       : ((result.data as { data?: Record<string, unknown>[] }).data || []);
+
+    console.log('Resend receiving emails count:', emails.length, 'first:', emails[0] ? JSON.stringify(emails[0]).substring(0, 200) : 'none');
 
     let synced = 0;
     for (const email of emails) {
@@ -86,7 +93,7 @@ export async function POST(req: NextRequest) {
       synced++;
     }
 
-    return NextResponse.json({ synced, total: emails.length });
+    return NextResponse.json({ synced, total: emails.length, ok: true });
   } catch (error) {
     console.error('Email sync error:', error);
     return NextResponse.json({ error: 'Sync failed', synced: 0 }, { status: 200 });
