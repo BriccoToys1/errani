@@ -37,6 +37,7 @@ export default function AdminEmailPage() {
   const [composing, setComposing] = useState(false);
   const [replyTo, setReplyTo] = useState<Email | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [spamCount, setSpamCount] = useState(0);
 
   // Compose state
   const [compTo, setCompTo] = useState("");
@@ -69,10 +70,27 @@ export default function AdminEmailPage() {
         const data = await res.json();
         setEmails(data.emails || []);
         setUnreadCount(data.unreadCount || 0);
+        setSpamCount(data.spamCount || 0);
       }
     } catch { /* ignore */ }
     setLoading(false);
   }, [getToken, router, folder, search]);
+
+  const syncEmails = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      await fetch('/api/admin/email/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch { /* ignore */ }
+  }, [getToken]);
+
+  useEffect(() => {
+    syncEmails().then(() => fetchEmails());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => { fetchEmails(); }, [fetchEmails]);
 
@@ -269,7 +287,7 @@ export default function AdminEmailPage() {
             <button className="cms-btn cms-btn-sm" onClick={markAllRead} title="Отметить все как прочитанные">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
-            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchEmails(); }} title="Обновить">
+            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); syncEmails().then(() => fetchEmails()); }} title="Обновить">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
             </button>
           </div>
@@ -281,16 +299,34 @@ export default function AdminEmailPage() {
             <div style={{ display: "flex", gap: "4px" }}>
               {[
                 { key: "all", label: "Все" },
-                { key: "inbox", label: "Входящие" },
+                { key: "inbox", label: "Входящие", count: unreadCount },
                 { key: "sent", label: "Отправленные" },
+                { key: "spam", label: "Спам", count: spamCount },
               ].map(f => (
                 <button
                   key={f.key}
                   className={`cms-btn cms-btn-sm ${folder === f.key ? "cms-btn-primary" : ""}`}
                   onClick={() => setFolder(f.key)}
-                  style={{ fontSize: 12 }}
+                  style={{ fontSize: 12, position: 'relative', display: 'flex', alignItems: 'center', gap: 5 }}
                 >
                   {f.label}
+                  {(f.count ?? 0) > 0 && (
+                    <span style={{
+                      background: f.key === 'spam' ? '#ef4444' : 'var(--cms-accent)',
+                      color: '#fff',
+                      borderRadius: '50%',
+                      minWidth: 16,
+                      height: 16,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 4px',
+                    }}>
+                      {(f.count ?? 0) > 99 ? '99+' : f.count}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

@@ -30,9 +30,20 @@ export async function GET(req: NextRequest) {
   const cacheKey = JSON.stringify({ folder, search: search.trim().toLowerCase() });
 
   try {
-    const where: Record<string, unknown> = { status: { not: 'archived' } };
-    if (folder === 'inbox') where.direction = 'inbound';
-    else if (folder === 'sent') where.direction = 'outbound';
+    const where: Record<string, unknown> = {};
+    if (folder === 'inbox') {
+      where.direction = 'inbound';
+      where.status = 'received';
+    } else if (folder === 'sent') {
+      where.direction = 'outbound';
+      where.status = { not: 'archived' };
+    } else if (folder === 'spam') {
+      where.direction = 'inbound';
+      where.status = 'spam';
+    } else {
+      // all: exclude archived and spam
+      where.status = { notIn: ['archived', 'spam'] };
+    }
 
     if (search) {
       where.OR = [
@@ -43,19 +54,22 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const { emails, unreadCount } = await withFreshPrisma(async (db) => {
+    const { emails, unreadCount, spamCount } = await withFreshPrisma(async (db) => {
       const emails = await db.adminEmail.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         take: 100,
       });
       const unreadCount = await db.adminEmail.count({
-        where: { direction: 'inbound', isRead: false, status: { not: 'archived' } },
+        where: { direction: 'inbound', isRead: false, status: 'received' },
       });
-      return { emails, unreadCount };
+      const spamCount = await db.adminEmail.count({
+        where: { direction: 'inbound', status: 'spam' },
+      });
+      return { emails, unreadCount, spamCount };
     });
 
-    const payload = { emails, unreadCount };
+    const payload = { emails, unreadCount, spamCount };
     emailListCache.set(cacheKey, { ts: Date.now(), payload });
     return NextResponse.json(payload, {
       headers: {
