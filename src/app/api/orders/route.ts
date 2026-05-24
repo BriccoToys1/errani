@@ -312,6 +312,16 @@ export async function POST(req: NextRequest) {
           where: { id: order.id },
           data: { paymentId: yukassaResponse.id, paymentMethod: 'yukassa' },
         });
+      } else {
+        // Payment URL creation failed — cancel the order so it doesn't litter the DB
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { status: 'cancelled' },
+        });
+        return NextResponse.json(
+          { error: 'Не удалось создать платёж. Пожалуйста, попробуйте ещё раз или свяжитесь с поддержкой.' },
+          { status: 502 }
+        );
       }
     } else {
       await prisma.order.update({
