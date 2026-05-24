@@ -103,7 +103,7 @@ export function CatalogContent() {
 
   const filters: { key: FilterType; label: string }[] = [
     { key: 'all', label: lang === 'ru' ? 'Все' : 'All' },
-    { key: 'author', label: lang === 'ru' ? 'Авторские' : 'Author' },
+    { key: 'author', label: lang === 'ru' ? 'Авторские' : 'Signature' },
     { key: 'preorder', label: lang === 'ru' ? 'Предзаказ' : 'Preorder' },
   ];
 
@@ -198,7 +198,7 @@ export function CatalogContent() {
                       <span className="catalog-sold-out-badge">Sold Out</span>
                     )}
                     <div className="catalog-card-badges">
-                      {product.isAuthor && <span className="badge badge-author"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }}><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 000-4H8a2 2 0 000 4h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17z"/></svg>{lang === 'ru' ? 'Авторская' : 'Author'}</span>}
+                      {product.isAuthor && <span className="badge badge-author"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, display: 'inline-block', verticalAlign: 'middle' }}><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 000-4H8a2 2 0 000 4h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17z"/></svg>{lang === 'ru' ? 'Авторская' : 'Signature'}</span>}
                       {product.discount > 0 && <span className="badge badge-discount">-{product.discount}%</span>}
                       {product.isPreorder && <span className="badge badge-preorder">{lang === 'ru' ? 'Предзаказ' : 'Preorder'}</span>}
                       {(() => { try { const bs: Array<{text:string;textEn?:string;icon:string;color:string}> = JSON.parse(product.customBadges || '[]'); return bs.map((b, bi) => <span key={bi} style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 20, fontSize: '9px', fontWeight: 700, background: b.color + '22', color: b.color, border: `1px solid ${b.color}55` }}>{lang === 'ru' ? b.text : (b.textEn || b.text)}</span>); } catch { return null; } })()}

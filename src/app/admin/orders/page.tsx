@@ -154,7 +154,7 @@ export default function AdminOrdersPage() {
   const [showSortDrop, setShowSortDrop] = useState(false);
   const [manualForm, setManualForm] = useState<typeof emptyManualForm>(emptyManualForm);
   const [creatingManual, setCreatingManual] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
   const [showStageManager, setShowStageManager] = useState(false);
   const [stageEdits, setStageEdits] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
@@ -619,7 +619,7 @@ export default function AdminOrdersPage() {
   return (
     <div className="cms-root">
       <AdminSidebar />
-      <main className="cms-main">
+      <main className="cms-main" style={viewMode === 'kanban' ? { height: '100vh', overflow: 'hidden' } : undefined}>
         <div className="cms-header">
           <h1 className="cms-header-title">
             Заказы
@@ -649,7 +649,7 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        <div className="cms-content">
+        <div className="cms-content" style={viewMode === 'kanban' ? { border: 'none', background: 'transparent', boxShadow: 'none', padding: '8px 8px 4px' } : undefined}>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
             {/* List / Kanban toggle */}
             <div style={{ display: 'flex', border: '1px solid var(--cms-border)', borderRadius: 6, overflow: 'hidden' }}>
@@ -757,127 +757,6 @@ export default function AdminOrdersPage() {
             )}
           </div>
 
-          {viewMode === 'kanban' && (
-            <>
-              {showContact && (
-                <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={() => setShowContact(null)}>
-                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', background: 'var(--cms-surface)', border: '1px solid var(--cms-border)', borderRadius: 10, padding: '14px 20px', fontSize: 14, boxShadow: '0 8px 32px rgba(0,0,0,0.6)', zIndex: 201, minWidth: 220 }} onClick={e => e.stopPropagation()}>
-                    <div style={{ fontWeight: 700, fontSize: 11, color: 'var(--cms-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{showContact.type === 'phone' ? 'Телефон' : 'Email'}</div>
-                    <div style={{ fontSize: 15, userSelect: 'all', fontWeight: 600 }}>{showContact.value}</div>
-                  </div>
-                </div>
-              )}
-              <div style={{ position: 'relative', width: '100%' }}>
-                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 60, zIndex: 10, background: 'linear-gradient(to right, rgba(0,0,0,0.07), transparent)', pointerEvents: 'none', borderRadius: '10px 0 0 10px' }} />
-                <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 60, zIndex: 10, background: 'linear-gradient(to left, rgba(0,0,0,0.07), transparent)', pointerEvents: 'none', borderRadius: '0 10px 10px 0' }} />
-                <div
-                  ref={kanbanRef}
-                  className="kanban-board"
-                  style={{
-                    display: 'flex',
-                    gap: 12,
-                    padding: '4px 2px 4px',
-                    alignItems: 'flex-start',
-                    width: '100%',
-                  }}
-                  onMouseMove={handleKanbanMouseMove}
-                  onDragOver={handleKanbanDragOver}
-                  onMouseLeave={stopKanbanScroll}
-                  onDrop={stopKanbanScroll}
-                >
-                  {kanbanStages.map(stage => {
-                  const stageOrders = sorted.filter(o => o.status === stage.key);
-                  const zone = resolveStageZone(stage);
-                  const stageColor = zone === 'green'
-                    ? '#22c55e'
-                    : zone === 'red'
-                      ? '#ef4444'
-                      : (STATUS_BORDER[stage.key] || 'var(--cms-border)');
-                  const zoneTint = zone === 'green'
-                    ? 'rgba(16,185,129,0.07)'
-                    : zone === 'red'
-                      ? 'rgba(244,63,94,0.08)'
-                      : 'rgba(255,255,255,0.01)';
-                  const isOver = dragOverStage === stage.key;
-                  return (
-                    <div
-                      key={stage.key}
-                      style={{ minWidth: 250, maxWidth: 280, flexShrink: 0 }}
-                      onDragOver={(e) => { e.preventDefault(); startKanbanAutoScroll(e.clientX); setDragOverStage(stage.key); }}
-                      onDragEnter={(e) => { e.preventDefault(); startKanbanAutoScroll(e.clientX); setDragOverStage(stage.key); }}
-                      onDragLeave={() => setDragOverStage(null)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setDragOverStage(null);
-                        const droppedOrderId = draggingOrderId || e.dataTransfer.getData('text/plain');
-                        if (droppedOrderId) {
-                          const o = orders.find(x => x.id === droppedOrderId);
-                          if (o && o.status !== stage.key) updateOrderStatus(o, stage.key);
-                          setDraggingOrderId(null);
-                        }
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--cms-surface)', borderRadius: '8px 8px 0 0', border: '1px solid var(--cms-border)', borderBottom: `2px solid ${stageColor}` }}>
-                        <span style={{ fontWeight: 700, fontSize: 13 }}>{stage.name}</span>
-                        <span style={{ fontSize: 11, background: 'rgba(255,255,255,0.07)', borderRadius: 10, padding: '1px 7px', color: 'var(--cms-text-muted)' }}>{stageOrders.length}</span>
-                      </div>
-                      <div style={{ border: '1px solid var(--cms-border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px', minHeight: 80, background: isOver ? 'rgba(232,114,42,0.07)' : zoneTint, transition: 'background 0.15s', boxShadow: isOver ? `inset 0 0 0 2px ${stageColor}40` : 'none' }}>
-                        {stageOrders.map(order => (
-                          <div
-                            key={order.id}
-                            draggable
-                            onDragStart={(e) => {
-                              setDraggingOrderId(order.id);
-                              e.dataTransfer.effectAllowed = 'move';
-                              e.dataTransfer.setData('text/plain', order.id);
-                            }}
-                            onDragEnd={() => { setDraggingOrderId(null); setDragOverStage(null); stopKanbanScroll(); }}
-                            style={{ background: 'var(--cms-surface)', border: `1px solid ${draggingOrderId === order.id ? 'var(--cms-accent)' : 'var(--cms-border)'}`, borderRadius: 8, padding: '10px 12px', marginBottom: 8, cursor: 'grab', opacity: draggingOrderId === order.id ? 0.45 : 1, transition: 'opacity 0.15s, border-color 0.15s' }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                              <span style={{ fontSize: 11, color: 'var(--cms-text-muted)', fontFamily: 'monospace' }}>#{order.orderNumber}</span>
-                              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cms-accent)' }}>{formatPrice(order.totalAmount)}</span>
-                            </div>
-                            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{order.customerName}</div>
-                            {order.items.length > 0 && (
-                              <div style={{ fontSize: 11, color: 'var(--cms-text-muted)', marginBottom: 6 }}>
-                                {order.items.map((item, idx) => (
-                                  <div key={idx}>{item.product?.name} ×{item.quantity}{item.selectedColor ? ` · ${item.selectedColor}` : ''}</div>
-                                ))}
-                              </div>
-                            )}
-                            <div style={{ fontSize: 10, color: 'var(--cms-text-muted)', marginBottom: 8 }}>{new Date(order.createdAt).toLocaleDateString('ru-RU')}</div>
-                            <div style={{ display: 'flex', gap: 6 }}>
-                              {order.customerPhone && (
-                                <button className="cms-btn cms-btn-xs cms-btn-ghost" title="Показать телефон" onClick={() => setShowContact({ orderId: order.id, type: 'phone', value: order.customerPhone })}>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 011 1.18 2 2 0 013 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L7.09 7a16 16 0 006.91 6.91l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14.92z"/></svg>
-                                </button>
-                              )}
-                              {order.customerEmail && (
-                                <button className="cms-btn cms-btn-xs cms-btn-ghost" title="Показать email" onClick={() => setShowContact({ orderId: order.id, type: 'email', value: order.customerEmail })}>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                                </button>
-                              )}
-                              <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openReceipt(order.id)} title="Чек">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>
-                              </button>
-                              <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openOrder(order)} title="Изменить">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {stageOrders.length === 0 && (
-                          <div style={{ padding: '20px 0', textAlign: 'center', fontSize: 12, color: 'var(--cms-text-muted)' }}>—</div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                  })}
-                </div>
-              </div>
-            </>
-          )}
 
           {viewMode === 'list' && <div className="cms-table-wrap">
             <table className="cms-table">

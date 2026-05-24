@@ -19,10 +19,10 @@ async function getApiKey(): Promise<string | null> {
 function extractAddr(raw: unknown): string {
   if (typeof raw === 'string') return raw;
   if (Array.isArray(raw)) {
-    return raw.map((r: unknown) => {
+    return (raw as unknown[]).map((r) => {
       if (typeof r === 'string') return r;
       const obj = r as Record<string, string>;
-      return obj.address || obj.email || '';
+      return obj.address || obj.email || obj.name || '';
     }).filter(Boolean).join(', ');
   }
   if (raw && typeof raw === 'object') {
@@ -38,42 +38,65 @@ export async function POST(req: NextRequest) {
 
   const apiKey = await getApiKey();
   if (!apiKey) {
-    return NextResponse.json({ error: 'Resend API key not configured', synced: 0 }, { status: 200 });
+    return NextResponse.json({ error: 'RESEND_API_KEY не настроен', synced: 0 });
   }
 
   try {
     const resend = new Resend(apiKey);
-    const result = await resend.emails.receiving.list();
 
-    console.log('Resend receiving.list raw:', JSON.stringify(result).substring(0, 500));
+    // Fetch received emails via Resend API
+    const { data, error } = await resend.emails.receiving.list();
 
-    if (result.error) {
-      return NextResponse.json({ error: String(result.error?.message || 'API error'), synced: 0, debug: result.error }, { status: 200 });
+    if (error) {
+      console.error('Resend receiving.list error:', error);
+      return NextResponse.json({ error: `Resend error: ${error.message}`, synced: 0 });
     }
 
-    if (!result.data) {
-      return NextResponse.json({ error: 'no data returned', synced: 0 }, { status: 200 });
+    // Resend returns { data: [...] } or { data: { data: [...] } }
+    const rawData = data as unknown;
+    let emails: Record<string, unknown>[] = [];
+    if (Array.isArray(rawData)) {
+      emails = rawData as Record<string, unknown>[];
+    } else if (rawData && typeof rawData === 'object') {
+      const nested = (rawData as Record<string, unknown>).data;
+      if (Array.isArray(nested)) emails = nested as Record<string, unknown>[];
     }
 
-    const emails: Record<string, unknown>[] = Array.isArray(result.data)
-      ? (result.data as Record<string, unknown>[])
-      : ((result.data as { data?: Record<string, unknown>[] }).data || []);
-
-    console.log('Resend receiving emails count:', emails.length, 'first:', emails[0] ? JSON.stringify(emails[0]).substring(0, 200) : 'none');
+    console.log(`Resend receiving: ${emails.length} emails found`);
 
     let synced = 0;
     for (const email of emails) {
       const resendId = String(email.id || '').trim();
       if (!resendId) continue;
 
+      // Skip duplicates
       const existing = await prisma.adminEmail.findFirst({
         where: { resendId },
         select: { id: true },
       });
       if (existing) continue;
 
+      // Fetch full email body via receiving.get()
+      let body = '';
+      let textBody = '';
+      try {
+        const { data: full } = await resend.emails.receiving.get(resendId);
+        if (full) {
+          const f = full as unknown as Record<string, unknown>;
+          body = String(f.html || f.body || '');
+          textBody = String(f.text || f.text_body || '');
+        }
+      } catch { /* use list data as fallback */ }
+
+      if (!body) {
+        body = String(email.html || email.body || `<pre style="white-space:pre-wrap;font-family:inherit;">${email.text || email.text_body || '(без текста)'}</pre>`);
+      }
+      if (!textBody) {
+        textBody = String(email.text || email.text_body || email.subject || '');
+      }
+
       const spamStatus = String(email.spam_status || 'pass').toLowerCase();
-      const isSpam = spamStatus === 'spam' || spamStatus.includes('fail');
+      const isSpam = spamStatus === 'spam';
 
       await withPrismaRetry(() => prisma.adminEmail.create({
         data: {
@@ -81,8 +104,8 @@ export async function POST(req: NextRequest) {
           fromAddr: extractAddr(email.from) || 'unknown',
           toAddr: extractAddr(email.to) || 'mail@errani.ru',
           subject: String(email.subject || '(без темы)'),
-          body: String(email.html || email.body || `<pre style="white-space:pre-wrap;font-family:inherit;">${email.text || '(без текста)'}</pre>`),
-          textBody: String(email.text || email.subject || ''),
+          body,
+          textBody,
           status: isSpam ? 'spam' : 'received',
           isRead: false,
           resendId,
@@ -95,7 +118,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ synced, total: emails.length, ok: true });
   } catch (error) {
-    console.error('Email sync error:', error);
-    return NextResponse.json({ error: 'Sync failed', synced: 0 }, { status: 200 });
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Email sync error:', msg);
+    return NextResponse.json({ error: msg, synced: 0 });
   }
 }
