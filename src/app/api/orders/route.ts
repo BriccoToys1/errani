@@ -318,8 +318,9 @@ export async function POST(req: NextRequest) {
           where: { id: order.id },
           data: { status: 'cancelled' },
         });
+        const detail = yukassaResponse?.__error || 'no response';
         return NextResponse.json(
-          { error: 'Не удалось создать платёж. Пожалуйста, попробуйте ещё раз или свяжитесь с поддержкой.' },
+          { error: `Не удалось создать платёж: ${detail}` },
           { status: 502 }
         );
       }
@@ -383,7 +384,7 @@ async function createYukassaPayment(order: { id: string; orderNumber: string; to
     if (!response.ok) {
       const error = await response.text();
       console.error('YuKassa error:', response.status, error);
-      return null;
+      return { __error: `YuKassa ${response.status}: ${error}` };
     }
 
     const result = await response.json();
