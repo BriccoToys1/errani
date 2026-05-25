@@ -2580,12 +2580,29 @@ select.form-field {
 }
 
 /* ── Reviews Carousel ───────────────────────────────────────────── */
-.reviews-carousel-section {
+@keyframes rc-leave-left {
+  from { transform: translateX(0);     opacity: 1; }
+  to   { transform: translateX(-60px); opacity: 0; }
+}
+@keyframes rc-leave-right {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(60px); opacity: 0; }
+}
+@keyframes rc-enter-right {
+  from { transform: translateX(60px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes rc-enter-left {
+  from { transform: translateX(-60px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+.rc-section {
   background: var(--bg);
   padding: clamp(3rem, 7vw, 5rem) clamp(1.5rem, 5vw, 5rem);
 }
 
-.reviews-carousel-wrap {
+.rc-wrap {
   max-width: 680px;
   margin: 0 auto;
   display: flex;
@@ -2594,24 +2611,33 @@ select.form-field {
   gap: 1.5rem;
 }
 
-.reviews-carousel-card {
+.rc-track {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.rc-card {
   width: 100%;
   background: var(--bg-elevated);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
   padding: clamp(1.4rem, 4vw, 2rem) clamp(1.5rem, 4vw, 2.2rem);
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.28s ease, transform 0.28s ease;
-  min-height: 160px;
 }
 
-.reviews-carousel-card--visible {
-  opacity: 1;
-  transform: translateY(0);
+/* leaving cards are absolute so they overlap the entering card */
+.rc-card--leave-left,
+.rc-card--leave-right {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
+.rc-card--leave-left  { animation: rc-leave-left  380ms ease forwards; }
+.rc-card--leave-right { animation: rc-leave-right 380ms ease forwards; }
+.rc-card--enter-right { animation: rc-enter-right 380ms ease forwards; }
+.rc-card--enter-left  { animation: rc-enter-left  380ms ease forwards; }
 
-.reviews-carousel-header {
+.rc-card-header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -2619,37 +2645,35 @@ select.form-field {
   margin-bottom: 0.9rem;
 }
 
-.reviews-carousel-name {
+.rc-card-name {
   font-weight: 700;
   font-size: 1rem;
   color: var(--text);
 }
 
-.reviews-carousel-rating {
+.rc-card-rating {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
 }
 
-.reviews-carousel-star {
-  color: #ffb400;
-}
+.rc-star { color: #ffb400; }
 
-.reviews-carousel-text {
+.rc-card-text {
   font-size: 0.92rem;
   line-height: 1.75;
   color: var(--text-secondary);
   white-space: pre-wrap;
 }
 
-.reviews-carousel-controls {
+.rc-controls {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.reviews-carousel-arrow {
+.rc-arrow {
   background: none;
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-secondary);
@@ -2664,19 +2688,18 @@ select.form-field {
   justify-content: center;
   transition: border-color 0.15s, color 0.15s;
 }
-
-.reviews-carousel-arrow:hover {
+.rc-arrow:hover {
   border-color: var(--orange);
   color: var(--orange);
 }
 
-.reviews-carousel-dots {
+.rc-dots {
   display: flex;
   gap: 6px;
   align-items: center;
 }
 
-.reviews-carousel-dot {
+.rc-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -2686,14 +2709,11 @@ select.form-field {
   padding: 0;
   transition: background 0.2s, transform 0.2s;
 }
-
-.reviews-carousel-dot--active {
+.rc-dot--active {
   background: var(--orange);
   transform: scale(1.3);
 }
 
 @media (max-width: 480px) {
-  .reviews-carousel-card {
-    border-radius: 14px;
-  }
+  .rc-card { border-radius: 14px; }
 }

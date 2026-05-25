@@ -44,7 +44,6 @@ export async function GET(req: NextRequest) {
       prisma.review.findMany({
         where: whereClause,
         orderBy: [{ approvedAt: 'desc' }, { createdAt: 'desc' }],
-        take: 100,
         select: {
           id: true,
           customerName: true,
