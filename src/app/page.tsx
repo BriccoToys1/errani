@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEffect, useState } from 'react';
+import ReviewsCarousel from '@/components/ReviewsCarousel';
 
 export default function HomePage() {
   const { lang } = useLanguage();
@@ -130,6 +131,8 @@ export default function HomePage() {
           </div>
         </div>
       </main>
+
+      <ReviewsCarousel />
     </>
   );
 }

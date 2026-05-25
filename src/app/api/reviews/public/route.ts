@@ -18,28 +18,31 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const slug = String(searchParams.get('slug') || '').trim();
     const productId = String(searchParams.get('productId') || '').trim();
+    const all = searchParams.get('all') === 'true';
 
-    if (!slug && !productId) {
-      return NextResponse.json({ success: false, message: 'Укажите slug или productId' }, { status: 400 });
+    if (!slug && !productId && !all) {
+      return NextResponse.json({ success: false, message: 'Укажите slug, productId или all=true' }, { status: 400 });
     }
 
-    let resolvedProductId = productId;
-    if (!resolvedProductId && slug) {
-      const product = await withPrismaRetry(() =>
-        prisma.product.findUnique({ where: { slug }, select: { id: true } })
-      );
-      if (!product) {
-        return NextResponse.json({ success: true, reviews: [] });
+    let whereClause: { productId?: string; status: string } = { status: 'approved' };
+
+    if (!all) {
+      let resolvedProductId = productId;
+      if (!resolvedProductId && slug) {
+        const product = await withPrismaRetry(() =>
+          prisma.product.findUnique({ where: { slug }, select: { id: true } })
+        );
+        if (!product) {
+          return NextResponse.json({ success: true, reviews: [] });
+        }
+        resolvedProductId = product.id;
       }
-      resolvedProductId = product.id;
+      whereClause = { productId: resolvedProductId, status: 'approved' };
     }
 
     const reviews = await withPrismaRetry(() =>
       prisma.review.findMany({
-        where: {
-          productId: resolvedProductId,
-          status: 'approved',
-        },
+        where: whereClause,
         orderBy: [{ approvedAt: 'desc' }, { createdAt: 'desc' }],
         take: 100,
         select: {
