@@ -327,7 +327,6 @@ export async function sendReviewInviteEmail(data: {
         <tr><td style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.09);">
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;background:#e8601c;font-size:0;line-height:0;">&nbsp;</td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:26px 28px 12px;">
-            <p style="margin:0 0 8px;font-size:10px;font-weight:700;color:#e8601c;letter-spacing:0.14em;text-transform:uppercase;">errani</p>
             <h1 style="margin:0;font-size:24px;font-weight:900;color:#1a1a1a;">Поделитесь впечатлением</h1>
           </td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 24px;">
@@ -337,7 +336,6 @@ export async function sendReviewInviteEmail(data: {
             <p style="margin:18px 0 0;font-size:12px;color:#888;word-break:break-all;">Если кнопка не работает, откройте ссылку:<br/>${data.reviewUrl}</p>
           </td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 28px;">
-            <p style="margin:0;font-size:13px;color:#888;line-height:1.7;">Спасибо, что выбираете errani.</p>
           </td></tr></table>
         </td></tr>
         <tr><td style="padding:22px 0 0;text-align:center;"><p style="margin:0;font-size:12px;color:#aaa;">© ${new Date().getFullYear()} errani.ru</p></td></tr>

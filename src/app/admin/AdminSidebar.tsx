@@ -66,6 +66,7 @@ export function AdminSidebar() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>('system');
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -97,6 +98,29 @@ export function AdminSidebar() {
     const saved = localStorage.getItem('cms_sidebar_collapsed');
     if (saved === 'true') setCollapsed(true);
   }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('cms_theme_mode');
+    if (saved === 'light' || saved === 'dark' || saved === 'system') {
+      setThemeMode(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const root = document.documentElement;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+
+    const apply = () => {
+      const resolved = themeMode === 'system' ? (media.matches ? 'dark' : 'light') : themeMode;
+      root.setAttribute('data-cms-theme', resolved);
+    };
+
+    apply();
+    localStorage.setItem('cms_theme_mode', themeMode);
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [themeMode]);
 
   // Close on route change
   useEffect(() => {
@@ -130,6 +154,12 @@ export function AdminSidebar() {
     localStorage.removeItem('admin_token');
     document.cookie = 'admin_token=; path=/; max-age=0';
     router.push('/admin/login');
+  };
+
+  const THEME_LABEL: Record<'light' | 'dark' | 'system', string> = {
+    light: 'Light',
+    dark: 'Dark',
+    system: 'System',
   };
 
   const getCount = (countKey?: string) => {
@@ -190,7 +220,7 @@ export function AdminSidebar() {
         </svg>
         {!collapsed && (
           <div className="cms-sidebar-brand-text">
-            CMS
+            errani <span>admin</span>
           </div>
         )}
         <button
@@ -321,20 +351,30 @@ export function AdminSidebar() {
       </nav>
 
       <div className="cms-sidebar-footer">
+        {!collapsed && (
+          <div className="cms-theme-switch" role="group" aria-label="Theme mode">
+            {(['light', 'dark', 'system'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                className={`cms-theme-switch-btn ${themeMode === mode ? 'active' : ''}`}
+                onClick={() => setThemeMode(mode)}
+                title={THEME_LABEL[mode]}
+              >
+                {THEME_LABEL[mode]}
+              </button>
+            ))}
+          </div>
+        )}
         <button
           onClick={handleLogout}
           title="Выйти"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: '8px',
-            color: 'var(--cms-text-muted)', display: 'flex', alignItems: 'center',
-            borderRadius: '6px', transition: 'background 0.15s',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--cms-surface-hover)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          className="cms-logout-btn"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ opacity: 0.7 }}>
             <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
           </svg>
+          {!collapsed && <span style={{ marginLeft: 7 }}>Выход</span>}
         </button>
       </div>
       </aside>
