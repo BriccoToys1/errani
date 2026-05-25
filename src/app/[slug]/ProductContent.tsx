@@ -2,7 +2,8 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import ReviewsStack from '@/components/ReviewsStack';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
 import { addToCart, getCart } from '@/lib/cart';
@@ -36,16 +37,6 @@ interface Product {
   customBadges?: string;
 }
 
-interface PublicReview {
-  id: string;
-  customerName: string;
-  rating: number;
-  text: string;
-  media: string[];
-  approvedAt?: string;
-  createdAt?: string;
-}
-
 export function ProductContent({ product }: { product: Product }) {
   const { lang } = useLanguage();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -60,11 +51,6 @@ export function ProductContent({ product }: { product: Product }) {
   const [waitlistLoading, setWaitlistLoading] = useState(false);
   const [waitlistSuccess, setWaitlistSuccess] = useState('');
   const [waitlistError, setWaitlistError] = useState('');
-  const [reviews, setReviews] = useState<PublicReview[]>([]);
-  const [reviewsLoading, setReviewsLoading] = useState(true);
-  const [reviewIdx, setReviewIdx] = useState(0);
-  const [reviewTrans, setReviewTrans] = useState<{ fromIdx: number; toIdx: number; dir: 1 | -1 } | null>(null);
-  const reviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check if product is already in cart on mount / when selectedColor changes
   useEffect(() => {
@@ -179,50 +165,6 @@ export function ProductContent({ product }: { product: Product }) {
   const carouselPrev = () => setCarouselIndex((carouselIndex - 1 + allImages.length) % allImages.length);
   const carouselNext = () => setCarouselIndex((carouselIndex + 1) % allImages.length);
 
-  useEffect(() => {
-    let canceled = false;
-    const loadReviews = async () => {
-      setReviewsLoading(true);
-      try {
-        const res = await fetch(`/api/reviews/public?slug=${encodeURIComponent(product.slug)}`);
-        const data = await res.json();
-        if (!res.ok || !data.success) return;
-        if (!canceled) setReviews(Array.isArray(data.reviews) ? data.reviews : []);
-      } catch {
-        // ignore
-      } finally {
-        if (!canceled) setReviewsLoading(false);
-      }
-    };
-    loadReviews();
-    return () => { canceled = true; };
-  }, [product.slug]);
-
-  const goReview = useCallback((dir: 1 | -1) => {
-    if (reviewTrans || reviews.length < 2) return;
-    const to = (reviewIdx + dir + reviews.length) % reviews.length;
-    setReviewTrans({ fromIdx: reviewIdx, toIdx: to, dir });
-    setTimeout(() => {
-      setReviewIdx(to);
-      setReviewTrans(null);
-    }, 380);
-  }, [reviewTrans, reviewIdx, reviews.length]);
-
-  const goReviewTo = useCallback((idx: number) => {
-    if (reviewTrans || idx === reviewIdx || reviews.length < 2) return;
-    const dir: 1 | -1 = idx > reviewIdx ? 1 : -1;
-    setReviewTrans({ fromIdx: reviewIdx, toIdx: idx, dir });
-    setTimeout(() => {
-      setReviewIdx(idx);
-      setReviewTrans(null);
-    }, 380);
-  }, [reviewTrans, reviewIdx, reviews.length]);
-
-  useEffect(() => {
-    if (reviews.length < 2) return;
-    reviewTimerRef.current = setTimeout(() => goReview(1), 5000);
-    return () => { if (reviewTimerRef.current) clearTimeout(reviewTimerRef.current); };
-  }, [reviewIdx, reviews.length, goReview]);
 
   return (
     <main>
@@ -663,50 +605,12 @@ export function ProductContent({ product }: { product: Product }) {
         </section>
       )}
 
-      {/* Reviews carousel */}
-      <section className="description-section" style={{ paddingTop: '3rem' }}>
-        <h2 className="description-heading">{lang === 'ru' ? 'Отзывы' : 'Reviews'}</h2>
-        {reviewsLoading ? (
-          <p style={{ color: 'var(--text-secondary)' }}>{lang === 'ru' ? 'Загрузка отзывов...' : 'Loading reviews...'}</p>
-        ) : reviews.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)' }}>{lang === 'ru' ? 'Пока нет опубликованных отзывов.' : 'No published reviews yet.'}</p>
-        ) : (
-          <div className="rc-wrap" style={{ maxWidth: '100%' }}>
-            <div className="rc-track">
-              {reviewTrans && (
-                <div
-                  key={`rv-leave-${reviewTrans.fromIdx}`}
-                  className={`rc-card ${reviewTrans.dir === 1 ? 'rc-card--leave-left' : 'rc-card--leave-right'}`}
-                >
-                  <ReviewCardInner review={reviews[reviewTrans.fromIdx]} lang={lang} />
-                </div>
-              )}
-              <div
-                key={`rv-enter-${reviewTrans ? reviewTrans.toIdx : reviewIdx}`}
-                className={`rc-card${reviewTrans ? ` ${reviewTrans.dir === 1 ? 'rc-card--enter-right' : 'rc-card--enter-left'}` : ''}`}
-              >
-                <ReviewCardInner review={reviews[reviewTrans ? reviewTrans.toIdx : reviewIdx]} lang={lang} />
-              </div>
-            </div>
-            {reviews.length > 1 && (
-              <div className="rc-controls">
-                <button className="rc-arrow" onClick={() => goReview(-1)} aria-label={lang === 'ru' ? 'Предыдущий' : 'Previous'}>‹</button>
-                <div className="rc-dots">
-                  {reviews.map((_, i) => (
-                    <button
-                      key={i}
-                      className={`rc-dot${i === (reviewTrans ? reviewTrans.toIdx : reviewIdx) ? ' rc-dot--active' : ''}`}
-                      onClick={() => goReviewTo(i)}
-                      aria-label={`${lang === 'ru' ? 'Отзыв' : 'Review'} ${i + 1}`}
-                    />
-                  ))}
-                </div>
-                <button className="rc-arrow" onClick={() => goReview(1)} aria-label={lang === 'ru' ? 'Следующий' : 'Next'}>›</button>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      {/* Reviews stack */}
+      <ReviewsStack
+        slug={product.slug}
+        lang={lang}
+        heading={lang === 'ru' ? 'Отзывы' : 'Reviews'}
+      />
 
       {/* Gallery */}
       {allImages.length > 1 && (
@@ -773,27 +677,3 @@ export function ProductContent({ product }: { product: Product }) {
   );
 }
 
-function ReviewCardInner({ review, lang }: { review: PublicReview; lang: string }) {
-  const firstName = (review.customerName || '').split(' ')[0] || (lang === 'ru' ? 'Клиент' : 'Customer');
-  return (
-    <>
-      <div className="rc-card-header">
-        <span className="rc-card-name">{firstName}</span>
-        <span className="rc-card-rating">{review.rating.toFixed(1)} <span className="rc-star">★</span></span>
-      </div>
-      {review.text && <p className="rc-card-text">{review.text}</p>}
-      {Array.isArray(review.media) && review.media.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '8px', marginTop: '10px' }}>
-          {review.media.map((url) => {
-            const isVideo = /\.(mp4|webm|mov)$/i.test(url);
-            return isVideo ? (
-              <video key={url} src={url} controls style={{ width: '100%', borderRadius: '8px' }} />
-            ) : (
-              <img key={url} src={url} alt="" style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '8px' }} />
-            );
-          })}
-        </div>
-      )}
-    </>
-  );
-}
