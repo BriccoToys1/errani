@@ -6,7 +6,7 @@ import { HeaderScroll } from './HeaderScroll';
 
 export function Header() {
   const pathname = usePathname();
-  if (pathname?.startsWith('/admin')) return null;
+  if (pathname?.startsWith('/admin') || pathname?.startsWith('/review')) return null;
 
   return (
     <header className="site-header" id="site-header">

@@ -86,6 +86,15 @@ export default function ReviewForm({ token }: { token: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-grow textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  }, [text]);
 
   const T = {
     title: lang === 'ru' ? 'Отзыв о' : 'Review for',
@@ -126,6 +135,13 @@ export default function ReviewForm({ token }: { token: string }) {
     return () => { canceled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
 
   const canSubmit = useMemo(() => {
     if (!state?.valid) return false;
@@ -199,7 +215,7 @@ export default function ReviewForm({ token }: { token: string }) {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'flex-start',
-      padding: '96px 16px 48px',
+      padding: '48px 16px 48px',
       background: 'radial-gradient(ellipse at 50% 0%, rgba(232,114,42,0.06) 0%, #0a0a0f 60%)',
     }}>
       <div style={{
@@ -224,7 +240,7 @@ export default function ReviewForm({ token }: { token: string }) {
         <div style={{ padding: '28px 32px 32px' }}>
           {loading && (
             <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.45)' }}>
-              <div style={{ width: 32, height: 32, border: '2px solid rgba(155,135,245,0.3)', borderTopColor: '#9b87f5', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 0.8s linear infinite' }} />
+              <div style={{ width: 32, height: 32, border: '2px solid rgba(232,114,42,0.28)', borderTopColor: '#E8722A', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 0.8s linear infinite' }} />
               {T.checking}
             </div>
           )}
@@ -274,6 +290,7 @@ export default function ReviewForm({ token }: { token: string }) {
                   {T.reviewText}
                 </label>
                 <textarea
+                  ref={textareaRef}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   rows={5}
@@ -284,11 +301,12 @@ export default function ReviewForm({ token }: { token: string }) {
                     background: 'rgba(255,255,255,0.04)',
                     border: '1px solid rgba(255,255,255,0.1)',
                     color: '#fff', fontSize: 15, lineHeight: 1.7,
-                    resize: 'vertical', outline: 'none',
+                    resize: 'none', outline: 'none',
+                    overflow: 'hidden',
                     fontFamily: 'inherit',
                     transition: 'border-color 0.2s',
                   }}
-                  onFocus={(e) => { e.target.style.borderColor = 'rgba(155,135,245,0.5)'; }}
+                  onFocus={(e) => { e.target.style.borderColor = 'rgba(232,114,42,0.65)'; }}
                   onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; }}
                 />
               </div>
@@ -338,13 +356,7 @@ export default function ReviewForm({ token }: { token: string }) {
                     opacity: media.length >= 8 ? 0.4 : 1,
                   }}
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="url(#clip-grad)" strokeWidth="2">
-                    <defs>
-                      <linearGradient id="clip-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#9b87f5" />
-                        <stop offset="100%" stopColor="#f5a087" />
-                      </linearGradient>
-                    </defs>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E8722A" strokeWidth="2">
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                   </svg>
                   {uploading ? T.uploading : T.attachFiles}
