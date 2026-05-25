@@ -17,7 +17,7 @@ type StageZone = 'neutral' | 'green' | 'red';
 type KanbanStage = { key: string; name: string; zone?: StageZone };
 
 const DEFAULT_KANBAN_STAGES = [
-  { key: 'pending', name: 'Ожидает оплаты', zone: 'neutral' },
+  { key: 'pending', name: 'В ожидании', zone: 'neutral' },
   { key: 'paid', name: 'Оплачен', zone: 'neutral' },
   { key: 'assembling', name: 'Сборка', zone: 'neutral' },
   { key: 'shipped', name: 'Отправлен', zone: 'neutral' },
@@ -63,7 +63,7 @@ interface Product {
 }
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  pending:    { label: "Ожидает оплаты", cls: "cms-badge-yellow" },
+  pending:    { label: "В ожидании",  cls: "cms-badge-yellow" },
   unpaid:     { label: "Не оплачен",  cls: "cms-badge-red" },
   paid:       { label: "Оплачен",     cls: "cms-badge-green" },
   assembling: { label: "Сборка",      cls: "cms-badge-yellow" },
@@ -802,8 +802,31 @@ export default function AdminOrdersPage() {
                       </div>
                     </td>
                     <td className="cms-td-bold">
-                      {order.customerName}
-                      {order.customerEmail && <div style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{order.customerEmail}</div>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                        <span>{order.customerName}</span>
+                        <div style={{ display: 'flex', gap: 2 }}>
+                          {order.customerPhone && (
+                            <button
+                              className="cms-btn cms-btn-xs cms-btn-ghost"
+                              title={order.customerPhone}
+                              onClick={() => setShowContact({ orderId: order.id, type: 'phone', value: order.customerPhone })}
+                              style={{ padding: '2px 4px' }}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.07 2.18 2 2 0 012.07 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+                            </button>
+                          )}
+                          {order.customerEmail && (
+                            <button
+                              className="cms-btn cms-btn-xs cms-btn-ghost"
+                              title={order.customerEmail}
+                              onClick={() => setShowContact({ orderId: order.id, type: 'email', value: order.customerEmail })}
+                              style={{ padding: '2px 4px' }}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td>
                       {order.items.length > 0 ? order.items.map((item) => (
@@ -816,7 +839,7 @@ export default function AdminOrdersPage() {
                         className="cms-select"
                         value={order.status}
                         onChange={(e) => updateOrderStatus(order, e.target.value)}
-                        style={{ minWidth: "132px", borderLeft: `3px solid ${STATUS_BORDER[order.status] || 'transparent'}` }}
+                        style={{ borderLeft: `3px solid ${STATUS_BORDER[order.status] || 'transparent'}`, appearance: 'none', WebkitAppearance: 'none', paddingRight: '6px', fontSize: '11px' }}
                       >
                         {ALL_STATUSES.map((s) => (
                           <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>
@@ -1113,6 +1136,33 @@ export default function AdminOrdersPage() {
       )}
 
       {notification && <div className="cms-toast">{notification}</div>}
+
+      {showContact && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 100 }}
+          onClick={() => setShowContact(null)}
+        >
+          <div
+            style={{ position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)', background: 'var(--cms-surface, #1a1d27)', border: '1px solid var(--cms-border)', borderRadius: 10, padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 101, minWidth: 240, display: 'flex', alignItems: 'center', gap: 10 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--cms-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                {showContact.type === 'phone' ? 'Телефон' : 'Email'}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--cms-text)', wordBreak: 'break-all' }}>{showContact.value}</div>
+            </div>
+            <button
+              className="cms-btn cms-btn-xs"
+              onClick={() => { navigator.clipboard.writeText(showContact.value).then(() => notify('Скопировано')).catch(() => {}); setShowContact(null); }}
+              title="Скопировать"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+            <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setShowContact(null)}>✕</button>
+          </div>
+        </div>
+      )}
 
       {/* Stage Manager Modal */}
       {showStageManager && (

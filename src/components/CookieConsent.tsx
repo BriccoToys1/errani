@@ -10,21 +10,22 @@ const CONSENT_KEY = 'errani_consent';
 function hasConsent(): boolean {
   try {
     if (localStorage.getItem(CONSENT_KEY) === '1') return true;
+  } catch { /* ignore */ }
+  try {
     return document.cookie.split(';').some(c => c.trim().startsWith(`${CONSENT_KEY}=1`));
-  } catch {
-    return false;
-  }
+  } catch { /* ignore */ }
+  return false;
 }
 
 function saveConsent() {
   try {
     localStorage.setItem(CONSENT_KEY, '1');
+  } catch { /* ignore */ }
+  try {
     const exp = new Date();
     exp.setFullYear(exp.getFullYear() + 1);
     document.cookie = `${CONSENT_KEY}=1; expires=${exp.toUTCString()}; path=/; SameSite=Lax`;
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
 }
 
 export function CookieConsent() {
