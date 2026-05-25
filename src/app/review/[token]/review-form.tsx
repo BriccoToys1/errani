@@ -216,30 +216,30 @@ export default function ReviewForm({ token }: { token: string }) {
       alignItems: 'center',
       justifyContent: 'flex-start',
       padding: '48px 16px 48px',
-      background: 'radial-gradient(ellipse at 50% 0%, rgba(232,114,42,0.06) 0%, #0a0a0f 60%)',
+      background: 'radial-gradient(ellipse at 50% 0%, rgba(232,114,42,0.06) 0%, var(--bg) 60%)',
     }}>
       <div style={{
         width: '100%',
         maxWidth: '560px',
-        background: 'rgba(255,255,255,0.03)',
+        background: 'var(--surface-1)',
         borderRadius: '24px',
-        border: '1px solid rgba(255,255,255,0.09)',
+        border: '1px solid var(--border-2)',
         boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
         overflow: 'hidden',
       }}>
         {/* Header */}
-        <div style={{ padding: '32px 32px 24px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', color: '#fff' }}>
+        <div style={{ padding: '32px 32px 24px', borderBottom: '1px solid var(--border)' }}>
+          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>
             {T.title} <span style={{ color: '#E8722A' }}>{title}</span>
           </h1>
-          <p style={{ margin: '8px 0 0', color: 'rgba(255,255,255,0.45)', fontSize: '13px', lineHeight: 1.6 }}>
+          <p style={{ margin: '8px 0 0', color: 'var(--text-dim-2)', fontSize: '13px', lineHeight: 1.6 }}>
             {T.subtitle}
           </p>
         </div>
 
         <div style={{ padding: '28px 32px 32px' }}>
           {loading && (
-            <div style={{ textAlign: 'center', padding: '24px 0', color: 'rgba(255,255,255,0.45)' }}>
+            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-dim-2)' }}>
               <div style={{ width: 32, height: 32, border: '2px solid rgba(232,114,42,0.28)', borderTopColor: '#E8722A', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 0.8s linear infinite' }} />
               {T.checking}
             </div>
@@ -252,7 +252,7 @@ export default function ReviewForm({ token }: { token: string }) {
           )}
 
           {!loading && state && !state.valid && !success && (
-            <div style={{ padding: '20px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
+            <div style={{ padding: '20px', borderRadius: 14, border: '1px solid var(--border-2)', background: 'var(--surface-1)', color: 'var(--text-dim)', textAlign: 'center' }}>
               {state.alreadyUsed ? T.alreadyUsed : state.expired ? T.expired : T.invalid}
             </div>
           )}
@@ -268,17 +268,17 @@ export default function ReviewForm({ token }: { token: string }) {
             <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               {/* Name — read-only */}
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-dim-2)', marginBottom: 8 }}>
                   {T.yourName}
                 </label>
-                <div style={{ padding: '12px 16px', borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.7)', fontSize: 15 }}>
+                <div style={{ padding: '12px 16px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text-dim)', fontSize: 15 }}>
                   {customerName || '—'}
                 </div>
               </div>
 
               {/* Star rating */}
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 10 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-dim-2)', marginBottom: 10 }}>
                   {T.rating}
                 </label>
                 <StarRating value={rating} onChange={setRating} />
@@ -286,7 +286,7 @@ export default function ReviewForm({ token }: { token: string }) {
 
               {/* Review text */}
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 8 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-dim-2)', marginBottom: 8 }}>
                   {T.reviewText}
                 </label>
                 <textarea
@@ -298,22 +298,22 @@ export default function ReviewForm({ token }: { token: string }) {
                   style={{
                     width: '100%', boxSizing: 'border-box',
                     padding: '14px 16px', borderRadius: 12,
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: '#fff', fontSize: 15, lineHeight: 1.7,
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--border-2)',
+                    color: 'var(--text)', fontSize: 15, lineHeight: 1.7,
                     resize: 'none', outline: 'none',
                     overflow: 'hidden',
                     fontFamily: 'inherit',
                     transition: 'border-color 0.2s',
                   }}
                   onFocus={(e) => { e.target.style.borderColor = 'rgba(232,114,42,0.65)'; }}
-                  onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; }}
+                  onBlur={(e) => { e.target.style.borderColor = 'var(--border-2)'; }}
                 />
               </div>
 
               {/* Media */}
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 10 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-dim-2)', marginBottom: 10 }}>
                   {T.mediaLabel}
                 </label>
 
@@ -322,11 +322,11 @@ export default function ReviewForm({ token }: { token: string }) {
                     {media.map((url) => {
                       const isVideo = /\.(mp4|webm|mov)$/i.test(url);
                       return (
-                        <div key={url} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
+                        <div key={url} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', background: 'var(--surface-3)', border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
                           {isVideo ? (
                             <>
                               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#E8722A" strokeWidth="1.5"><rect x="2" y="2" width="20" height="20" rx="3"/><path d="M10 8l6 4-6 4V8z" fill="#E8722A" stroke="none"/></svg>
-                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '0 4px', lineHeight: 1.3 }}>{url.split('/').pop()?.slice(0, 16)}</span>
+                              <span style={{ fontSize: 9, color: 'var(--text-dim-2)', textAlign: 'center', padding: '0 4px', lineHeight: 1.3 }}>{url.split('/').pop()?.slice(0, 16)}</span>
                             </>
                           ) : (
                             <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }} />
@@ -361,11 +361,11 @@ export default function ReviewForm({ token }: { token: string }) {
                   </svg>
                   {uploading ? T.uploading : T.attachFiles}
                   {media.length > 0 && !uploading && (
-                    <span style={{ marginLeft: 'auto', fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>{media.length}/8</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-dim-3)' }}>{media.length}/8</span>
                   )}
                 </button>
 
-                <p style={{ margin: '8px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.3)', lineHeight: 1.6 }}>
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-dim-3)', lineHeight: 1.6 }}>
                   {T.mediaHint}
                 </p>
 
@@ -389,8 +389,8 @@ export default function ReviewForm({ token }: { token: string }) {
                   border: 'none',
                   background: canSubmit
                     ? 'linear-gradient(135deg, #E8722A 0%, #C45A1A 100%)'
-                    : 'rgba(255,255,255,0.07)',
-                  color: canSubmit ? '#fff' : 'rgba(255,255,255,0.3)',
+                    : 'var(--surface-2)',
+                  color: canSubmit ? '#fff' : 'var(--text-dim-3)',
                   fontSize: 15, fontWeight: 700,
                   cursor: canSubmit ? 'pointer' : 'not-allowed',
                   transition: 'all 0.2s',
@@ -407,7 +407,7 @@ export default function ReviewForm({ token }: { token: string }) {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        textarea::placeholder { color: rgba(255,255,255,0.2); }
+        textarea::placeholder { color: var(--text-dim-4); }
       `}</style>
     </main>
   );

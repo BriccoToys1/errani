@@ -31,7 +31,7 @@ export function BottomNav() {
       .catch(() => {});
   }, []);
 
-  if (pathname.startsWith('/admin')) return null;
+  if (pathname.startsWith('/admin') || pathname.startsWith('/review')) return null;
 
   const navItems = [
     {

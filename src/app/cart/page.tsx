@@ -553,7 +553,7 @@ export default function CartPage() {
                   <span>ЮKassa</span>
                 </div>
                 {cartNotices.length > 0 && (
-                  <div style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border)' }}>
                     {cartNotices.map((n, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', color: '#ffb400', fontSize: '0.78rem', fontWeight: 600, lineHeight: 1.5 }}>
                         <span style={{ flexShrink: 0 }}>⚠️</span><span>{n}</span>

@@ -304,15 +304,15 @@ export function ProductContent({ product }: { product: Product }) {
                         position: 'relative',
                         width: '32px', height: '32px', borderRadius: '50%',
                         background: c.hex,
-                        border: isSelected ? '3px solid #fff' : '3px solid transparent',
-                        outline: isSelected ? '2px solid rgba(255,255,255,0.5)' : '2px solid transparent',
+                        border: isSelected ? '3px solid var(--text)' : '3px solid transparent',
+                        outline: isSelected ? '2px solid var(--text-dim)' : '2px solid transparent',
                         cursor: 'pointer', transition: 'all 0.15s',
                         opacity: outOfStock ? 0.4 : 1,
                       }}
                     >
                       {outOfStock && (
                         <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2.5">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <line x1="4" y1="4" x2="20" y2="20" /><line x1="20" y1="4" x2="4" y2="20" />
                           </svg>
                         </span>
@@ -333,12 +333,12 @@ export function ProductContent({ product }: { product: Product }) {
           <div className="product-actions anim-fade-up anim-fade-up-d4">
             {/* Color must be selected when colors have per-color stock */}
             {hasPerColorStock && !selectedColor ? (
-              <div style={{ padding: '14px 20px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'center' }}>
+              <div style={{ padding: '14px 20px', background: 'var(--surface-2)', border: '1px solid var(--border-2)', borderRadius: '10px', fontSize: '14px', color: 'var(--text-secondary)', textAlign: 'center' }}>
                 {lang === 'ru' ? 'Выберите цвет для добавления в корзину' : 'Select a color to add to cart'}
               </div>
             ) : hasPerColorStock && selectedColorOutOfStock ? (
               /* Selected color is out of stock — show notify */
-              <div style={{ padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+              <div style={{ padding: '14px 20px', background: 'var(--surface-3)', border: '1px solid var(--border-2)', borderRadius: '10px', fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
                 <strong style={{ color: 'var(--text-primary)', display: 'block', marginBottom: '4px' }}>
                   {lang === 'ru' ? `Цвет "${selectedColorObj?.name || selectedColor}" нет в наличии.` : `Color "${selectedColorObj?.nameEn || selectedColorObj?.name || selectedColor}" is out of stock.`}
                 </strong>
@@ -346,7 +346,7 @@ export function ProductContent({ product }: { product: Product }) {
                 <button
                   type="button"
                   className="product-btn"
-                  style={{ marginTop: '14px', width: '100%', borderColor: 'rgba(255,255,255,0.18)' }}
+                  style={{ marginTop: '14px', width: '100%', borderColor: 'var(--border-3)' }}
                   onClick={() => { setShowWaitlistModal(true); setWaitlistError(''); setWaitlistSuccess(''); }}
                 >
                   {lang === 'ru' ? 'Уведомить о поступлении' : 'Notify me when restocked'}
@@ -379,7 +379,7 @@ export function ProductContent({ product }: { product: Product }) {
                   <button
                     type="button"
                     className="product-btn"
-                    style={{ marginTop: '14px', width: '100%', borderColor: 'rgba(255,255,255,0.18)' }}
+                    style={{ marginTop: '14px', width: '100%', borderColor: 'var(--border-3)' }}
                     onClick={() => {
                       setShowWaitlistModal(true);
                       setWaitlistError('');
@@ -427,50 +427,50 @@ export function ProductContent({ product }: { product: Product }) {
       {showWaitlistModal && (
         <div
           className="product-modal-overlay"
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+          style={{ position: 'fixed', inset: 0, background: 'var(--scrim)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
           onClick={() => setShowWaitlistModal(false)}
         >
           <div
-            style={{ width: '100%', maxWidth: '520px', background: '#111', borderRadius: '18px', padding: '28px', boxShadow: '0 30px 90px rgba(0,0,0,0.45)', position: 'relative' }}
+            style={{ width: '100%', maxWidth: '520px', background: 'var(--card-dark)', borderRadius: '18px', padding: '28px', boxShadow: '0 30px 90px rgba(0,0,0,0.45)', position: 'relative' }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              style={{ position: 'absolute', top: '16px', right: '16px', border: 'none', background: 'transparent', color: '#fff', fontSize: '24px', cursor: 'pointer' }}
+              style={{ position: 'absolute', top: '16px', right: '16px', border: 'none', background: 'transparent', color: 'var(--text)', fontSize: '24px', cursor: 'pointer' }}
               onClick={() => setShowWaitlistModal(false)}
               aria-label="Close"
             >
               ×
             </button>
-            <h2 style={{ margin: 0, marginBottom: '12px', fontSize: '22px', color: '#fff' }}>
+            <h2 style={{ margin: 0, marginBottom: '12px', fontSize: '22px', color: 'var(--text)' }}>
               {lang === 'ru' ? 'Уведомить о поступлении' : 'Notify when back in stock'}
             </h2>
-            <p style={{ margin: '0 0 18px', color: '#bbb', lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 18px', color: 'var(--text-dim-2)', lineHeight: 1.6 }}>
               {lang === 'ru'
                 ? 'Оставьте имя и email, и мы сообщим вам, когда товар снова появится в продаже.'
                 : 'Leave your name and email, and we will notify you when this item is back in stock.'}
             </p>
             <div style={{ display: 'grid', gap: '14px' }}>
               <label style={{ display: 'block' }}>
-                <span style={{ display: 'block', color: '#ddd', marginBottom: '6px' }}>{lang === 'ru' ? 'Имя' : 'Name'}</span>
+                <span style={{ display: 'block', color: 'var(--text-dim)', marginBottom: '6px' }}>{lang === 'ru' ? 'Имя' : 'Name'}</span>
                 <input
                   type="text"
                   value={waitlistName}
                   onChange={(e) => setWaitlistName(e.target.value)}
                   placeholder={lang === 'ru' ? 'Ваше имя' : 'Your name'}
-                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', background: '#121212', color: '#fff' }}
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid var(--border-2)', background: 'var(--input-bg)', color: 'var(--text)' }}
                 />
               </label>
               <label style={{ display: 'block' }}>
-                <span style={{ display: 'block', color: '#ddd', marginBottom: '6px' }}>{lang === 'ru' ? 'Email' : 'Email'}</span>
+                <span style={{ display: 'block', color: 'var(--text-dim)', marginBottom: '6px' }}>{lang === 'ru' ? 'Email' : 'Email'}</span>
                 <input
                   type="email"
                   value={waitlistEmail}
                   onChange={(e) => setWaitlistEmail(e.target.value)}
                   placeholder="name@example.com"
-                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.12)', background: '#121212', color: '#fff' }}
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: '12px', border: '1px solid var(--border-2)', background: 'var(--input-bg)', color: 'var(--text)' }}
                 />
               </label>
-              <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', color: '#ddd', fontSize: '13px', lineHeight: 1.5 }}>
+              <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', color: 'var(--text-dim)', fontSize: '13px', lineHeight: 1.5 }}>
                 <input
                   type="checkbox"
                   checked={waitlistConsent}
@@ -481,7 +481,7 @@ export function ProductContent({ product }: { product: Product }) {
                   {lang === 'ru'
                     ? 'Я даю согласие на обработку персональных данных.'
                     : 'I consent to the processing of personal data.'}{' '}
-                  <Link href="/privacy" target="_blank" rel="noreferrer" style={{ color: '#fff', textDecoration: 'underline' }}>
+                  <Link href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--text)', textDecoration: 'underline' }}>
                     {lang === 'ru' ? 'Политика конфиденциальности' : 'Privacy policy'}
                   </Link>
                 </span>
@@ -550,7 +550,7 @@ export function ProductContent({ product }: { product: Product }) {
                 <button
                   type="button"
                   className="product-btn"
-                  style={{ width: '100%', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+                  style={{ width: '100%', background: 'transparent', border: '1px solid var(--border-2)', color: 'var(--text)' }}
                   onClick={() => setShowWaitlistModal(false)}
                 >
                   {lang === 'ru' ? 'Отмена' : 'Cancel'}
@@ -596,7 +596,7 @@ export function ProductContent({ product }: { product: Product }) {
           </h2>
           <div style={{ display: 'grid', gap: '0' }}>
             {characteristics.map((c, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: '1px solid rgba(255,255,255,0.06)', fontSize: '0.9rem' }}>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.9rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>{lang === 'en' && c.keyEn ? c.keyEn : c.key}</span>
                 <span style={{ color: 'var(--text-primary)', fontWeight: 500, textAlign: 'right' }}>{lang === 'en' && c.valueEn ? c.valueEn : c.value}</span>
               </div>

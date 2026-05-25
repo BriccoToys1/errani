@@ -61,8 +61,8 @@ function ReviewCard({ review, lang }: { review: Review; lang: string }) {
   return (
     <div
       style={{
-        background: '#161616',
-        border: '1px solid rgba(255,255,255,0.09)',
+        background: 'var(--bg-elevated)',
+        border: '1px solid var(--border-2)',
         borderRadius: '20px',
         padding: '28px 26px',
         boxShadow: '0 16px 48px rgba(0,0,0,0.65)',
@@ -90,7 +90,7 @@ function ReviewCard({ review, lang }: { review: Review; lang: string }) {
         style={{
           margin: 0,
           lineHeight: 1.75,
-          color: 'rgba(255,255,255,0.66)',
+          color: 'var(--text-dim)',
           fontSize: '0.92rem',
           whiteSpace: 'pre-wrap',
         }}

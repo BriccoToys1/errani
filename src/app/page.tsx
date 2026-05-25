@@ -94,7 +94,7 @@ export default function HomePage() {
               {lang === 'ru' ? '78 карт · Лимитированный тираж' : '78 cards · Limited edition'}
             </p>
 
-            <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--text-secondary)', borderColor: 'rgba(255,255,255,0.12)' }}>
+            <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'var(--surface-1)', color: 'var(--text-secondary)', borderColor: 'var(--border-2)' }}>
               {lang === 'ru' ? 'Предзаказ закрыт. Скоро в продаже...' : 'Pre-order closed. Coming soon...'}
             </div>
 

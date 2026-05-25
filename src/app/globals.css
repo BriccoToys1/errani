@@ -36,11 +36,50 @@
   --bg-surface: #0e0e0e;
   --bg-elevated: #161616;
   --text: #f5f5f5;
+  --text-primary: #f5f5f5;
   --text-secondary: #8a8a8a;
   --text-muted: #4a4a4a;
   --border: rgba(255, 255, 255, 0.07);
   --font-display: 'Montserrat', sans-serif;
   --font-body: 'Montserrat', sans-serif;
+  /* Semantic tokens — used in inline styles via var() */
+  --text-dim:    rgba(255,255,255,0.66);
+  --text-dim-2:  rgba(255,255,255,0.45);
+  --text-dim-3:  rgba(255,255,255,0.3);
+  --text-dim-4:  rgba(255,255,255,0.2);
+  --border-2:    rgba(255,255,255,0.1);
+  --border-3:    rgba(255,255,255,0.18);
+  --surface-1:   rgba(255,255,255,0.03);
+  --surface-2:   rgba(255,255,255,0.04);
+  --surface-3:   rgba(255,255,255,0.05);
+  --scrim:       rgba(0,0,0,0.65);
+  --input-bg:    #121212;
+  --card-dark:   #111;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f5f0ea;
+    --bg-surface: #ede8e0;
+    --bg-elevated: #e3ddd5;
+    --text: #111111;
+    --text-primary: #111111;
+    --text-secondary: #555555;
+    --text-muted: #888888;
+    --border: rgba(0,0,0,0.08);
+    --text-dim:   rgba(0,0,0,0.66);
+    --text-dim-2: rgba(0,0,0,0.45);
+    --text-dim-3: rgba(0,0,0,0.3);
+    --text-dim-4: rgba(0,0,0,0.18);
+    --border-2:   rgba(0,0,0,0.12);
+    --border-3:   rgba(0,0,0,0.2);
+    --surface-1:  rgba(0,0,0,0.02);
+    --surface-2:  rgba(0,0,0,0.04);
+    --surface-3:  rgba(0,0,0,0.05);
+    --scrim:      rgba(0,0,0,0.5);
+    --input-bg:   #ebe5dc;
+    --card-dark:  #ddd8ce;
+  }
 }
 
 /* --- Base --- */
@@ -2716,4 +2755,53 @@ select.form-field {
 
 @media (max-width: 480px) {
   .rc-card { border-radius: 14px; }
+}
+
+/* ============================================================
+   LIGHT MODE OVERRIDES
+   (CSS classes with hardcoded colors that can't use variables)
+   ============================================================ */
+@media (prefers-color-scheme: light) {
+  ::-webkit-scrollbar-thumb { background: #b8b0a6; }
+
+  /* Header */
+  .site-header.scrolled {
+    background: rgba(245, 240, 234, 0.9);
+  }
+
+  /* Lang dropdown */
+  .lang-dropdown {
+    background: rgba(240, 235, 228, 0.98);
+    border-color: rgba(0,0,0,0.1);
+  }
+  .lang-option { color: rgba(0,0,0,0.55); }
+  .lang-option:hover { background: rgba(0,0,0,0.06); color: #111; }
+
+  /* Bottom nav — keep dark pill for contrast on light pages */
+  .bottom-nav-pill {
+    background: rgba(20, 20, 20, 0.92);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+  }
+  .bottom-nav-item { color: rgba(255,255,255,0.65); }
+  .bottom-nav-item.active { color: #fff; }
+  .bottom-nav-item:not(.active):hover { color: rgba(255,255,255,0.9); }
+  .bottom-nav-item.active .bottom-nav-icon {
+    border-color: var(--orange);
+    background: rgba(232,114,42,0.2);
+    color: #fff;
+  }
+
+  /* Catalog */
+  .catalog-card:hover {
+    box-shadow: 0 16px 40px rgba(0,0,0,0.12);
+    border-color: rgba(0,0,0,0.2);
+  }
+  .catalog-card-badges .badge-author { background: #222; color: #fff; border-color: #222; }
+
+  /* Reviews carousel dots & arrows */
+  .rc-dot { background: rgba(0,0,0,0.2); }
+  .rc-arrow { color: var(--text-secondary); border-color: var(--border-2); }
+
+  /* Selection highlight */
+  ::selection { background: rgba(232,114,42,0.25); color: #111; }
 }
