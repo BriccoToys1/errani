@@ -598,6 +598,11 @@ img {
   color: var(--text-muted);
 }
 
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-dim-3);
+}
+
 select.form-field {
   padding-right: 2.75rem;
   -webkit-appearance: none;

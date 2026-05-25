@@ -16,14 +16,21 @@ export function Button({
   children,
   className = '',
   disabled,
+  style,
   ...props
 }: ButtonProps) {
   const base = 'inline-flex items-center justify-center font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variants = {
     primary: 'bg-[#E8722A] text-white hover:bg-[#C45A1A]',
-    secondary: 'bg-[#161616] text-white border border-[rgba(255,255,255,0.07)] hover:border-[rgba(255,255,255,0.15)]',
-    outline: 'border border-[rgba(255,255,255,0.07)] text-[#f5f5f5] bg-transparent hover:bg-[#E8722A] hover:border-[#E8722A] hover:text-white',
+    secondary: 'border hover:opacity-80',
+    outline: 'border bg-transparent hover:bg-[#E8722A] hover:border-[#E8722A] hover:text-white',
+  };
+
+  const variantStyles: Record<string, React.CSSProperties> = {
+    primary: {},
+    secondary: { background: 'var(--card-dark)', color: 'var(--text)', borderColor: 'var(--border)' },
+    outline: { color: 'var(--text)', borderColor: 'var(--border)' },
   };
 
   const sizes = {
@@ -35,6 +42,7 @@ export function Button({
   return (
     <button
       className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+      style={{ ...variantStyles[variant], ...style }}
       disabled={disabled || loading}
       {...props}
     >

@@ -364,8 +364,8 @@ export function ProductContent({ product }: { product: Product }) {
             ) : !product.inStock ? (
               <div style={{
                 padding: '14px 20px',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.12)',
+                background: 'var(--surface-3)',
+                border: '1px solid var(--border-2)',
                 borderRadius: '10px',
                 fontSize: '14px',
                 lineHeight: 1.6,
@@ -399,8 +399,8 @@ export function ProductContent({ product }: { product: Product }) {
             ) : product.isPreorder && product.preorderClosed ? (
               <div style={{
                 padding: '14px 20px',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.12)',
+                background: 'var(--surface-3)',
+                border: '1px solid var(--border-2)',
                 borderRadius: '10px',
                 fontSize: '14px',
                 lineHeight: 1.6,

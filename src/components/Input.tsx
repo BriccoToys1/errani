@@ -18,9 +18,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <input
           ref={ref}
-          className={`w-full bg-[#111] border border-[rgba(255,255,255,0.08)] px-4 py-3 text-sm text-white placeholder:text-[#444] focus:outline-none focus:border-[#E8722A] transition-colors ${
+          className={`w-full px-4 py-3 text-sm focus:outline-none focus:border-[#E8722A] transition-colors ${
             error ? 'border-red-500/60' : ''
           } ${className}`}
+          style={{ background: 'var(--input-bg)', color: 'var(--text)', border: '1px solid var(--border-2)', borderRadius: '0.5rem' }}
           {...props}
         />
         {error && (
