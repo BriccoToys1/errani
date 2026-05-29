@@ -4,8 +4,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEffect, useState } from 'react';
-import ReviewsStack from '@/components/ReviewsStack';
-
 export default function HomePage() {
   const { lang } = useLanguage();
   const [pgvtPrice, setPgvtPrice] = useState<number | null>(null);
@@ -132,7 +130,6 @@ export default function HomePage() {
         </div>
       </main>
 
-      <ReviewsStack />
     </>
   );
 }
