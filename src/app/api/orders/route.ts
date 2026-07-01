@@ -69,6 +69,9 @@ export async function GET(req: NextRequest) {
           street: true,
           house: true,
           apartment: true,
+          entrance: true,
+          floor: true,
+          intercom: true,
           shippingMethod: true,
           cdekDeliveryPointCode: true,
           cdekDeliveryPointAddress: true,
@@ -162,7 +165,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, email, phone, country, customCountry, oblast, city, zipCode, street, house, apartment, shippingMethod, items, cdekDeliveryPoint } = body as {
+    const { name, email, phone, country, customCountry, oblast, city, zipCode, street, house, apartment, entrance, floor, intercom, shippingMethod, items, cdekDeliveryPoint } = body as {
       name: string;
       email: string;
       phone: string;
@@ -174,6 +177,9 @@ export async function POST(req: NextRequest) {
       street: string;
       house: string;
       apartment: string;
+      entrance?: string;
+      floor?: string;
+      intercom?: string;
       shippingMethod: string;
       items: OrderItemInput[];
       cdekDeliveryPoint?: CdekDeliveryPointInput | null;
@@ -189,6 +195,9 @@ export async function POST(req: NextRequest) {
       || String(email).trim().length > 254
       || String(phone).trim().length > 32
       || String(city).trim().length > 120
+      || String(entrance || '').trim().length > 40
+      || String(floor || '').trim().length > 40
+      || String(intercom || '').trim().length > 80
       || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())
     ) {
       return NextResponse.json({ error: 'Invalid order data' }, { status: 400 });
@@ -354,6 +363,9 @@ export async function POST(req: NextRequest) {
         street: street || '',
         house: house || '',
         apartment: apartment || '',
+        entrance: apartment ? String(entrance || '').trim() : '',
+        floor: apartment ? String(floor || '').trim() : '',
+        intercom: apartment ? String(intercom || '').trim() : '',
         shippingMethod: shippingMethod || '',
         cdekDeliveryPointCode: cdekDeliveryPoint?.code || '',
         cdekDeliveryPointAddress: cdekDeliveryPoint?.address || '',

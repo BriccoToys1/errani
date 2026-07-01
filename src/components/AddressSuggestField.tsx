@@ -75,8 +75,11 @@ export function AddressSuggestField({
   }, []);
 
   useEffect(() => {
-    if (kind !== 'city' || value.trim().length < 2) {
-      if (kind === 'city') setItems([]);
+    const isCitySearch = kind === 'city';
+    const isStreetSearch = kind === 'street';
+    const hasStreetContext = Boolean(city.trim() || region.trim());
+    if ((!isCitySearch && !isStreetSearch) || value.trim().length < 2 || (isStreetSearch && !hasStreetContext)) {
+      if (isCitySearch || isStreetSearch) setItems([]);
       return;
     }
     const controller = new AbortController();
@@ -84,8 +87,9 @@ export function AddressSuggestField({
       setLoading(true);
       setSearched(true);
       try {
-        const params = new URLSearchParams({ type: 'city', q: value.trim() });
+        const params = new URLSearchParams({ type: kind, q: value.trim() });
         if (region) params.set('region', region);
+        if (city) params.set('city', city);
         const response = await fetch(`/api/delivery/address-suggestions?${params}`, { signal: controller.signal });
         const data = await response.json();
         setItems(response.ok && Array.isArray(data) ? data : []);
@@ -100,26 +104,7 @@ export function AddressSuggestField({
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [kind, region, value]);
-
-  const searchStreets = async () => {
-    if (kind !== 'street' || value.trim().length < 2 || !city) return;
-    setLoading(true);
-    setSearched(true);
-    try {
-      const params = new URLSearchParams({ type: 'street', q: value.trim(), city });
-      if (region) params.set('region', region);
-      const response = await fetch(`/api/delivery/address-suggestions?${params}`);
-      const data = await response.json();
-      setItems(response.ok && Array.isArray(data) ? data : []);
-      setOpen(true);
-    } catch {
-      setItems([]);
-      setOpen(true);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [city, kind, region, value]);
 
   const visibleItems = kind === 'region' ? regionItems : items;
   const choose = (item: Suggestion) => {
@@ -131,7 +116,7 @@ export function AddressSuggestField({
   return (
     <div ref={wrapperRef} style={{ position: 'relative', minWidth: 0 }}>
       <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>{label}</label>
-      <div style={{ position: 'relative', display: 'flex', gap: '0.45rem' }}>
+      <div style={{ position: 'relative' }}>
         <input
           type="text"
           className="form-field"
@@ -144,26 +129,10 @@ export function AddressSuggestField({
           onFocus={() => {
             if (kind === 'region' || visibleItems.length > 0) setOpen(true);
           }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && kind === 'street') {
-              event.preventDefault();
-              void searchStreets();
-            }
-          }}
           autoComplete={kind === 'region' ? 'address-level1' : kind === 'city' ? 'address-level2' : 'address-line1'}
           style={error ? { borderColor: '#ef4444' } : undefined}
         />
-        {kind === 'street' && (
-          <button
-            type="button"
-            onClick={() => void searchStreets()}
-            disabled={loading || value.trim().length < 2 || !city}
-            style={{ flex: '0 0 auto', border: '1px solid var(--border)', borderRadius: 8, padding: '0 0.8rem', background: 'var(--surface-1)', color: 'var(--text)', cursor: 'pointer', opacity: loading || value.trim().length < 2 || !city ? 0.5 : 1 }}
-          >
-            {loading ? '…' : 'Найти'}
-          </button>
-        )}
-        {loading && kind === 'city' && <span style={{ position: 'absolute', right: 12, top: 14, color: '#666', fontSize: '0.72rem' }}>Ищем…</span>}
+        {loading && (kind === 'city' || kind === 'street') && <span style={{ position: 'absolute', right: 12, top: 14, color: '#666', fontSize: '0.72rem' }}>Ищем…</span>}
       </div>
       {error && <p style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.25rem' }}>{error}</p>}
       {open && (

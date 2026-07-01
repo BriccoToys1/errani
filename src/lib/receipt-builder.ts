@@ -67,6 +67,9 @@ export interface ReceiptOrder {
   street: string;
   house: string;
   apartment: string;
+  entrance: string;
+  floor: string;
+  intercom: string;
   shippingMethod: string;
   cdekDeliveryPointAddress?: string;
   paymentMethod: string;
@@ -118,6 +121,9 @@ export function buildReceiptHtml(order: ReceiptOrder, forPdf = false): string {
         order.street && `ул. ${order.street}`,
         order.house && `д. ${order.house}`,
         order.apartment && `кв. ${order.apartment}`,
+        order.entrance && `подъезд ${order.entrance}`,
+        order.floor && `этаж ${order.floor}`,
+        order.intercom && `домофон ${order.intercom}`,
       ]).filter(Boolean);
 
   const shippingLabel = SHIPPING_LABELS[order.shippingMethod] || order.shippingMethod || '—';

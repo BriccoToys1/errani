@@ -44,6 +44,9 @@ interface Order {
   street: string;
   house: string;
   apartment: string;
+  entrance: string;
+  floor: string;
+  intercom: string;
   shippingMethod: string;
   status: string;
   paymentMethod: string;
@@ -136,6 +139,9 @@ export default function AdminOrdersPage() {
     street: "",
     house: "",
     apartment: "",
+    entrance: "",
+    floor: "",
+    intercom: "",
     shippingMethod: "",
     paymentMethod: "",
     totalAmount: "",
@@ -303,6 +309,9 @@ export default function AdminOrdersPage() {
       street: order.street || "",
       house: order.house || "",
       apartment: order.apartment || "",
+      entrance: order.entrance || "",
+      floor: order.floor || "",
+      intercom: order.intercom || "",
       shippingMethod: order.shippingMethod || "",
       paymentMethod: order.paymentMethod || "",
       totalAmount: String(order.totalAmount || ""),
@@ -328,6 +337,9 @@ export default function AdminOrdersPage() {
         street: editForm.street,
         house: editForm.house,
         apartment: editForm.apartment,
+        entrance: editForm.entrance,
+        floor: editForm.floor,
+        intercom: editForm.intercom,
         shippingMethod: editForm.shippingMethod,
         paymentMethod: editForm.paymentMethod,
         totalAmount: Number(editForm.totalAmount || selected.totalAmount),
@@ -926,6 +938,18 @@ export default function AdminOrdersPage() {
                 <label className="cms-label">
                   Квартира
                   <input className="cms-input" value={editForm.apartment} onChange={(e) => setEditForm((prev) => ({ ...prev, apartment: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Подъезд
+                  <input className="cms-input" value={editForm.entrance} onChange={(e) => setEditForm((prev) => ({ ...prev, entrance: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Этаж
+                  <input className="cms-input" value={editForm.floor} onChange={(e) => setEditForm((prev) => ({ ...prev, floor: e.target.value }))} style={{ marginTop: 4 }} />
+                </label>
+                <label className="cms-label">
+                  Домофон
+                  <input className="cms-input" value={editForm.intercom} onChange={(e) => setEditForm((prev) => ({ ...prev, intercom: e.target.value }))} style={{ marginTop: 4 }} />
                 </label>
                 <label className="cms-label">
                   Доставка

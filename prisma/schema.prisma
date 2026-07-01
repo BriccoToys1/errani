@@ -106,6 +106,9 @@ model Order {
   street          String      @default("")
   house           String      @default("")
   apartment       String      @default("")
+  entrance        String      @default("")
+  floor           String      @default("")
+  intercom        String      @default("")
   shippingMethod  String      @default("") // cdek_courier, cdek_pvz
   cdekDeliveryPointCode    String @default("")
   cdekDeliveryPointAddress String @default("")

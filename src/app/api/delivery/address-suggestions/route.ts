@@ -61,16 +61,16 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    if (type === 'street' && city) {
+    if (type === 'street' && (city || region)) {
       const search = new URLSearchParams({
         street: query,
-        city,
         format: 'jsonv2',
         addressdetails: '1',
         countrycodes: 'ru',
         layer: 'address',
         limit: '10',
       });
+      if (city) search.set('city', city);
       if (region) search.set('state', region);
       const response = await fetch(`https://nominatim.openstreetmap.org/search?${search.toString()}`, {
         headers: {

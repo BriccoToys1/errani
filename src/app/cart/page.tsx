@@ -41,6 +41,9 @@ export default function CartPage() {
     street: '',
     house: '',
     apartment: '',
+    entrance: '',
+    floor: '',
+    intercom: '',
     noApartment: false,
     shippingMethod: 'cdek_courier',
   });
@@ -155,6 +158,9 @@ export default function CartPage() {
       street: '',
       house: '',
       apartment: '',
+      entrance: '',
+      floor: '',
+      intercom: '',
     }));
   }, []);
 
@@ -655,8 +661,22 @@ export default function CartPage() {
                         onChange={(v) => setFormData({ ...formData, house: v })} />
                       <div>
                         <Field label={lang === 'ru' ? 'Квартира (если есть)' : 'Apartment (if any)'} value={formData.apartment}
-                          onChange={(v) => setFormData({ ...formData, apartment: v })} />
+                          onChange={(v) => setFormData(prev => ({
+                            ...prev,
+                            apartment: v,
+                            ...(!v.trim() ? { entrance: '', floor: '', intercom: '' } : {}),
+                          }))} />
                       </div>
+                      {formData.apartment.trim() && (
+                        <>
+                          <Field label={lang === 'ru' ? 'Подъезд (если есть)' : 'Entrance (if any)'} value={formData.entrance}
+                            onChange={(v) => setFormData(prev => ({ ...prev, entrance: v }))} />
+                          <Field label={lang === 'ru' ? 'Этаж (если есть)' : 'Floor (if any)'} value={formData.floor}
+                            onChange={(v) => setFormData(prev => ({ ...prev, floor: v }))} />
+                          <Field label={lang === 'ru' ? 'Домофон (если есть)' : 'Intercom (if any)'} value={formData.intercom}
+                            onChange={(v) => setFormData(prev => ({ ...prev, intercom: v }))} />
+                        </>
+                      )}
                     </>
                   ) : (
                     <div className="full-width">
