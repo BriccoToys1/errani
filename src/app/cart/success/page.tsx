@@ -145,7 +145,7 @@ function SuccessContent() {
         </p>
 
         {orderNumber && (
-          <div className="receipt-actions" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', alignItems: 'stretch', gap: '0.7rem', marginBottom: '1.25rem' }}>
+          <div className="receipt-actions" style={{ display: 'grid', gridTemplateColumns: '48px minmax(0, 1fr)', alignItems: 'stretch', justifyContent: 'center', gap: '0.7rem', marginBottom: '1.25rem' }}>
             <a
               href={`/api/orders/receipt?number=${encodeURIComponent(orderNumber)}`}
               aria-label={lang === 'ru' ? 'Скачать чек' : 'Download receipt'}
@@ -155,15 +155,16 @@ function SuccessContent() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '0.5rem',
-                padding: '0.8rem 0.75rem',
+                width: '48px',
+                height: '48px',
+                padding: 0,
+                borderRadius: '50%',
                 textDecoration: 'none',
               }}
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
               </svg>
-              {lang === 'ru' ? 'Скачать чек' : 'Download receipt'}
             </a>
             <button
               type="button"
