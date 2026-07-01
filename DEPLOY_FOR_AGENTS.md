@@ -16,7 +16,7 @@ This project deploys to the SmartApe VPS, not to Vercel.
 - Do not print, commit, or store server passwords in the repository.
 - Prefer SSH key access for deploys.
 - Ensure `/var/www/errani/.env` exists on the server before deploying.
-- For Tochka Bank acquiring, keep these only in server `.env`: `TOCHKA_JWT_TOKEN`, `TOCHKA_CLIENT_ID`, `TOCHKA_CUSTOMER_CODE`, optional `TOCHKA_MERCHANT_ID`, `TOCHKA_PAYMENT_MODES=card,sbp`.
+- For Tochka Bank acquiring, keep these only in server `.env`: `TOCHKA_JWT_TOKEN`, `TOCHKA_CLIENT_ID`, `TOCHKA_CUSTOMER_CODE`, optional `TOCHKA_MERCHANT_ID`, `TOCHKA_PAYMENT_MODES=sbp`.
 
 ## Standard Deploy Flow After Code Edits
 

@@ -117,7 +117,7 @@ function SuccessContent() {
       padding: 'calc(72px + 2rem) 2rem 8rem',
       textAlign: 'center',
       boxSizing: 'border-box',
-    }}>
+    }} className="payment-success-page">
       <div style={{ maxWidth: '480px' }}>
         <div style={{
           width: '64px',
@@ -135,56 +135,46 @@ function SuccessContent() {
         </div>
 
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1rem' }}>
-          {lang === 'ru' ? 'Успешная оплата' : 'Payment successful'}
+          {lang === 'ru' ? 'Успешно!' : 'Success!'}
         </h1>
 
-        {orderNumber && (
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-            {lang === 'ru' ? 'Номер заказа' : 'Order number'}:{' '}
-            <strong style={{ color: 'var(--text)' }}>#{orderNumber}</strong>
-          </p>
-        )}
-
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.7, marginBottom: '2.5rem' }}>
-          {lang === 'ru'
-            ? 'Спасибо за покупку! Мы отправим подтверждение на вашу почту и свяжемся с вами после комплектации заказа.'
-            : 'Thank you for your purchase! We will send a confirmation to your email and contact you once the order is ready.'}
+          {orderNumber
+            ? (lang === 'ru' ? `Спасибо за заказ #${orderNumber}` : `Thank you for order #${orderNumber}`)
+            : (lang === 'ru' ? 'Спасибо за заказ' : 'Thank you for your order')}
         </p>
 
         {orderNumber && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.9rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+          <div className="receipt-actions" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', alignItems: 'stretch', gap: '0.7rem', marginBottom: '1.25rem' }}>
             <a
               href={`/api/orders/receipt?number=${encodeURIComponent(orderNumber)}`}
               aria-label={lang === 'ru' ? 'Скачать чек' : 'Download receipt'}
               title={lang === 'ru' ? 'Скачать чек' : 'Download receipt'}
+              className="product-btn receipt-download-btn"
               style={{
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                background: 'var(--orange)',
-                color: '#fff',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                flex: '0 0 auto',
+                gap: '0.5rem',
+                padding: '0.8rem 0.75rem',
+                textDecoration: 'none',
               }}
             >
-              <svg width="21" height="21" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
               </svg>
+              {lang === 'ru' ? 'Скачать чек' : 'Download receipt'}
             </a>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              {lang === 'ru' ? 'или' : 'or'}
-            </span>
             <button
               type="button"
               onClick={sendReceipt}
               disabled={emailStatus === 'sending' || emailStatus === 'sent'}
               className="product-btn"
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.55rem', border: 0, cursor: emailStatus === 'sending' || emailStatus === 'sent' ? 'default' : 'pointer' }}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', border: 0, padding: '0.8rem 0.75rem', cursor: emailStatus === 'sending' || emailStatus === 'sent' ? 'default' : 'pointer' }}
             >
               <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m3 11 18-8-8 18-2-8-8-2Zm8 2 4-4" />
+                <rect x="3" y="5" width="18" height="14" rx="2" strokeWidth={2} />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m4 7 8 6 8-6" />
               </svg>
               {emailStatus === 'sending'
                 ? (lang === 'ru' ? 'Отправляем…' : 'Sending…')
@@ -201,7 +191,7 @@ function SuccessContent() {
           </p>
         )}
 
-        <Link href="/" className="product-btn" style={{ display: 'inline-flex', justifyContent: 'center', marginTop: '0.75rem' }}>
+        <Link href="/" style={{ display: 'inline-flex', justifyContent: 'center', marginTop: '0.75rem', padding: '0.75rem 1.5rem', border: '1px solid var(--border)', borderRadius: '999px', background: 'transparent', color: 'var(--text)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 600 }}>
           {lang === 'ru' ? 'На главную' : 'Back to home'}
         </Link>
       </div>

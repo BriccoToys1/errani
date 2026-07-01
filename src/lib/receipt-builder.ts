@@ -12,7 +12,7 @@ const SHIPPING_LABELS: Record<string, string> = {
 
 const PAYMENT_LABELS: Record<string, string> = {
   yukassa: 'ЮKassa (карта)',
-  tochka: 'Картой / СБП',
+  tochka: 'СБП',
   card: 'Карта',
   sbp: 'СБП',
   stripe: 'Банковская карта',
@@ -164,10 +164,14 @@ export function buildReceiptHtml(order: ReceiptOrder, forPdf = false): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>${saveFilename}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>
+    @font-face {
+      font-family: 'Montserrat';
+      src: url('/fonts/Montserrat.woff2') format('woff2');
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: block;
+    }
     @page { margin: 0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {

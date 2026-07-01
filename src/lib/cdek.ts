@@ -158,6 +158,7 @@ export interface CdekCreatedOrder {
 }
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
+let locationsCatalogCache: { locations: CdekLocation[]; expiresAt: number } | null = null;
 
 export class CdekError extends Error {
   constructor(message: string, public readonly status = 502) {
@@ -292,6 +293,13 @@ interface NominatimAddress {
   road?: string;
   pedestrian?: string;
   residential?: string;
+  neighbourhood?: string;
+  quarter?: string;
+  suburb?: string;
+  city_district?: string;
+  state_district?: string;
+  county?: string;
+  state?: string;
   city?: string;
   town?: string;
   village?: string;
@@ -301,6 +309,7 @@ interface NominatimAddress {
 }
 
 interface NominatimResult {
+  display_name?: string;
   address?: NominatimAddress;
 }
 
@@ -320,8 +329,26 @@ function addressPartMatches(expected: string, actual: string): boolean {
 }
 
 function houseMatches(expected: string, actual: string): boolean {
-  const normalizeHouse = (value: string) => value.toLocaleLowerCase('ru-RU').replace(/[^\p{L}\p{N}]/gu, '');
+  const normalizeHouse = (value: string) => value
+    .toLocaleLowerCase('ru-RU')
+    .replace(/\b(?:дом|д)\b/giu, '')
+    .replace(/\b(?:корпус|корп|к)\b/giu, 'к')
+    .replace(/\b(?:строение|стр|с)\b/giu, 'с')
+    .replace(/\b(?:литера|лит)\b/giu, 'л')
+    .replace(/[^\p{L}\p{N}]/gu, '');
   return Boolean(normalizeHouse(expected) && normalizeHouse(expected) === normalizeHouse(actual));
+}
+
+function houseAppearsInAddress(expected: string, displayName: string): boolean {
+  const compact = (value: string) => value
+    .toLocaleLowerCase('ru-RU')
+    .replace(/\b(?:дом|д)\b/giu, '')
+    .replace(/\b(?:корпус|корп|к)\b/giu, 'к')
+    .replace(/\b(?:строение|стр|с)\b/giu, 'с')
+    .replace(/\b(?:литера|лит)\b/giu, 'л')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+  const house = compact(expected);
+  return Boolean(house && compact(displayName).includes(house));
 }
 
 async function validateRussianCourierAddress(input: CdekCalculationInput): Promise<void> {
@@ -333,20 +360,17 @@ async function validateRussianCourierAddress(input: CdekCalculationInput): Promi
     throw new CdekError('Укажите полный адрес: город, улицу и дом.', 400);
   }
 
-  const query = [
-    `${street}, ${house}`,
-    city,
-    input.region?.trim(),
-    postalCode,
-    'Россия',
-  ].filter(Boolean).join(', ');
   const params = new URLSearchParams({
-    q: query,
+    street: `${house} ${street}`,
+    city,
     format: 'jsonv2',
     addressdetails: '1',
     countrycodes: 'ru',
     limit: '5',
+    layer: 'address',
   });
+  if (input.region?.trim()) params.set('state', input.region.trim());
+  if (postalCode) params.set('postalcode', postalCode);
   let response: Response;
   try {
     response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
@@ -367,12 +391,25 @@ async function validateRussianCourierAddress(input: CdekCalculationInput): Promi
   const results = await response.json().catch(() => []) as NominatimResult[];
   const valid = Array.isArray(results) && results.some((result) => {
     const address = result.address || {};
-    const settlement = address.city || address.town || address.village || address.municipality || address.hamlet || '';
-    const road = address.road || address.pedestrian || address.residential || '';
+    const displayName = result.display_name || '';
+    const settlements = [
+      address.city, address.town, address.village, address.municipality, address.hamlet,
+      address.city_district, address.state_district, address.county, address.suburb,
+    ].filter((value): value is string => Boolean(value));
+    const roads = [
+      address.road, address.pedestrian, address.residential, address.neighbourhood,
+      address.quarter, address.suburb,
+    ].filter((value): value is string => Boolean(value));
+    const cityMatches = settlements.some((value) => addressPartMatches(city, value))
+      || addressPartMatches(city, displayName);
+    const streetMatches = roads.some((value) => addressPartMatches(street, value))
+      || addressPartMatches(street, displayName);
+    const matchedHouse = houseMatches(house, address.house_number || '')
+      || houseAppearsInAddress(house, displayName);
     return address.country_code?.toLowerCase() === 'ru'
-      && addressPartMatches(city, settlement)
-      && addressPartMatches(street, road)
-      && houseMatches(house, address.house_number || '')
+      && cityMatches
+      && streetMatches
+      && matchedHouse
       && (!postalCode || !address.postcode || address.postcode === postalCode);
   });
   if (!valid) {
@@ -469,6 +506,26 @@ function normalizeLocationCandidate(value: string): string {
     .trim()
     .replace(/^(?:г\.?|город|п\.?|пос[её]лок|с\.?|село)\s+/iu, '')
     .trim();
+}
+
+export async function getCdekRussianLocationsCatalog(): Promise<CdekLocation[]> {
+  if (locationsCatalogCache && locationsCatalogCache.expiresAt > Date.now()) {
+    return locationsCatalogCache.locations;
+  }
+
+  const params = new URLSearchParams({ country_codes: 'RU', size: '10000' });
+  const { response, data } = await authorizedRequest<CdekCityResponse[]>(`/location/cities?${params.toString()}`);
+  if (!response.ok || !Array.isArray(data)) {
+    throw new CdekError('Не удалось загрузить справочник населённых пунктов.', 502);
+  }
+  const unique = new Map<number, CdekLocation>();
+  for (const entry of data) {
+    const location = locationFromResponse(entry);
+    if (location) unique.set(location.code, location);
+  }
+  const locations = [...unique.values()];
+  locationsCatalogCache = { locations, expiresAt: Date.now() + 24 * 60 * 60 * 1000 };
+  return locations;
 }
 
 export async function searchCdekLocations(query: string): Promise<CdekLocation[]> {

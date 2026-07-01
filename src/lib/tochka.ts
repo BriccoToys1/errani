@@ -2,7 +2,7 @@ import { importJWK, jwtVerify, type JWK } from 'jose';
 
 const DEFAULT_API_BASE_URL = 'https://enter.tochka.com/uapi';
 const PUBLIC_KEY_URL = 'https://enter.tochka.com/doc/openapi/static/keys/public';
-const DEFAULT_PAYMENT_MODES = ['card', 'sbp'];
+const DEFAULT_PAYMENT_MODES = ['sbp'];
 
 export interface TochkaPaymentOrder {
   id: string;

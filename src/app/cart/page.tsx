@@ -9,6 +9,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
 import { PhoneInput } from '@/components/PhoneInput';
 import { CdekPickupLocation, CdekPickupMap, CdekPickupPoint } from '@/components/CdekPickupMap';
+import { AddressSuggestField } from '@/components/AddressSuggestField';
 
 interface CdekDeliveryQuote {
   amount: number;
@@ -228,7 +229,7 @@ export default function CartPage() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [cart, deliveryMode, formData.city, formData.country, formData.house, formData.shippingMethod, formData.street, formData.zipCode, isRussia, lang, selectedPickupPoint]);
+  }, [cart, deliveryMode, formData.city, formData.country, formData.house, formData.oblast, formData.shippingMethod, formData.street, formData.zipCode, isRussia, lang, selectedPickupPoint]);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -626,15 +627,30 @@ export default function CartPage() {
 
                   {deliveryMode === 'courier' ? (
                     <>
-                      <Field
+                      <AddressSuggestField
+                        kind="region"
                         label={lang === 'ru' ? 'Область / Регион (по желанию)' : 'Oblast / Region (optional)'}
                         value={formData.oblast}
-                        onChange={(v) => setFormData({ ...formData, oblast: v })}
+                        onChange={(value) => setFormData(prev => ({ ...prev, oblast: value, city: '', street: '', house: '' }))}
                       />
-                      <Field label={lang === 'ru' ? 'Город' : 'City'} value={formData.city} error={errors.city}
-                        onChange={(v) => setFormData({ ...formData, city: v })} />
-                      <Field label={lang === 'ru' ? 'Улица' : 'Street'} value={formData.street} error={errors.street}
-                        onChange={(v) => setFormData({ ...formData, street: v })} />
+                      <AddressSuggestField
+                        kind="city"
+                        label={lang === 'ru' ? 'Город' : 'City'}
+                        value={formData.city}
+                        region={formData.oblast}
+                        error={errors.city}
+                        onChange={(value) => setFormData(prev => ({ ...prev, city: value, street: '', house: '' }))}
+                        onSelect={(item) => setFormData(prev => ({ ...prev, city: item.value, oblast: item.region || prev.oblast, street: '', house: '' }))}
+                      />
+                      <AddressSuggestField
+                        kind="street"
+                        label={lang === 'ru' ? 'Улица' : 'Street'}
+                        value={formData.street}
+                        region={formData.oblast}
+                        city={formData.city}
+                        error={errors.street}
+                        onChange={(value) => setFormData(prev => ({ ...prev, street: value, house: '' }))}
+                      />
                       <Field label={lang === 'ru' ? 'Дом' : 'House'} value={formData.house} error={errors.house}
                         onChange={(v) => setFormData({ ...formData, house: v })} />
                       <div>
@@ -661,7 +677,7 @@ export default function CartPage() {
           {isRussia && <div className="checkout-form">
             <h2 className="checkout-heading">{lang === 'ru' ? 'Ваш заказ' : 'Your order'}</h2>
             {isRussia && (
-              <div style={{ marginTop: '0.85rem', padding: '0.75rem 1rem', background: 'rgba(232,114,42,0.07)', borderRadius: '8px', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+              <div style={{ marginTop: '0.85rem', padding: '0.85rem 1rem', background: '#fff', border: '1px solid #dedede', borderRadius: '8px', fontSize: '0.82rem', color: '#111', lineHeight: 1.8 }}>
                 {cart.map(item => (
                   <div key={item.productId} style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span>{item.name} — {item.quantity} {lang === 'ru' ? 'шт.' : 'pcs.'}</span>
@@ -684,7 +700,7 @@ export default function CartPage() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>{lang === 'ru' ? 'Способ оплаты' : 'Payment method'}</span>
-                  <span>{lang === 'ru' ? 'Картой/СБП' : 'Card / SBP'}</span>
+                  <span>{lang === 'ru' ? 'СБП' : 'Faster Payments System'}</span>
                 </div>
                 {cartNotices.length > 0 && (
                   <div style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border)' }}>
@@ -709,12 +725,12 @@ export default function CartPage() {
                 </svg>
                 <div>
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0 4px' }}><strong>
-                    {lang === 'ru' ? 'Оплата принимается только российскими картами.' : 'Only Russian bank cards are accepted online.'}
+                    {lang === 'ru' ? 'Онлайн-оплата доступна только через СБП.' : 'Online payment is available through the Faster Payments System only.'}
                   </strong></p>
                   <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
                     {lang === 'ru'
-                      ? 'Если у вас иностранная карта и/или доставка зарубеж — оставьте заявку.'
-                      : 'If you have a foreign card and/or need international delivery, send us a request.'}
+                      ? 'Если вам нужна доставка за рубеж — оставьте заявку.'
+                      : 'If you need international delivery, send us a request.'}
                   </p>
                 </div>
               </div>

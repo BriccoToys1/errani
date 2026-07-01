@@ -1062,20 +1062,15 @@ select.form-field {
 
   .receipt-actions {
     width: 100%;
-    flex-wrap: nowrap !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
     gap: 0.45rem !important;
   }
 
   .receipt-download-btn {
-    width: 46px !important;
-    height: 46px !important;
-    min-width: 46px !important;
-    flex: 0 0 46px;
-  }
-
-  .receipt-or {
-    flex: 0 0 auto;
-    font-size: 0.72rem !important;
+    width: 100% !important;
+    height: auto !important;
+    min-width: 0 !important;
+    white-space: normal !important;
   }
 
   .receipt-email-btn {
