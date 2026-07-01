@@ -12,7 +12,7 @@ export default function HomePage() {
     fetch('/api/products')
       .then(r => r.json())
       .then((list: Array<{ slug: string; price: number }>) => {
-        const pgvt = list.find(p => p.slug === 'pgvt');
+        const pgvt = list.find(p => p.slug === 'gothic-vibe-tarot' || p.slug === 'pgvt');
         if (pgvt) setPgvtPrice(pgvt.price);
       })
       .catch(() => {});
@@ -34,14 +34,6 @@ export default function HomePage() {
               <span style={{ color: '#ff6eb4' }}>Vibe</span>
             </h1>
 
-            <p className="preorder-spec anim-fade-up anim-fade-up-d2">
-              {lang === 'ru' ? '78 карт · Лимитированный тираж' : '78 cards · Limited edition'}
-            </p>
-
-            <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255,110,180,0.1)', color: '#ff6eb4', borderColor: 'rgba(255,110,180,0.3)' }}>
-              {lang === 'ru' ? 'Скоро в предзаказе' : 'Pre-order soon'}
-            </div>
-
             <p className="preorder-desc anim-fade-up anim-fade-up-d3">
               {lang === 'ru'
                 ? 'Тёмная романтика и нежная эстетика в одной колоде. Погрузись в мир готической нежности.'
@@ -53,6 +45,12 @@ export default function HomePage() {
                 {formatPrice(pgvtPrice)}
               </div>
             )}
+
+            <div className="preorder-actions anim-fade-up anim-fade-up-d4">
+              <Link href="/gothic-vibe-tarot" className="preorder-btn-primary preorder-btn-pink">
+                {lang === 'ru' ? 'Предзаказ' : 'Pre-order'}
+              </Link>
+            </div>
           </div>
 
           <div className="preorder-visual anim-fade-up anim-fade-up-d2">
@@ -72,63 +70,32 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* Tenderly Vibe Hero */}
-      <main className="preorder-hero">
-        <div className="preorder-orb preorder-orb-1" />
-        <div className="preorder-orb preorder-orb-2" />
-
-        <div className="preorder-content">
-          <div className="preorder-text">
-            <div className="preorder-eyebrow anim-fade-up">
-              {lang === 'ru' ? 'Авторская' : 'Original'}
-            </div>
-
-            <h1 className="preorder-title anim-fade-up anim-fade-up-d2">
-              <em>Tenderly</em><br />
-              <span>Vibe</span>
-            </h1>
-
-            <p className="preorder-spec anim-fade-up anim-fade-up-d2">
-              {lang === 'ru' ? '78 карт · Лимитированный тираж' : '78 cards · Limited edition'}
-            </p>
-
-            <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'var(--surface-1)', color: 'var(--text-secondary)', borderColor: 'var(--border-2)' }}>
-              {lang === 'ru' ? 'Предзаказ закрыт. Скоро в продаже...' : 'Pre-order closed. Coming soon...'}
-            </div>
-
-            <div className="preorder-badge anim-fade-up anim-fade-up-d3" style={{ background: 'rgba(255, 180, 0, 0.12)', color: '#ffb400', borderColor: 'rgba(255, 180, 0, 0.35)' }}>
-              {lang === 'ru' ? '⚠️ Ориентировочная дата доставок — начало мая' : '⚠️ Estimated delivery — early May'}
-            </div>
-
-            <p className="preorder-desc anim-fade-up anim-fade-up-d3">
-              {lang === 'ru'
-                ? 'Уникальная колода, созданная с любовью — каждая карта несёт особую энергетику и смысл. Станьте одним из первых владельцев.'
-                : 'A unique deck crafted with love — every card carries a special energy and meaning. Be one of the first to own it.'}
-            </p>
-
-            <div className="preorder-actions anim-fade-up anim-fade-up-d4">
-              <Link href="/tenderly-vibe" className="preorder-btn-ghost">
-                {lang === 'ru' ? 'Подробнее' : 'Learn more'}
-              </Link>
-            </div>
-          </div>
-
-          <div className="preorder-visual anim-fade-up anim-fade-up-d2">
-            <div className="preorder-img-wrap">
-              <Image
-                src="/media/photo-11.jpeg"
-                alt="Tenderly Vibe Tarot"
-                fill
-                className="preorder-img"
-                priority
-                sizes="(max-width: 768px) 80vw, 42vw"
-                quality={65}
-              />
-              <div className="preorder-img-overlay" />
-            </div>
-          </div>
-        </div>
-      </main>
+      <section className="home-feature-tabs" aria-label={lang === 'ru' ? 'Преимущества' : 'Benefits'}>
+        <article className="home-feature-tab">
+          <span className="home-feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>
+            </svg>
+          </span>
+          <span>{lang === 'ru' ? 'Доставка по всему миру' : 'Worldwide delivery'}</span>
+        </article>
+        <article className="home-feature-tab">
+          <span className="home-feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/>
+            </svg>
+          </span>
+          <span>{lang === 'ru' ? 'Лимитированная авторская коллекция' : 'Limited original collection'}</span>
+        </article>
+        <article className="home-feature-tab">
+          <span className="home-feature-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8z"/>
+            </svg>
+          </span>
+          <span>{lang === 'ru' ? 'Сделано с любовью' : 'Made with love'}</span>
+        </article>
+      </section>
 
     </>
   );

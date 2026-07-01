@@ -56,9 +56,10 @@ export default async function CustomPublicPage({ params }: Props) {
       </Link>
       <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 24 }}>{title}</h1>
       <div
-        style={{ fontSize: 15, lineHeight: 1.7, color: '#333' }}
-        dangerouslySetInnerHTML={{ __html: content }}
-      />
+        style={{ fontSize: 15, lineHeight: 1.7, color: '#333', whiteSpace: 'pre-wrap' }}
+      >
+        {content}
+      </div>
     </div>
   );
 }

@@ -1,157 +1,364 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
-import { withPrismaRetry } from '@/lib/prisma-retry';
 
-type AnalyticsPayload = {
-  realtime: { onlineNow: number };
-  today: { views: number; visitors: number; orders: number; avgDuration: number };
-  chart: Array<{ date: string; views: number; visitors: number; orders: number; revenue: number }>;
-  countries: Array<{ country: string; count: number }>;
-  totals: { views: number; orders: number; revenue: number; products: number; uniqueIPs: number };
-};
+type Breakdown = { label: string; count: number; percentage: number };
 
-const cache = new Map<number, { data: AnalyticsPayload; at: number }>();
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const STALE_TTL_MS = 24 * 60 * 60 * 1000;
+const MOSCOW_DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+const MOSCOW_HOUR_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Moscow', hour: '2-digit', hourCycle: 'h23',
+});
 
-function buildDateRange(period: number, now: Date): string[] {
-  const days: string[] = [];
-  for (let i = period - 1; i >= 0; i -= 1) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
-  }
-  return days;
+function moscowDateKey(date: Date): string {
+  const parts = MOSCOW_DATE_FORMATTER.formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
-function getStaleCache(period: number): AnalyticsPayload | null {
-  const hit = cache.get(period);
-  if (!hit) return null;
-  if (Date.now() - hit.at > STALE_TTL_MS) return null;
-  return hit.data;
+function moscowDayStart(key: string): Date {
+  return new Date(`${key}T00:00:00+03:00`);
+}
+
+function sourceLabel(referrer: string, utmSource: string): string {
+  if (utmSource) return utmSource;
+  if (!referrer) return 'Прямой заход';
+  try {
+    return new URL(referrer).hostname.replace(/^www\./, '') || 'Прямой заход';
+  } catch {
+    return referrer.slice(0, 80);
+  }
+}
+
+function userAgentInfo(userAgent: string): { device: string; browser: string; os: string } {
+  const device = /ipad|tablet|kindle/i.test(userAgent) ? 'Планшет'
+    : /mobi|iphone|android/i.test(userAgent) ? 'Телефон' : 'Компьютер';
+  const browser = /edg\//i.test(userAgent) ? 'Edge'
+    : /opr\//i.test(userAgent) ? 'Opera'
+      : /yabrowser/i.test(userAgent) ? 'Яндекс Браузер'
+        : /firefox\//i.test(userAgent) ? 'Firefox'
+          : /crios|chrome\//i.test(userAgent) ? 'Chrome'
+            : /safari\//i.test(userAgent) ? 'Safari' : 'Другой';
+  const os = /iphone|ipad|ios/i.test(userAgent) ? 'iOS'
+    : /android/i.test(userAgent) ? 'Android'
+      : /windows/i.test(userAgent) ? 'Windows'
+        : /mac os|macintosh/i.test(userAgent) ? 'macOS'
+          : /linux/i.test(userAgent) ? 'Linux' : 'Другая';
+  return { device, browser, os };
+}
+
+function increment(map: Map<string, number>, label: string): void {
+  const normalized = label.trim() || 'Не определено';
+  map.set(normalized, (map.get(normalized) || 0) + 1);
+}
+
+function breakdown(map: Map<string, number>, total: number, limit = 12): Breakdown[] {
+  return [...map.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, limit)
+    .map(([label, count]) => ({ label, count, percentage: total > 0 ? Math.round((count / total) * 1000) / 10 : 0 }));
+}
+
+function average(values: number[]): number {
+  if (values.length === 0) return 0;
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+function percent(part: number, total: number): number {
+  return total > 0 ? Math.round((part / total) * 1000) / 10 : 0;
+}
+
+function buildDays(start: Date, end: Date): string[] {
+  const days: string[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end && days.length < 1500) {
+    days.push(moscowDateKey(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return [...new Set(days)];
 }
 
 export async function GET(req: NextRequest) {
   const denied = adminGuard(req);
   if (denied) return denied;
 
-  const { searchParams } = new URL(req.url);
-  const period = Math.min(Math.max(parseInt(searchParams.get('period') || '30', 10), 7), 90);
-
-  const cached = cache.get(period);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-    return NextResponse.json(cached.data, { headers: { 'X-Analytics-Cache': 'hit' } });
-  }
-
   try {
+    const { searchParams } = new URL(req.url);
+    const requestedPeriod = searchParams.get('period') || '30';
+    const period = requestedPeriod === 'all'
+      ? null
+      : Math.min(Math.max(Number.parseInt(requestedPeriod, 10) || 30, 1), 365);
     const now = new Date();
-    const today = now.toISOString().slice(0, 10);
-    const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);
-    const days = buildDateRange(period, now);
-    const startDay = days[0];
+    const todayKey = moscowDateKey(now);
+    const todayStart = moscowDayStart(todayKey);
+    const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    const firstView = await prisma.pageView.findFirst({
+      where: { isBot: false },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    });
+    const start = period === null
+      ? firstView?.createdAt || todayStart
+      : new Date(todayStart.getTime() - (period - 1) * 24 * 60 * 60 * 1000);
 
-    const withTimeout = async <T,>(promise: Promise<T>, ms = 8000): Promise<T> =>
-      Promise.race([
-        promise,
-        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('analytics query timeout')), ms)),
-      ]);
+    const paidStatuses = ['paid', 'assembling', 'shipped', 'in_transit', 'delivered'];
+    const [views, orders, allTimeRows, totalProducts, lastView] = await Promise.all([
+      prisma.pageView.findMany({
+        where: { createdAt: { gte: start }, isBot: false },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          sessionId: true, path: true, query: true, title: true, previousPath: true, referrer: true,
+          ip: true, country: true, city: true, lang: true, userAgent: true, device: true,
+          browser: true, os: true, screenWidth: true, screenHeight: true, timezone: true,
+          utmSource: true, utmMedium: true, utmCampaign: true, duration: true, maxScroll: true,
+          lastActiveAt: true, createdAt: true,
+        },
+      }),
+      prisma.order.findMany({
+        where: { createdAt: { gte: start } },
+        select: { createdAt: true, status: true, totalAmount: true },
+      }),
+      prisma.$queryRaw<Array<{ views: number; sessions: number; unique_ips: number; avg_duration: number; bounces: number; pages_per_session: number }>>`
+        WITH sessions AS (
+          SELECT "sessionId", COUNT(*)::int AS page_count, SUM("duration")::int AS session_duration
+          FROM "PageView" WHERE "isBot" = false GROUP BY "sessionId"
+        )
+        SELECT
+          (SELECT COUNT(*)::int FROM "PageView" WHERE "isBot" = false) AS views,
+          COUNT(*)::int AS sessions,
+          (SELECT COUNT(DISTINCT NULLIF("ip", ''))::int FROM "PageView" WHERE "isBot" = false) AS unique_ips,
+          COALESCE(ROUND(AVG(session_duration)), 0)::int AS avg_duration,
+          COUNT(*) FILTER (WHERE page_count = 1)::int AS bounces,
+          COALESCE(ROUND(AVG(page_count)::numeric, 2), 0)::float AS pages_per_session
+        FROM sessions
+      `,
+      prisma.product.count(),
+      prisma.pageView.findFirst({ where: { isBot: false }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+    ]);
 
-    const [
-      recentViews,
-      chartRows,
-      countriesRaw,
-      totalViews,
-      totalPaidOrders,
-      totalRevenueRaw,
-      totalProducts,
-    ] = await withTimeout(
-      withPrismaRetry(
-        () =>
-          prisma.$transaction([
-            prisma.pageView.findMany({
-              where: { createdAt: { gte: fiveMinAgo } },
-              distinct: ['sessionId'],
-              select: { sessionId: true },
-            }),
-            prisma.dailyStat.findMany({
-              where: { date: { gte: startDay, lte: today } },
-              orderBy: { date: 'asc' },
-            }),
-            prisma.pageView.groupBy({
-              by: ['country'],
-              where: { createdAt: { gte: new Date(`${today}T00:00:00Z`) }, country: { not: '' } },
-              _count: { country: true },
-              orderBy: { _count: { country: 'desc' } },
-              take: 8,
-            }),
-            prisma.pageView.count(),
-            prisma.order.count({ where: { status: 'paid' } }),
-            prisma.order.aggregate({ where: { status: 'paid' }, _sum: { totalAmount: true } }),
-            prisma.product.count(),
-          ]),
-        3,
-        120
-      )
-    );
+    type SessionAggregate = {
+      views: number;
+      duration: number;
+      firstAt: Date;
+      lastAt: Date;
+      entryPath: string;
+      exitPath: string;
+    };
+    const sessions = new Map<string, SessionAggregate>();
+    const pageMap = new Map<string, { title: string; views: number; sessions: Set<string>; durations: number[]; scrolls: number[] }>();
+    const sources = new Map<string, number>();
+    const countries = new Map<string, number>();
+    const cities = new Map<string, number>();
+    const devices = new Map<string, number>();
+    const browsers = new Map<string, number>();
+    const operatingSystems = new Map<string, number>();
+    const languages = new Map<string, number>();
+    const campaigns = new Map<string, number>();
+    const mediums = new Map<string, number>();
+    const screens = new Map<string, number>();
+    const hourly = Array.from({ length: 24 }, (_, hour) => ({ hour, views: 0 }));
+    const daily = new Map<string, { views: number; sessions: Set<string>; durations: number[]; orders: number; revenue: number }>();
 
-    const uniqueIPsRaw = await withTimeout(
-      withPrismaRetry(
-        () =>
-          prisma.$queryRaw<[{ count: bigint }]>`SELECT COUNT(DISTINCT ip)::int AS count FROM "PageView" WHERE ip != ''`,
-        2,
-        120
-      ),
-      5000
-    ).catch(() => [{ count: BigInt(0) }]);
+    for (const view of views) {
+      const day = moscowDateKey(view.createdAt);
+      if (!daily.has(day)) daily.set(day, { views: 0, sessions: new Set(), durations: [], orders: 0, revenue: 0 });
+      const dayRow = daily.get(day)!;
+      dayRow.views += 1;
+      dayRow.sessions.add(view.sessionId);
+      if (view.duration > 0) dayRow.durations.push(view.duration);
 
-    const chartMap = new Map(chartRows.map((row) => [row.date, row]));
-    const chart = days.map((date) => ({
-      date,
-      views: chartMap.get(date)?.views ?? 0,
-      visitors: chartMap.get(date)?.visitors ?? 0,
-      orders: chartMap.get(date)?.orders ?? 0,
-      revenue: chartMap.get(date)?.revenue ?? 0,
-    }));
+      const session = sessions.get(view.sessionId);
+      const firstSessionView = !session;
+      if (!session) {
+        sessions.set(view.sessionId, {
+          views: 1, duration: view.duration, firstAt: view.createdAt, lastAt: view.createdAt,
+          entryPath: view.path, exitPath: view.path,
+        });
+      } else {
+        session.views += 1;
+        session.duration += view.duration;
+        if (view.createdAt < session.firstAt) {
+          session.firstAt = view.createdAt;
+          session.entryPath = view.path;
+        }
+        if (view.createdAt >= session.lastAt) {
+          session.lastAt = view.createdAt;
+          session.exitPath = view.path;
+        }
+      }
 
-    const todayRow = chartMap.get(today);
-    const fallbackTotalViews = chart.reduce((sum, day) => sum + day.views, 0);
-    const fallbackTotalOrders = chart.reduce((sum, day) => sum + day.orders, 0);
-    const fallbackTotalRevenue = chart.reduce((sum, day) => sum + day.revenue, 0);
+      const page = pageMap.get(view.path) || { title: '', views: 0, sessions: new Set<string>(), durations: [], scrolls: [] };
+      page.title = view.title || page.title;
+      page.views += 1;
+      page.sessions.add(view.sessionId);
+      if (view.duration > 0) page.durations.push(view.duration);
+      if (view.maxScroll > 0) page.scrolls.push(view.maxScroll);
+      pageMap.set(view.path, page);
 
-    const payload: AnalyticsPayload = {
-      realtime: { onlineNow: recentViews.length },
+      if (firstSessionView) {
+        const agent = userAgentInfo(view.userAgent);
+        increment(sources, sourceLabel(view.referrer, view.utmSource));
+        increment(countries, view.country);
+        increment(cities, [view.city, view.country].filter(Boolean).join(', '));
+        increment(devices, view.device || agent.device);
+        increment(browsers, view.browser || agent.browser);
+        increment(operatingSystems, view.os || agent.os);
+        increment(languages, view.lang);
+        if (view.utmCampaign) increment(campaigns, view.utmCampaign);
+        if (view.utmMedium) increment(mediums, view.utmMedium);
+        if (view.screenWidth > 0) {
+          const screen = view.screenWidth <= 480 ? '≤ 480 px'
+            : view.screenWidth <= 768 ? '481–768 px'
+              : view.screenWidth <= 1280 ? '769–1280 px'
+                : view.screenWidth <= 1920 ? '1281–1920 px' : '> 1920 px';
+          increment(screens, screen);
+        }
+      }
+      const moscowHour = Number(MOSCOW_HOUR_FORMATTER.format(view.createdAt));
+      if (Number.isInteger(moscowHour) && hourly[moscowHour]) hourly[moscowHour].views += 1;
+    }
+
+    for (const order of orders) {
+      const day = moscowDateKey(order.createdAt);
+      if (!daily.has(day)) daily.set(day, { views: 0, sessions: new Set(), durations: [], orders: 0, revenue: 0 });
+      const dayRow = daily.get(day)!;
+      dayRow.orders += 1;
+      if (paidStatuses.includes(order.status)) dayRow.revenue += order.totalAmount;
+    }
+
+    const days = buildDays(start, now);
+    const chart = days.map((date) => {
+      const row = daily.get(date);
+      return {
+        date,
+        views: row?.views || 0,
+        visitors: row?.sessions.size || 0,
+        orders: row?.orders || 0,
+        revenue: Math.round((row?.revenue || 0) * 100) / 100,
+        avgDuration: average(row?.durations || []),
+      };
+    });
+
+    const sessionValues = [...sessions.values()];
+    const bounces = sessionValues.filter((session) => session.views === 1).length;
+    const entryMap = new Map<string, number>();
+    const exitMap = new Map<string, number>();
+    sessionValues.forEach((session) => {
+      increment(entryMap, session.entryPath);
+      increment(exitMap, session.exitPath);
+    });
+    const periodOrders = orders.length;
+    const paidOrders = orders.filter((order) => paidStatuses.includes(order.status));
+    const todayViews = views.filter((view) => view.createdAt >= todayStart && view.createdAt < tomorrowStart);
+    const todaySessionIds = new Set(todayViews.map((view) => view.sessionId));
+    const todaySessions = [...todaySessionIds].map((id) => sessions.get(id)).filter(Boolean) as SessionAggregate[];
+    const todayOrders = orders.filter((order) => order.createdAt >= todayStart && order.createdAt < tomorrowStart);
+    const onlineSince = new Date(now.getTime() - 5 * 60 * 1000);
+    const onlineViews = views.filter((view) => view.lastActiveAt >= onlineSince);
+    const onlineSessions = new Set(onlineViews.map((view) => view.sessionId));
+    const activePageMap = new Map<string, number>();
+    onlineViews.forEach((view) => increment(activePageMap, view.path));
+
+    const pages = [...pageMap.entries()]
+      .map(([path, data]) => ({
+        path,
+        title: data.title,
+        views: data.views,
+        visitors: data.sessions.size,
+        avgDuration: average(data.durations),
+        avgScroll: average(data.scrolls),
+      }))
+      .sort((left, right) => right.views - left.views)
+      .slice(0, 30);
+
+    const allTime = allTimeRows[0] || { views: 0, sessions: 0, unique_ips: 0, avg_duration: 0, bounces: 0, pages_per_session: 0 };
+    const totalPaidOrders = await prisma.order.count({ where: { status: { in: paidStatuses } } });
+    const totalRevenue = await prisma.order.aggregate({ where: { status: { in: paidStatuses } }, _sum: { totalAmount: true } });
+    const periodRevenue = paidOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+
+    const payload = {
+      status: {
+        enabled: process.env.ANALYTICS_DB_ENABLED !== 'false',
+        firstEventAt: firstView?.createdAt?.toISOString() || null,
+        lastEventAt: lastView?.createdAt?.toISOString() || null,
+        hasFreshData: Boolean(lastView?.createdAt && now.getTime() - lastView.createdAt.getTime() < 24 * 60 * 60 * 1000),
+      },
+      period: { value: requestedPeriod, from: start.toISOString(), to: now.toISOString() },
+      realtime: {
+        onlineNow: onlineSessions.size,
+        activePages: breakdown(activePageMap, onlineViews.length, 10),
+      },
       today: {
-        views: todayRow?.views ?? 0,
-        visitors: todayRow?.visitors ?? 0,
-        orders: todayRow?.orders ?? 0,
-        avgDuration: 0,
+        views: todayViews.length,
+        visitors: todaySessionIds.size,
+        orders: todayOrders.length,
+        revenue: todayOrders.filter((order) => paidStatuses.includes(order.status)).reduce((sum, order) => sum + order.totalAmount, 0),
+        avgDuration: average(todaySessions.map((session) => session.duration)),
+        bounceRate: percent(todaySessions.filter((session) => session.views === 1).length, todaySessions.length),
+      },
+      totals: {
+        views: views.length,
+        visitors: sessions.size,
+        uniqueIPs: new Set(views.map((view) => view.ip).filter(Boolean)).size,
+        orders: periodOrders,
+        paidOrders: paidOrders.length,
+        revenue: Math.round(periodRevenue * 100) / 100,
+        products: totalProducts,
+        avgDuration: average(sessionValues.map((session) => session.duration)),
+        avgPageDuration: average(views.map((view) => view.duration).filter((duration) => duration > 0)),
+        pagesPerSession: sessions.size > 0 ? Math.round((views.length / sessions.size) * 100) / 100 : 0,
+        bounceRate: percent(bounces, sessions.size),
+        conversionRate: percent(paidOrders.length, sessions.size),
+        avgScroll: average(views.map((view) => view.maxScroll).filter((scroll) => scroll > 0)),
+      },
+      allTime: {
+        views: Number(allTime.views || 0),
+        visitors: Number(allTime.sessions || 0),
+        uniqueIPs: Number(allTime.unique_ips || 0),
+        orders: totalPaidOrders,
+        revenue: totalRevenue._sum.totalAmount || 0,
+        avgDuration: Number(allTime.avg_duration || 0),
+        pagesPerSession: Number(allTime.pages_per_session || 0),
+        bounceRate: percent(Number(allTime.bounces || 0), Number(allTime.sessions || 0)),
       },
       chart,
-      countries: countriesRaw.map((c) => ({ country: c.country, count: c._count.country })),
-      totals: {
-        views: totalViews || fallbackTotalViews,
-        orders: totalPaidOrders || fallbackTotalOrders,
-        revenue: totalRevenueRaw._sum.totalAmount ?? fallbackTotalRevenue,
-        products: totalProducts,
-        uniqueIPs: Number(uniqueIPsRaw[0]?.count ?? 0),
-      },
+      pages,
+      entryPages: breakdown(entryMap, sessions.size, 15),
+      exitPages: breakdown(exitMap, sessions.size, 15),
+      sources: breakdown(sources, sessions.size, 15),
+      countries: breakdown(countries, sessions.size, 15).map((item) => ({ country: item.label === 'Не определено' ? '' : item.label, count: item.count, percentage: item.percentage })),
+      cities: breakdown(cities, sessions.size, 15),
+      devices: breakdown(devices, sessions.size),
+      browsers: breakdown(browsers, sessions.size),
+      operatingSystems: breakdown(operatingSystems, sessions.size),
+      languages: breakdown(languages, sessions.size),
+      campaigns: breakdown(campaigns, sessions.size, 20),
+      mediums: breakdown(mediums, sessions.size, 20),
+      screens: breakdown(screens, sessions.size),
+      hourly,
+      recent: [...views].reverse().slice(0, 50).map((view) => {
+        const agent = userAgentInfo(view.userAgent);
+        return {
+          at: view.createdAt.toISOString(),
+          path: view.path,
+          title: view.title,
+          duration: view.duration,
+          scroll: view.maxScroll,
+          device: view.device || agent.device,
+          browser: view.browser || agent.browser,
+          os: view.os || agent.os,
+          country: view.country,
+          city: view.city,
+          source: sourceLabel(view.referrer, view.utmSource),
+          session: view.sessionId.slice(0, 8),
+        };
+      }),
     };
 
-    cache.set(period, { data: payload, at: Date.now() });
-    return NextResponse.json(payload, { headers: { 'X-Analytics-Cache': 'miss' } });
+    return NextResponse.json(payload, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Analytics error:', error);
-    const stale = getStaleCache(period);
-    if (stale) {
-      return NextResponse.json(stale, { headers: { 'X-Analytics-Cache': 'stale' } });
-    }
-    return NextResponse.json({
-      realtime: { onlineNow: 0 },
-      today: { views: 0, visitors: 0, orders: 0, avgDuration: 0 },
-      chart: [],
-      countries: [],
-      totals: { views: 0, orders: 0, revenue: 0, products: 0, uniqueIPs: 0 },
-    }, { headers: { 'X-Analytics-Cache': 'degraded' } });
+    return NextResponse.json({ error: 'Не удалось загрузить аналитику.' }, { status: 500 });
   }
 }

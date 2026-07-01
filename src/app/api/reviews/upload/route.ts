@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import prisma from '@/lib/db';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 import { hashReviewToken } from '@/lib/review-links';
+import { consumeRateLimit } from '@/lib/rate-limit';
 
 const MAX_IMAGE_SIZE_BYTES = 12 * 1024 * 1024;
 const MAX_VIDEO_SIZE_BYTES = 40 * 1024 * 1024;
@@ -34,6 +35,14 @@ async function validateInvite(token: string) {
 
 export async function POST(req: NextRequest) {
   try {
+    const rate = consumeRateLimit(req, { key: 'review-upload', limit: 20, windowMs: 60 * 60_000 });
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { success: false, message: 'Слишком много загрузок. Попробуйте позже.' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } }
+      );
+    }
+
     const formData = await req.formData();
     const token = String(formData.get('token') || '').trim();
     const filePart = formData.get('file');

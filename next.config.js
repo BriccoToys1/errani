@@ -1,8 +1,26 @@
 /** @type {import('next').NextConfig} */
+const isDevelopment = process.env.NODE_ENV !== 'production';
+const scriptPolicy = isDevelopment
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api-maps.yandex.ru https://yastatic.net"
+  : "script-src 'self' 'unsafe-inline' https://api-maps.yandex.ru https://yastatic.net";
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  scriptPolicy,
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com https://yastatic.net",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' blob:",
+  "frame-src 'self' https://yandex.ru https://yandex.com https://api-maps.yandex.ru",
+  "connect-src 'self' https://nominatim.openstreetmap.org https://api-maps.yandex.ru https://*.maps.yandex.net https://*.yandex.ru https://yastatic.net",
+  "worker-src 'self' blob:",
+  "upgrade-insecure-requests",
+].join('; ');
+
 const nextConfig = {
-  experimental: {
-    browsersListForSwc: true,
-  },
   serverExternalPackages: ['@prisma/client', 'prisma'],
   images: {
     formats: ['image/avif', 'image/webp'],
@@ -12,7 +30,11 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**',
+        hostname: 'errani.ru',
+      },
+      {
+        protocol: 'https',
+        hostname: 'admin.errani.ru',
       },
       {
         protocol: 'http',
@@ -31,14 +53,12 @@ const nextConfig = {
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'origin-when-cross-origin' },
-        ],
-      },
-      // Кэш статики на год
-      {
-        source: '/_next/static/(.*)',
-        headers: [
-          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(self), payment=()' },
+          { key: 'Content-Security-Policy', value: contentSecurityPolicy },
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+          { key: 'Cross-Origin-Resource-Policy', value: 'same-site' },
         ],
       },
       // Кэш медиа из базы данных — иммутабельно (UUID не меняется)

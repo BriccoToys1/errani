@@ -45,15 +45,29 @@ export default function AdminInquiriesPage() {
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
+  const notify = useCallback((msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(""), 3000);
+  }, []);
+
   const fetchInquiries = useCallback(async () => {
     const token = getToken();
     if (!token) { router.push("/admin/login"); return; }
-    const res = await fetch("/api/inquiries?includeArchived=true", { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
-    const data = await res.json();
-    setInquiries(Array.isArray(data) ? data : []);
-    setLoading(false);
-  }, [getToken, router]);
+    try {
+      const res = await fetch("/api/inquiries?includeArchived=true", { cache: "no-store", headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(data)) {
+        setInquiries(data);
+      } else {
+        notify("Не удалось загрузить заявки");
+      }
+    } catch {
+      notify("Не удалось загрузить заявки");
+    } finally {
+      setLoading(false);
+    }
+  }, [getToken, notify, router]);
 
   useEffect(() => { fetchInquiries(); }, [fetchInquiries]);
 
@@ -103,11 +117,6 @@ export default function AdminInquiriesPage() {
     setDeleteConfirm(null);
     setCheckedIds(new Set());
     fetchInquiries();
-  };
-
-  const notify = (msg: string) => {
-    setNotification(msg);
-    setTimeout(() => setNotification(""), 3000);
   };
 
   const toggleCheck = (id: string) => {

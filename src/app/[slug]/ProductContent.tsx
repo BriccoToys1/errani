@@ -17,7 +17,6 @@ interface Product {
   descriptionRu: string | null;
   price: number;
   shippingFee?: number;
-  shippingConditions?: string;
   oldPrice: number | null;
   discount: number;
   image: string;
@@ -103,7 +102,7 @@ export function ProductContent({ product }: { product: Product }) {
     ? (product.descriptionRu || product.description)
     : (product.description || product.descriptionRu || '');
   const price = product.price;
-  const canJoinWaitlist = !product.inStock && !product.isPreorder;
+  const canJoinWaitlist = !product.inStock;
   const noticeText = lang === 'ru'
     ? (product.noticeText || '')
     : (product.noticeTextEn || product.noticeText || '');
@@ -582,7 +581,7 @@ export function ProductContent({ product }: { product: Product }) {
           {product.isLimited && (
             <div className="limited-edition-banner">
               <h3>{t(lang, 'product.limited.title')}</h3>
-              <p>{product.limitedEditionText || t(lang, 'product.limited.text')}</p>
+              <p>{(lang === 'ru' ? product.limitedEditionText : product.limitedEditionTextEn) || t(lang, 'product.limited.text')}</p>
             </div>
           )}
         </section>
@@ -676,4 +675,3 @@ export function ProductContent({ product }: { product: Product }) {
     </main>
   );
 }
-

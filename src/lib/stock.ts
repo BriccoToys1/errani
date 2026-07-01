@@ -13,13 +13,18 @@ function parseColors(raw: string): ColorEntry[] {
   }
 }
 
-export async function markOrderPaidAndDecrementStock(orderId: string, paymentId?: string) {
+export async function markOrderPaidAndDecrementStock(
+  orderId: string,
+  paymentId?: string,
+  paymentMethod?: string,
+) {
   return prisma.$transaction(async (tx) => {
     const markedAsPaid = await tx.order.updateMany({
       where: { id: orderId, status: { not: PAID_STATUS } },
       data: {
         status: PAID_STATUS,
         ...(paymentId ? { paymentId } : {}),
+        ...(paymentMethod ? { paymentMethod } : {}),
       },
     });
 
@@ -33,6 +38,14 @@ export async function markOrderPaidAndDecrementStock(orderId: string, paymentId?
     }
 
     if (markedAsPaid.count === 0) {
+      if (paymentMethod && order.paymentMethod !== paymentMethod) {
+        const updatedOrder = await tx.order.update({
+          where: { id: orderId },
+          data: { paymentMethod },
+          include: { items: { include: { product: true } } },
+        });
+        return { order: updatedOrder, alreadyPaid: true as const };
+      }
       return { order, alreadyPaid: true as const };
     }
 
@@ -53,7 +66,22 @@ export async function markOrderPaidAndDecrementStock(orderId: string, paymentId?
       });
 
       if (updated.count === 0) {
-        throw new Error(`Insufficient stock for product ${item.productId}`);
+        const product = await tx.product.findUnique({
+          where: { id: item.productId },
+          select: { id: true },
+        });
+
+        if (product) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stock: 0,
+              inStock: false,
+              isSoldOut: true,
+            },
+          });
+          console.warn(`Paid order ${orderId} exceeded stock for product ${item.productId}`);
+        }
       }
 
       // Decrement per-color stock if selectedColor is specified

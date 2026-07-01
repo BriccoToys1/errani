@@ -1048,15 +1048,8 @@ export default function AdminOrdersPage() {
                   Способ доставки
                   <select className="cms-select" value={manualForm.shippingMethod} onChange={(e) => setManualForm({ ...manualForm, shippingMethod: e.target.value })} style={{ marginTop: 4 }}>
                     <option value="">— не указан —</option>
-                    <option value="cdek">СДЭК</option>
-                    <option value="russianpost">Почта России</option>
-                    <option value="pochta_int">Почта России (межд.)</option>
-                    <option value="ozon">OZON</option>
-                    <option value="yandex">Яндекс Маркет</option>
-                    <option value="dhl">DHL</option>
-                    <option value="fedex">FedEx</option>
-                    <option value="pickup">Самовывоз</option>
-                    <option value="courier">Курьер</option>
+                    <option value="cdek_courier">СДЭК — курьером</option>
+                    <option value="cdek_pvz">СДЭК — пункт выдачи</option>
                   </select>
                 </label>
                 <label className="cms-label">
@@ -1065,6 +1058,7 @@ export default function AdminOrdersPage() {
                     <option value="cash">Наличные</option>
                     <option value="card">Карта (офлайн)</option>
                     <option value="transfer">Перевод на карту</option>
+                    <option value="tochka">Точка Банк</option>
                     <option value="yukassa">ЮКасса</option>
                     <option value="stripe">Stripe</option>
                     <option value="manual">Другое</option>

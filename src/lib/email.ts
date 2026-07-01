@@ -1,16 +1,15 @@
 import { Resend } from 'resend';
 import prisma from '@/lib/db';
 
-// Returns API key from env var first, then from DB settings (allows admin to set it without redeployment)
+// Returns the key from admin settings first so it can be replaced without redeployment.
 async function getResendApiKey(): Promise<string | null> {
-  const envKey = process.env.RESEND_API_KEY;
-  if (envKey) return envKey;
   try {
     const setting = await prisma.siteSettings.findUnique({ where: { key: 'resend_api_key' } });
-    return setting?.value || null;
+    if (setting?.value) return setting.value;
   } catch {
-    return null;
+    // Fall back to the environment below.
   }
+  return process.env.RESEND_API_KEY || null;
 }
 
 export interface OrderEmailData {
@@ -31,6 +30,8 @@ const SHIPPING_LABELS: Record<string, string> = {
   ozon: 'OZON',
   yandex: 'Яндекс Маркет',
   cdek: 'СДЭК',
+  cdek_courier: 'СДЭК — курьером',
+  cdek_pvz: 'СДЭК — пункт выдачи',
   russianpost: 'Почта России',
   pochta_ru: 'Почта России',
   pochta_int: 'Почта России (международная)',
@@ -199,6 +200,11 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
       html: emailBody,
       ...(attachments.length ? { attachments } : {}),
     });
+
+    if (result.error) {
+      console.error('Failed to send order confirmation email:', result.error);
+      return;
+    }
     console.log(`Order confirmation email sent to ${data.customerEmail}`);
 
     // Save to adminEmail table so it's visible in admin email section
@@ -221,6 +227,89 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
     }
   } catch (err) {
     console.error('Failed to send order confirmation email:', err);
+  }
+}
+
+export async function sendReceiptEmail(data: {
+  recipientEmail: string;
+  orderNumber: string;
+  receiptPdf: Buffer;
+}) {
+  const apiKey = await getResendApiKey();
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY not set and not found in DB settings, skipping receipt email');
+    return false;
+  }
+
+  const subject = `Чек по заказу #${data.orderNumber} — errani`;
+  const html = `<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:32px;background:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;">
+  <div style="max-width:540px;margin:0 auto;background:#fff;border-radius:16px;padding:32px;">
+    <h1 style="margin:0 0 16px;font-size:22px;">Чек по заказу #${data.orderNumber}</h1>
+    <p style="margin:0;color:#666;line-height:1.6;">Чек приложен к письму в формате PDF.</p>
+  </div>
+</body>
+</html>`;
+
+  try {
+    let resendId = '';
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'errani <mail@errani.ru>',
+          to: [data.recipientEmail],
+          subject,
+          html,
+          attachments: [{
+            filename: `receipt-${data.orderNumber}.pdf`,
+            content: data.receiptPdf.toString('base64'),
+          }],
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const result = await response.json() as { id?: string; message?: string };
+
+      if (response.ok && result.id) {
+        resendId = result.id;
+        break;
+      }
+
+      console.error('Failed to send receipt email:', response.status, result.message || result);
+      if (response.status < 500) return false;
+    }
+
+    if (!resendId) return false;
+
+    try {
+      await prisma.adminEmail.create({
+        data: {
+          direction: 'outbound',
+          fromAddr: 'mail@errani.ru',
+          toAddr: data.recipientEmail,
+          subject,
+          body: html,
+          textBody: `Чек по заказу #${data.orderNumber} приложен в формате PDF.`,
+          status: 'sent',
+          isRead: true,
+          resendId,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to save receipt email to DB:', error);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to send receipt email:', error);
+    return false;
   }
 }
 

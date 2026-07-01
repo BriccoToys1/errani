@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { verifyAdminToken } from '@/lib/admin-auth';
+import crypto from 'crypto';
+import { adminGuard, verifyAdminToken } from '@/lib/admin-auth';
 import { getJwtSecret } from '@/lib/jwt-secret';
 
 // GET current admin profile
@@ -18,6 +19,8 @@ export async function GET(req: NextRequest) {
 
 // PUT update admin profile (email, name, password)
 export async function PUT(req: NextRequest) {
+  const denied = adminGuard(req);
+  if (denied) return denied;
   const admin = verifyAdminToken(req);
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -28,6 +31,16 @@ export async function PUT(req: NextRequest) {
     }
 
     const { email, name, currentPassword, newPassword } = await req.json();
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
+    if (
+      (normalizedEmail && (normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)))
+      || normalizedName.length > 100
+      || (typeof currentPassword === 'string' && currentPassword.length > 256)
+      || (typeof newPassword === 'string' && newPassword.length > 256)
+    ) {
+      return NextResponse.json({ error: 'Некорректные данные' }, { status: 400 });
+    }
 
     const record = await prisma.admin.findUnique({ where: { id: admin.adminId } });
     if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -44,20 +57,20 @@ export async function PUT(req: NextRequest) {
 
     const updateData: { email?: string; name?: string; password?: string } = {};
 
-    if (email && email !== record.email) {
+    if (normalizedEmail && normalizedEmail !== record.email) {
       // Check uniqueness
-      const exists = await prisma.admin.findUnique({ where: { email } });
+      const exists = await prisma.admin.findUnique({ where: { email: normalizedEmail } });
       if (exists) return NextResponse.json({ error: 'Этот email уже используется' }, { status: 400 });
-      updateData.email = email;
+      updateData.email = normalizedEmail;
     }
 
-    if (name && name !== record.name) {
-      updateData.name = name;
+    if (normalizedName && normalizedName !== record.name) {
+      updateData.name = normalizedName;
     }
 
     if (newPassword) {
-      if (newPassword.length < 8) {
-        return NextResponse.json({ error: 'Пароль должен быть минимум 8 символов' }, { status: 400 });
+      if (newPassword.length < 12) {
+        return NextResponse.json({ error: 'Пароль должен быть минимум 12 символов' }, { status: 400 });
       }
       updateData.password = await bcrypt.hash(newPassword, 12);
     }
@@ -76,10 +89,24 @@ export async function PUT(req: NextRequest) {
     const token = jwt.sign(
       { adminId: updated.id, email: updated.email, name: updated.name },
       jwtSecret,
-      { expiresIn: '7d' }
+      {
+        algorithm: 'HS256',
+        expiresIn: '12h',
+        issuer: 'errani-admin',
+        audience: 'errani-admin-panel',
+        jwtid: crypto.randomUUID(),
+      }
     );
 
-    return NextResponse.json({ ...updated, token });
+    const response = NextResponse.json(updated, { headers: { 'Cache-Control': 'no-store' } });
+    response.cookies.set('admin_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 12 * 60 * 60,
+    });
+    return response;
   } catch (error) {
     console.error('Account update error:', error);
     return NextResponse.json({ error: 'Ошибка сервера' }, { status: 500 });

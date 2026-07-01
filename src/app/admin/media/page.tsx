@@ -111,7 +111,7 @@ export default function AdminMediaPage() {
     try {
       const [mediaResult, productsResult] = await Promise.all([
         requestJson("/api/admin/upload/images", { headers: { Authorization: `Bearer ${token}` } }),
-        requestJson("/api/products?summary=0", { headers: { Authorization: `Bearer ${token}` } }),
+        requestJson("/api/products?showAll=true&includeArchived=true", { headers: { Authorization: `Bearer ${token}` } }),
       ]);
 
       if (mediaResult.status === 401) {
@@ -120,22 +120,26 @@ export default function AdminMediaPage() {
         return;
       }
 
-      const data = mediaResult.data as { items?: unknown[] };
-      const normalized = Array.isArray(data?.items)
-        ? data.items
-            .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
-            .map((item) => ({
-              filename: String(item.filename || ""),
-              relativePath: String(item.relativePath || ""),
-              url: String(item.url || ""),
-              size: Number(item.size || 0),
-              updatedAt: String(item.updatedAt || new Date().toISOString()),
-            }))
-        : [];
-      setItems(normalized);
+      const data = mediaResult.data as { success?: boolean; items?: unknown[]; message?: string };
+      if (mediaResult.ok && data?.success && Array.isArray(data.items)) {
+        const normalized = data.items
+          .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+          .map((item) => ({
+            filename: String(item.filename || ""),
+            relativePath: String(item.relativePath || ""),
+            url: String(item.url || ""),
+            size: Number(item.size || 0),
+            updatedAt: String(item.updatedAt || new Date().toISOString()),
+          }));
+        setItems(normalized);
+      } else if (showFullLoader) {
+        showMessage(data?.message || "Не удалось загрузить медиатеку");
+      }
 
       if (Array.isArray(productsResult.data)) {
         setProducts((productsResult.data as ProductInfo[]).filter((p) => p.isActive !== false));
+      } else if (showFullLoader) {
+        showMessage("Не удалось загрузить товары для медиатеки");
       }
     } catch {
       if (showFullLoader) showMessage("Не удалось загрузить медиатеку");
@@ -317,9 +321,9 @@ export default function AdminMediaPage() {
           </div>
         </div>
 
-        <div className="cms-content" style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        <div className="cms-content cms-media-layout" style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
           {/* Directory tree */}
-          <div style={{ width: 200, flexShrink: 0, background: "var(--cms-surface)", border: "1px solid var(--cms-border)", borderRadius: 10, padding: "8px 0", position: "sticky", top: 16 }}>
+          <div className="cms-media-folders" style={{ width: 200, flexShrink: 0, background: "var(--cms-surface)", border: "1px solid var(--cms-border)", borderRadius: 10, padding: "8px 0", position: "sticky", top: 16 }}>
             <button
               onClick={() => setFolder(null)}
               style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 14px", background: folder === null ? "rgba(232,114,42,0.1)" : "none", borderLeft: folder === null ? "2px solid var(--cms-accent)" : "2px solid transparent", border: "none", borderRadius: 0, color: folder === null ? "var(--cms-accent)" : "var(--cms-text)", fontSize: 13, cursor: "pointer", fontWeight: folder === null ? 600 : 400 }}
@@ -389,7 +393,7 @@ export default function AdminMediaPage() {
               <input className="cms-input" placeholder="Поиск по имени или URL" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px" }}>
+            <div className="cms-media-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "10px" }}>
               {filtered.map((item) => {
                 const ownerProductId = urlToProduct.get(item.url);
                 const ownerProduct = ownerProductId ? products.find((p) => p.id === ownerProductId) : null;

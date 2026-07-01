@@ -55,8 +55,9 @@ export default function AdminLoginPage() {
         return;
       }
 
-      localStorage.setItem("admin_token", data.token);
-      document.cookie = `admin_token=${data.token}; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax`;
+      // Non-secret marker used by legacy admin screens. The actual JWT lives in
+      // an HttpOnly, Secure cookie and is never exposed to client-side code.
+      localStorage.setItem("admin_token", "cookie-session");
       router.push("/admin");
     } catch {
       setError("Ошибка сети");
@@ -93,13 +94,13 @@ export default function AdminLoginPage() {
           <label className="cms-label">
             Email
             <input
-              type="text"
+              type="email"
               className="cms-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               autoFocus
-              autoComplete="off"
+              autoComplete="username"
               autoCorrect="off"
               autoCapitalize="off"
               spellCheck={false}
@@ -116,7 +117,7 @@ export default function AdminLoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                autoComplete="new-password"
+                autoComplete="current-password"
                 style={{ paddingRight: "40px" }}
               />
               <button
@@ -128,6 +129,7 @@ export default function AdminLoginPage() {
                   color: "var(--cms-text-muted)", display: "flex"
                 }}
                 tabIndex={-1}
+                aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
               >
                 {showPassword ? (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>

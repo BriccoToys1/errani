@@ -1,34 +1,48 @@
 #!/bin/bash
-# deploy.sh — production deploy на Vercel
-# Использование: ./deploy.sh
+# deploy.sh — deploy production to SmartApe VPS
+# Usage:
+#   ./deploy.sh
+#   SERVER_USER=deploy SERVER_PORT=22 ./deploy.sh
 
 set -euo pipefail
 
-LOCAL_DIR="$(cd "$(dirname "$0")" && pwd)"
-NODE_22_NPM="$HOME/.nvm/versions/node/v22.22.2/bin/npm"
-NODE_22_NPX="$HOME/.nvm/versions/node/v22.22.2/bin/npx"
+SERVER_HOST="${SERVER_HOST:-188.127.251.184}"
+SERVER_USER="${SERVER_USER:-root}"
+SERVER_PORT="${SERVER_PORT:-22}"
+APP_DIR="${APP_DIR:-/var/www/errani}"
 
-cd "$LOCAL_DIR"
+echo "Deploy target: ${SERVER_USER}@${SERVER_HOST}:${APP_DIR}"
 
-if [ ! -x "$NODE_22_NPX" ]; then
-  echo "Не найден npx: $NODE_22_NPX"
-  exit 1
-fi
+echo "Uploading project files..."
+COPYFILE_DISABLE=1 tar \
+  --exclude='./.git' \
+  --exclude='./node_modules' \
+  --exclude='node_modules' \
+  --exclude='node_modules/*' \
+  --exclude='./.next' \
+  --exclude='.next' \
+  --exclude='.next/*' \
+  --exclude='./.vercel' \
+  --exclude='./Montserrat' \
+  --exclude='./.env' \
+  --exclude='./.env.local' \
+  --exclude='./.env.prod' \
+  --exclude='./.env.production' \
+  --exclude='./tsconfig.tsbuildinfo' \
+  -czf - . | ssh \
+    -p "$SERVER_PORT" \
+    -o StrictHostKeyChecking=accept-new \
+    "${SERVER_USER}@${SERVER_HOST}" \
+    "mkdir -p '$APP_DIR' && tar -xzf - --no-same-owner -C '$APP_DIR'"
 
-echo "Проверка зависимостей и lockfile..."
-if [ -x "$NODE_22_NPM" ]; then
-  "$NODE_22_NPM" install --ignore-scripts
-fi
+echo "Building and reloading on server..."
+ssh \
+  -p "$SERVER_PORT" \
+  -o StrictHostKeyChecking=accept-new \
+  "${SERVER_USER}@${SERVER_HOST}" \
+  "APP_DIR='$APP_DIR' bash -s" < scripts/deploy-server.sh
 
-echo "Локальная сборка..."
-./node_modules/.bin/prisma generate
-./node_modules/.bin/next build --webpack
-
-echo "Деплой на Vercel production..."
-"$NODE_22_NPX" vercel@latest link --yes --scope briccotoys1s-projects --project errani
-"$NODE_22_NPX" vercel@latest deploy --prod --yes --scope briccotoys1s-projects
-
-echo "Проверка доменов..."
+echo "Checking domains..."
 for url in \
   "https://errani.ru/" \
   "https://www.errani.ru/" \

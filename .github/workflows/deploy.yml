@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies
@@ -24,3 +24,56 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    env:
+      SMARTAPE_HOST: ${{ secrets.SMARTAPE_HOST }}
+      SMARTAPE_USER: ${{ secrets.SMARTAPE_USER }}
+      SMARTAPE_PORT: ${{ secrets.SMARTAPE_PORT }}
+      SMARTAPE_SSH_KEY: ${{ secrets.SMARTAPE_SSH_KEY }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check deploy secrets
+        id: secrets
+        run: |
+          if [ -n "$SMARTAPE_HOST" ] && [ -n "$SMARTAPE_USER" ] && [ -n "$SMARTAPE_PORT" ] && [ -n "$SMARTAPE_SSH_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure SSH
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SMARTAPE_SSH_KEY" > ~/.ssh/smartape_deploy
+          chmod 600 ~/.ssh/smartape_deploy
+          ssh-keyscan -p "$SMARTAPE_PORT" "$SMARTAPE_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy to SmartApe VPS
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          tar \
+            --exclude='./.git' \
+            --exclude='./node_modules' \
+            --exclude='./.next' \
+            --exclude='./.vercel' \
+            --exclude='./Montserrat' \
+            --exclude='./.env' \
+            --exclude='./.env.local' \
+            --exclude='./.env.prod' \
+            --exclude='./.env.production' \
+            --exclude='./tsconfig.tsbuildinfo' \
+            -czf - . | ssh -i ~/.ssh/smartape_deploy -p "$SMARTAPE_PORT" "$SMARTAPE_USER@$SMARTAPE_HOST" \
+              "mkdir -p /var/www/errani && tar -xzf - --no-same-owner -C /var/www/errani"
+          ssh -i ~/.ssh/smartape_deploy -p "$SMARTAPE_PORT" "$SMARTAPE_USER@$SMARTAPE_HOST" \
+            "APP_DIR=/var/www/errani bash -s" < scripts/deploy-server.sh
+
+      - name: Skip deploy
+        if: steps.secrets.outputs.ready != 'true'
+        run: echo "SmartApe deploy secrets are not configured; build check completed only."

@@ -1,13 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getCart, updateQuantity, removeFromCart, clearCart, getCartTotal, CartItem } from '@/lib/cart';
-import { formatPrice, COUNTRIES, SHIPPING_METHODS_RU, SHIPPING_METHODS_INT, getShippingCost } from '@/lib/utils';
+import { formatPrice, COUNTRIES } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
 import { PhoneInput } from '@/components/PhoneInput';
+import { CdekPickupLocation, CdekPickupMap, CdekPickupPoint } from '@/components/CdekPickupMap';
+
+interface CdekDeliveryQuote {
+  amount: number;
+  periodMin: number;
+  periodMax: number;
+  tariffCode: number;
+  mode: 'courier' | 'pickup';
+}
 
 export default function CartPage() {
   const { lang } = useLanguage();
@@ -32,15 +41,20 @@ export default function CartPage() {
     house: '',
     apartment: '',
     noApartment: false,
-    shippingMethod: 'pochta_ru',
+    shippingMethod: 'cdek_courier',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState('');
   const [consentOferta, setConsentOferta] = useState(false);
   const [consentData, setConsentData] = useState(false);
   const [unavailableProductIds, setUnavailableProductIds] = useState<Set<string>>(new Set());
   const [availabilityChecked, setAvailabilityChecked] = useState(false);
-  type ProductData = { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean; shippingFee?: number; shippingConditions?: string; noticeText?: string; noticeTextEn?: string };
+  type ProductData = { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean; shippingFee?: number; freeDelivery?: boolean; noticeText?: string; noticeTextEn?: string };
   const [productMap, setProductMap] = useState<Map<string, ProductData>>(new Map());
+  const [selectedPickupPoint, setSelectedPickupPoint] = useState<CdekPickupPoint | null>(null);
+  const [deliveryQuote, setDeliveryQuote] = useState<CdekDeliveryQuote | null>(null);
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
+  const [deliveryError, setDeliveryError] = useState('');
 
   const [deliveryEstimate, setDeliveryEstimate] = useState('Ориентировочный срок доставки ~ начало Мая');
 
@@ -72,7 +86,7 @@ export default function CartPage() {
           return;
         }
 
-        type ProductData = { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean; shippingFee?: number; shippingConditions?: string; noticeText?: string; noticeTextEn?: string };
+        type ProductData = { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean; shippingFee?: number; freeDelivery?: boolean; noticeText?: string; noticeTextEn?: string };
         const byId = new Map<string, ProductData>(
           products.map((p: ProductData) => [p.id, p])
         );
@@ -104,121 +118,185 @@ export default function CartPage() {
   }, []);
 
   const isRussia = formData.country === 'RU';
-  const shippingMethods = isRussia ? SHIPPING_METHODS_RU : SHIPPING_METHODS_INT;
+  const deliveryMode = formData.shippingMethod === 'cdek_pvz' ? 'pickup' : 'courier';
 
   useEffect(() => {
-    const methods = formData.country === 'RU' ? SHIPPING_METHODS_RU : SHIPPING_METHODS_INT;
-    if (!methods.some(m => m.key === formData.shippingMethod)) {
-      setFormData(prev => ({ ...prev, shippingMethod: methods[0]?.key || '' }));
+    if (formData.country === 'RU' && !['cdek_courier', 'cdek_pvz'].includes(formData.shippingMethod)) {
+      setFormData(prev => ({ ...prev, shippingMethod: 'cdek_courier' }));
     }
   }, [formData.country, formData.shippingMethod]);
 
   const handleQty = (id: string, qty: number) => setCart(updateQuantity(id, qty));
   const handleRemove = (id: string) => setCart(removeFromCart(id));
   const total = getCartTotal(cart);
-  const itemCount = cart.reduce((sum, i) => sum + i.quantity, 0);
-  const hasLegacyItemsWithoutShippingFee = cart.some((item) => typeof item.shippingFee !== 'number');
-
-  const getEffectiveShippingForItem = (item: CartItem): number => {
-    const pData = productMap.get(item.productId);
-    if (pData?.shippingConditions) {
-      try {
-        const conds: Array<{fromQty: number; toQty: number; price: number}> = JSON.parse(pData.shippingConditions);
-        const match = conds.find(c => item.quantity >= c.fromQty && item.quantity <= c.toQty);
-        if (match) return match.price;
-      } catch { /* ignore */ }
-    }
-    return Number(item.shippingFee || 0);
-  };
-
-  const perProductShippingCost = cart.reduce(
-    (sum, item) => sum + getEffectiveShippingForItem(item),
-    0
-  );
-  const fallbackShippingCost = isRussia ? getShippingCost(itemCount) : 0;
-  const shippingCost = hasLegacyItemsWithoutShippingFee ? fallbackShippingCost : perProductShippingCost;
+  const shippingCost = isRussia ? (deliveryQuote?.amount || 0) : 0;
 
   const cartNotices = cart
     .map(item => {
       const pData = productMap.get(item.productId);
-      return lang === 'ru' ? (pData?.noticeText || '') : (pData?.noticeTextEn || pData?.noticeText || '');
+      return lang === 'ru' ? (pData?.noticeText || '') : (pData?.noticeTextEn || '');
     })
     .filter((t, i, arr) => t && arr.indexOf(t) === i);
   const grandTotal = total + shippingCost;
   const unavailableItems = cart.filter(item => unavailableProductIds.has(item.productId));
   const hasUnavailableItems = unavailableItems.length > 0;
 
+  const handlePickupLocationChange = useCallback((location: CdekPickupLocation | null) => {
+    setSelectedPickupPoint(null);
+    setDeliveryQuote(null);
+    setDeliveryError('');
+    if (!location) return;
+    setFormData(prev => ({
+      ...prev,
+      oblast: location.region || prev.oblast,
+      city: location.city,
+      zipCode: location.postalCode || location.postalCodes[0] || '',
+      street: '',
+      house: '',
+      apartment: '',
+    }));
+  }, []);
+
+  const handlePickupSelect = useCallback((point: CdekPickupPoint) => {
+    setSelectedPickupPoint(point);
+    setDeliveryQuote(null);
+    setDeliveryError('');
+    setFormData(prev => ({
+      ...prev,
+      city: point.city,
+      zipCode: point.postalCode || prev.zipCode,
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (!isRussia || cart.length === 0) {
+      setDeliveryQuote(null);
+      setDeliveryError('');
+      setDeliveryLoading(false);
+      return;
+    }
+
+    const courierReady = formData.city.trim().length >= 2
+      && formData.street.trim().length >= 2
+      && formData.house.trim().length >= 1;
+    const pickupReady = Boolean(selectedPickupPoint);
+    if ((deliveryMode === 'courier' && !courierReady) || (deliveryMode === 'pickup' && !pickupReady)) {
+      setDeliveryQuote(null);
+      setDeliveryError('');
+      setDeliveryLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setDeliveryLoading(true);
+      setDeliveryError('');
+      try {
+        const response = await fetch('/api/delivery/cdek', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            country: 'RU',
+            shippingMethod: formData.shippingMethod,
+            city: formData.city,
+            oblast: formData.oblast,
+            zipCode: formData.zipCode,
+            street: formData.street,
+            house: formData.house,
+            items: cart.map(item => ({ productId: item.productId, quantity: item.quantity })),
+            cdekDeliveryPoint: selectedPickupPoint,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(lang === 'ru'
+          ? (data.error || 'Не удалось рассчитать доставку СДЭК.')
+          : 'Could not calculate CDEK delivery.');
+        setDeliveryQuote(data);
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return;
+        setDeliveryQuote(null);
+        setDeliveryError(error instanceof Error
+          ? error.message
+          : (lang === 'ru' ? 'Не удалось рассчитать доставку СДЭК.' : 'Could not calculate CDEK delivery.'));
+      } finally {
+        if (!controller.signal.aborted) setDeliveryLoading(false);
+      }
+    }, 550);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [cart, deliveryMode, formData.city, formData.country, formData.house, formData.shippingMethod, formData.street, formData.zipCode, isRussia, lang, selectedPickupPoint]);
+
   const validate = () => {
     const e: Record<string, string> = {};
     
     // Last name validation
     if (!formData.lastName.trim()) {
-      e.lastName = 'Введите фамилию';
+      e.lastName = lang === 'ru' ? 'Введите фамилию' : 'Enter your last name';
     } else if (!/^[\p{L}\s\-']+$/u.test(formData.lastName.trim())) {
-      e.lastName = 'Фамилия может содержать только буквы';
+      e.lastName = lang === 'ru' ? 'Фамилия может содержать только буквы' : 'Last name may contain letters only';
     }
 
     // First name validation
     if (!formData.firstName.trim()) {
-      e.firstName = 'Введите имя';
+      e.firstName = lang === 'ru' ? 'Введите имя' : 'Enter your first name';
     } else if (!/^[\p{L}\s\-']+$/u.test(formData.firstName.trim())) {
-      e.firstName = 'Имя может содержать только буквы';
+      e.firstName = lang === 'ru' ? 'Имя может содержать только буквы' : 'First name may contain letters only';
     }
 
     // Middle name validation (if not checked "no middle name")
     if (!formData.noMiddleName && !formData.middleName.trim()) {
-      e.middleName = 'Введите отчество';
+      e.middleName = lang === 'ru' ? 'Введите отчество' : 'Enter your middle name';
     }
     
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
     if (!formData.email.trim()) {
-      e.email = 'Введите email';
+      e.email = lang === 'ru' ? 'Введите email' : 'Enter your email';
     } else if (!emailRegex.test(formData.email.trim())) {
-      e.email = 'Введите корректный email';
+      e.email = lang === 'ru' ? 'Введите корректный email' : 'Enter a valid email';
     }
     
     // Phone validation - minimum 10 digits
     const phoneDigits = formData.phone.replace(/\D/g, '');
     if (phoneDigits.length < 10) {
-      e.phone = 'Введите корректный телефон (минимум 10 цифр)';
+      e.phone = lang === 'ru' ? 'Введите корректный телефон (минимум 10 цифр)' : 'Enter a valid phone number (at least 10 digits)';
     }
 
     // Custom country validation
     if (formData.country === 'OTHER' && !formData.customCountry.trim()) {
-      e.customCountry = 'Введите название страны';
+      e.customCountry = lang === 'ru' ? 'Введите название страны' : 'Enter the country name';
     }
     
-    // City validation
-    if (!formData.city.trim()) {
-      e.city = 'Введите город';
-    } else if (formData.city.trim().length < 2) {
-      e.city = 'Название города слишком короткое';
+    if (deliveryMode === 'courier') {
+      if (!formData.city.trim()) {
+        e.city = lang === 'ru' ? 'Введите город' : 'Enter your city';
+      } else if (formData.city.trim().length < 2) {
+        e.city = lang === 'ru' ? 'Название города слишком короткое' : 'City name is too short';
+      }
+      const zipTrimmed = formData.zipCode.trim();
+      if (zipTrimmed && !/^\d{6}$/.test(zipTrimmed)) {
+        e.zipCode = lang === 'ru' ? 'Индекс должен содержать 6 цифр' : 'Postal code must contain 6 digits';
+      }
+      if (!formData.street.trim()) e.street = lang === 'ru' ? 'Введите улицу' : 'Enter your street';
+      if (!formData.house.trim()) e.house = lang === 'ru' ? 'Введите дом' : 'Enter your house number';
+    } else if (!selectedPickupPoint) {
+      e.delivery = lang === 'ru' ? 'Выберите пункт выдачи СДЭК' : 'Choose a CDEK pickup point';
     }
-    
-    // Zip code validation
-    const zipTrimmed = formData.zipCode.trim();
-    if (!zipTrimmed) {
-      e.zipCode = 'Введите индекс';
-    } else if (formData.country === 'RU' && !/^\d{6}$/.test(zipTrimmed)) {
-      e.zipCode = 'Индекс должен содержать 6 цифр';
-    } else if (formData.country !== 'RU' && zipTrimmed.length < 3) {
-      e.zipCode = 'Введите корректный индекс';
-    }
-    
-    // Street validation
-    if (!formData.street.trim()) {
-      e.street = 'Введите улицу';
-    }
-    
-    // House validation
-    if (!formData.house.trim()) {
-      e.house = 'Введите дом';
+
+    const hasDeliveryFieldError = ['city', 'zipCode', 'street', 'house', 'delivery'].some(field => e[field]);
+    if (isRussia && !hasDeliveryFieldError && !deliveryQuote) {
+      e.delivery = deliveryLoading
+        ? (lang === 'ru' ? 'Дождитесь завершения расчёта доставки' : 'Wait for the delivery calculation to finish')
+        : deliveryError || (lang === 'ru' ? 'Не удалось подтвердить адрес и рассчитать доставку' : 'Could not verify the address and calculate delivery');
     }
 
     // Consent validation
-    if (!consentOferta) e.consentOferta = 'Необходимо принять условия оферты';
-    if (!consentData) e.consentData = 'Необходимо дать согласие на обработку данных';
+    if (!consentOferta) e.consentOferta = lang === 'ru' ? 'Необходимо принять условия оферты' : 'You must accept the public offer';
+    if (!consentData) e.consentData = lang === 'ru' ? 'Необходимо дать согласие на обработку данных' : 'You must consent to personal data processing';
     
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -226,8 +304,11 @@ export default function CartPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError('');
     if (hasUnavailableItems) {
-      alert('Некоторые товары в корзине сейчас недоступны. Удалите их, чтобы продолжить оформление.');
+      alert(lang === 'ru'
+        ? 'Некоторые товары в корзине сейчас недоступны. Удалите их, чтобы продолжить оформление.'
+        : 'Some products in your cart are currently unavailable. Remove them to continue.');
       return;
     }
     if (!validate()) return;
@@ -241,12 +322,16 @@ export default function CartPage() {
           ...formData,
           name: [formData.lastName, formData.firstName, formData.noMiddleName ? '' : formData.middleName].filter(Boolean).join(' '),
           items: cart.map(item => ({ productId: item.productId, quantity: item.quantity, selectedColor: item.selectedColor })),
+          cdekDeliveryPoint: selectedPickupPoint,
+          language: lang,
           shippingCost,
           totalAmount: grandTotal,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(lang === 'ru'
+        ? (data.error || 'Ошибка при оформлении заказа. Попробуйте ещё раз.')
+        : 'Could not place the order. Check your details and try again.');
 
       if (data.paymentUrl) {
         clearCart();
@@ -259,7 +344,11 @@ export default function CartPage() {
       setCart([]);
       setStep('done');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Ошибка при оформлении заказа. Попробуйте ещё раз.');
+      const message = err instanceof Error
+        ? err.message
+        : (lang === 'ru' ? 'Ошибка при оформлении заказа. Попробуйте ещё раз.' : 'Could not place the order. Try again.');
+      setSubmitError(message);
+      alert(message);
     } finally {
       setSubmitting(false);
     }
@@ -282,7 +371,7 @@ export default function CartPage() {
       });
       setForeignDone(true);
     } catch {
-      alert('Ошибка при отправке. Попробуйте ещё раз.');
+      alert(lang === 'ru' ? 'Ошибка при отправке. Попробуйте ещё раз.' : 'Could not send your request. Try again.');
     } finally {
       setForeignSubmitting(false);
     }
@@ -371,7 +460,7 @@ export default function CartPage() {
                     {lang === 'ru' ? 'Цвет' : 'Color'}: {item.selectedColor}
                   </div>
                 )}
-                {(() => { const pData = productMap.get(item.productId); const notice = lang === 'ru' ? pData?.noticeText : (pData?.noticeTextEn || pData?.noticeText); return notice ? <div style={{ fontSize: '0.75rem', color: '#ffb400', fontWeight: 600, marginTop: 4 }}>⚠ {notice}</div> : null; })()}
+                {(() => { const pData = productMap.get(item.productId); const notice = lang === 'ru' ? pData?.noticeText : pData?.noticeTextEn; return notice ? <div style={{ fontSize: '0.75rem', color: '#ffb400', fontWeight: 600, marginTop: 4 }}>⚠ {notice}</div> : null; })()}
                 {item.isPreorder && <span className="cart-item-tag">{t(lang, 'cart.preorder')}</span>}
                 {unavailableProductIds.has(item.productId) && (
                   <span className="cart-item-tag" style={{ background: 'rgba(239,68,68,0.18)', color: '#fda4af' }}>
@@ -465,7 +554,7 @@ export default function CartPage() {
               <Field label="Email" type="email" value={formData.email} error={errors.email}
                 onChange={(v) => setFormData({ ...formData, email: v })} />
               <PhoneInput
-                label="Телефон"
+                label={lang === 'ru' ? 'Телефон' : 'Phone'}
                 value={formData.phone}
                 onChange={(v) => setFormData({ ...formData, phone: v })}
                 countryCode={formData.country}
@@ -484,7 +573,7 @@ export default function CartPage() {
                   value={formData.country}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value, customCountry: '' })}
                 >
-                  {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+                  {COUNTRIES.map(c => <option key={c.code} value={c.code}>{lang === 'ru' ? c.name : c.nameEn}</option>)}
                 </select>
                 {formData.country === 'OTHER' && (
                   <div style={{ marginTop: '0.75rem' }}>
@@ -500,57 +589,102 @@ export default function CartPage() {
                   </div>
                 )}
               </div>
-              {isRussia && <>
-              <Field
-                label={lang === 'ru' ? 'Область / Регион (по желанию)' : 'Oblast / Region (optional)'}
-                value={formData.oblast}
-                onChange={(v) => setFormData({ ...formData, oblast: v })}
-              />
-              <Field label={lang === 'ru' ? 'Город' : 'City'} value={formData.city} error={errors.city}
-                onChange={(v) => setFormData({ ...formData, city: v })} />
-              <Field label={lang === 'ru' ? 'Индекс' : 'ZIP / Postal code'} value={formData.zipCode} error={errors.zipCode}
-                onChange={(v) => setFormData({ ...formData, zipCode: v })} />
-              <Field label={lang === 'ru' ? 'Улица' : 'Street'} value={formData.street} error={errors.street}
-                onChange={(v) => setFormData({ ...formData, street: v })} />
-              <Field label={lang === 'ru' ? 'Дом' : 'House / Apt'} value={formData.house} error={errors.house}
-                onChange={(v) => setFormData({ ...formData, house: v })} />
-              <div>
-                <Field label={lang === 'ru' ? 'Квартира (если есть)' : 'Apartment (if any)'} value={formData.apartment}
-                  onChange={(v) => setFormData({ ...formData, apartment: v })} />
-              </div>
-              </>
-              }
+              {isRussia && (
+                <>
+                  <div className="full-width">
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                      {lang === 'ru' ? 'Способ доставки СДЭК' : 'CDEK delivery method'}
+                    </label>
+                    <div className="cdek-delivery-switch" role="group" aria-label={lang === 'ru' ? 'Способ доставки СДЭК' : 'CDEK delivery method'}>
+                      <button
+                        type="button"
+                        className={deliveryMode === 'courier' ? 'active' : ''}
+                        aria-pressed={deliveryMode === 'courier'}
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, shippingMethod: 'cdek_courier', zipCode: '' }));
+                          setSelectedPickupPoint(null);
+                          setDeliveryQuote(null);
+                          setDeliveryError('');
+                        }}
+                      >
+                        {lang === 'ru' ? 'Курьером' : 'Courier'}
+                      </button>
+                      <button
+                        type="button"
+                        className={deliveryMode === 'pickup' ? 'active' : ''}
+                        aria-pressed={deliveryMode === 'pickup'}
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, shippingMethod: 'cdek_pvz' }));
+                          setDeliveryQuote(null);
+                          setDeliveryError('');
+                        }}
+                      >
+                        {lang === 'ru' ? 'Пункт выдачи' : 'Pickup point'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {deliveryMode === 'courier' ? (
+                    <>
+                      <Field
+                        label={lang === 'ru' ? 'Область / Регион (по желанию)' : 'Oblast / Region (optional)'}
+                        value={formData.oblast}
+                        onChange={(v) => setFormData({ ...formData, oblast: v })}
+                      />
+                      <Field label={lang === 'ru' ? 'Город' : 'City'} value={formData.city} error={errors.city}
+                        onChange={(v) => setFormData({ ...formData, city: v })} />
+                      <Field label={lang === 'ru' ? 'Улица' : 'Street'} value={formData.street} error={errors.street}
+                        onChange={(v) => setFormData({ ...formData, street: v })} />
+                      <Field label={lang === 'ru' ? 'Дом' : 'House'} value={formData.house} error={errors.house}
+                        onChange={(v) => setFormData({ ...formData, house: v })} />
+                      <div>
+                        <Field label={lang === 'ru' ? 'Квартира (если есть)' : 'Apartment (if any)'} value={formData.apartment}
+                          onChange={(v) => setFormData({ ...formData, apartment: v })} />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="full-width">
+                      <CdekPickupMap
+                        selectedPoint={selectedPickupPoint}
+                        onSelect={handlePickupSelect}
+                        onLocationChange={handlePickupLocationChange}
+                        lang={lang}
+                      />
+                    </div>
+                  )}
+                  {errors.delivery && <p className="full-width" style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '-0.25rem' }}>{errors.delivery}</p>}
+                </>
+              )}
             </div>
           </div>
 
           {isRussia && <div className="checkout-form">
-            <h2 className="checkout-heading">{lang === 'ru' ? 'Способ доставки' : 'Shipping method'}</h2>
-            <div>
-              <select
-                className="form-field"
-                value={formData.shippingMethod}
-                onChange={(e) => setFormData({ ...formData, shippingMethod: e.target.value })}
-              >
-                {shippingMethods.map(m => (
-                  <option key={m.key} value={m.key}>{m.label}</option>
-                ))}
-              </select>
-            </div>
+            <h2 className="checkout-heading">{lang === 'ru' ? 'Ваш заказ' : 'Your order'}</h2>
             {isRussia && (
               <div style={{ marginTop: '0.85rem', padding: '0.75rem 1rem', background: 'rgba(232,114,42,0.07)', borderRadius: '8px', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.8 }}>
                 {cart.map(item => (
                   <div key={item.productId} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>{item.name} — {item.quantity} шт.</span>
+                    <span>{item.name} — {item.quantity} {lang === 'ru' ? 'шт.' : 'pcs.'}</span>
                     <span>{formatPrice(item.price * item.quantity)}</span>
                   </div>
                 ))}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  <span>Доставка</span>
-                  <span>{formatPrice(shippingCost)}</span>
+                  <span>{lang === 'ru' ? 'Доставка' : 'Delivery'}</span>
+                  <span style={{ color: deliveryError ? '#ef4444' : undefined }}>
+                    {deliveryLoading
+                      ? (lang === 'ru' ? 'Рассчитываем…' : 'Calculating…')
+                      : deliveryQuote
+                        ? (deliveryQuote.amount === 0
+                          ? (lang === 'ru' ? 'Бесплатно' : 'Free')
+                          : formatPrice(shippingCost))
+                        : deliveryError || (lang === 'ru'
+                          ? (deliveryMode === 'pickup' ? 'Выберите пункт выдачи' : 'Введите адрес')
+                          : (deliveryMode === 'pickup' ? 'Choose a pickup point' : 'Enter an address'))}
+                  </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Способ оплаты</span>
-                  <span>ЮKassa</span>
+                  <span>{lang === 'ru' ? 'Способ оплаты' : 'Payment method'}</span>
+                  <span>{lang === 'ru' ? 'Картой/СБП' : 'Card / SBP'}</span>
                 </div>
                 {cartNotices.length > 0 && (
                   <div style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border)' }}>
@@ -574,8 +708,14 @@ export default function CartPage() {
                   <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                 </svg>
                 <div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0 4px' }}><strong>Оплата принимается только российскими картами.</strong></p>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>Если у вас иностранная карта и/или доставка зарубеж — оставьте заявку.</p>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0 4px' }}><strong>
+                    {lang === 'ru' ? 'Оплата принимается только российскими картами.' : 'Only Russian bank cards are accepted online.'}
+                  </strong></p>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+                    {lang === 'ru'
+                      ? 'Если у вас иностранная карта и/или доставка зарубеж — оставьте заявку.'
+                      : 'If you have a foreign card and/or need international delivery, send us a request.'}
+                  </p>
                 </div>
               </div>
               <button
@@ -583,7 +723,7 @@ export default function CartPage() {
                 onClick={() => setShowForeignCard(true)}
                 style={{ width: '100%', background: 'var(--orange)', border: 'none', color: '#fff', borderRadius: '7px', padding: '0.65rem 1rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}
               >
-                Оставить заявку
+                {lang === 'ru' ? 'Оставить заявку' : 'Send a request'}
               </button>
             </div>
           )}
@@ -598,8 +738,10 @@ export default function CartPage() {
                 style={{ marginTop: '2px', flexShrink: 0, accentColor: 'var(--orange)' }}
               />
               <span>
-                Я принимаю условия{' '}
-                <a href="/oferta" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--orange)', textDecoration: 'underline' }}>Публичной оферты</a>
+                {lang === 'ru' ? 'Я принимаю условия ' : 'I accept the terms of the '}
+                <a href="/oferta" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--orange)', textDecoration: 'underline' }}>
+                  {lang === 'ru' ? 'Публичной оферты' : 'Public Offer'}
+                </a>
               </span>
             </label>
             {errors.consentOferta && <p style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '-0.5rem' }}>{errors.consentOferta}</p>}
@@ -612,8 +754,10 @@ export default function CartPage() {
                 style={{ marginTop: '2px', flexShrink: 0, accentColor: 'var(--orange)' }}
               />
               <span>
-                Я согласен на обработку{' '}
-                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--orange)', textDecoration: 'underline' }}>персональных данных</a>
+                {lang === 'ru' ? 'Я согласен на обработку ' : 'I consent to the processing of my '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--orange)', textDecoration: 'underline' }}>
+                  {lang === 'ru' ? 'персональных данных' : 'personal data'}
+                </a>
               </span>
             </label>
             {errors.consentData && <p style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '-0.5rem' }}>{errors.consentData}</p>}
@@ -621,14 +765,21 @@ export default function CartPage() {
           )}
 
           {isRussia && <div className="cart-summary-inline" style={{ marginTop: '2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            {submitError && (
+              <div style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '0.84rem', lineHeight: 1.5 }}>
+                {submitError}
+              </div>
+            )}
             <button type="button" onClick={() => setStep('cart')} className="cart-back-btn">
-              ← Назад
+              ← {lang === 'ru' ? 'Назад' : 'Back'}
             </button>
             <span style={{ flex: 1 }} />
-            <span className="cart-total-label-inline">К оплате</span>
+            <span className="cart-total-label-inline">{lang === 'ru' ? 'К оплате' : 'Total due'}</span>
             <span className="cart-total-price-inline">{formatPrice(grandTotal)}</span>
             <button type="submit" className="cart-checkout-btn" disabled={submitting || hasUnavailableItems || !availabilityChecked}>
-              {submitting ? 'Обработка...' : 'Перейти к оплате'}
+              {submitting
+                ? (lang === 'ru' ? 'Обработка...' : 'Processing...')
+                : (lang === 'ru' ? 'Перейти к оплате' : 'Proceed to payment')}
             </button>
           </div>}
 
@@ -642,18 +793,20 @@ export default function CartPage() {
           submitting={foreignSubmitting}
           done={foreignDone}
           onSubmit={handleForeignSubmit}
+          lang={lang}
         />
       )}
     </main>
   );
 }
-function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, done, onSubmit }: {
+function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, done, onSubmit, lang }: {
   onClose: () => void;
   foreignForm: { name: string; phone: string; email: string; contact: string; consent: boolean };
   setForeignForm: (f: { name: string; phone: string; email: string; contact: string; consent: boolean }) => void;
   submitting: boolean;
   done: boolean;
   onSubmit: (e: React.FormEvent) => void;
+  lang: 'ru' | 'en';
 }) {
   return (
     <div
@@ -664,11 +817,15 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
         <button
           onClick={onClose}
           style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', color: 'var(--text-secondary)' }}
-          aria-label="Закрыть"
+          aria-label={lang === 'ru' ? 'Закрыть' : 'Close'}
         >×</button>
-        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.5rem' }}>Зарубеж</h3>
+        <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+          {lang === 'ru' ? 'Зарубеж' : 'International order'}
+        </h3>
         <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', lineHeight: 1.5 }}>
-          Оставьте контакт — мы свяжемся и поможем оформить оплату удобным способом.
+          {lang === 'ru'
+            ? 'Оставьте контакт — мы свяжемся и поможем оформить оплату удобным способом.'
+            : 'Leave your contact details and we will help arrange a convenient payment method.'}
         </p>
         {done ? (
           <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
@@ -682,13 +839,17 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Заявка отправлена!</p>
-            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Мы свяжемся с вами в ближайшее время.</p>
+            <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>{lang === 'ru' ? 'Заявка отправлена!' : 'Request sent!'}</p>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+              {lang === 'ru' ? 'Мы свяжемся с вами в ближайшее время.' : 'We will contact you soon.'}
+            </p>
           </div>
         ) : (
           <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Имя *</label>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                {lang === 'ru' ? 'Имя *' : 'Name *'}
+              </label>
               <input
                 type="text"
                 className="form-field"
@@ -708,13 +869,15 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
               />
             </div>
             <PhoneInput
-              label="Телефон"
+              label={lang === 'ru' ? 'Телефон' : 'Phone'}
               value={foreignForm.phone}
               onChange={(v) => setForeignForm({ ...foreignForm, phone: v })}
               countryCode=""
             />
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Предпочтительный способ связи</label>
+              <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+                {lang === 'ru' ? 'Предпочтительный способ связи' : 'Preferred contact method'}
+              </label>
               <select
                 className="form-field"
                 value={foreignForm.contact}
@@ -722,7 +885,7 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
               >
                 <option value="telegram">Telegram</option>
                 <option value="email">Email</option>
-                <option value="phone">Телефон</option>
+                <option value="phone">{lang === 'ru' ? 'Телефон' : 'Phone'}</option>
               </select>
             </div>
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.77rem', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1.5 }}>
@@ -733,7 +896,7 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
                 required
                 style={{ marginTop: '2px', flexShrink: 0, accentColor: 'var(--orange)' }}
               />
-              Согласен на обработку персональных данных
+              {lang === 'ru' ? 'Согласен на обработку персональных данных' : 'I consent to personal data processing'}
             </label>
             <button
               type="submit"
@@ -741,7 +904,9 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
               disabled={submitting}
               style={{ width: '100%', marginTop: '2rem' }}
             >
-              {submitting ? 'Отправка...' : 'Отправить заявку'}
+              {submitting
+                ? (lang === 'ru' ? 'Отправка...' : 'Sending...')
+                : (lang === 'ru' ? 'Отправить заявку' : 'Send request')}
             </button>
           </form>
         )}

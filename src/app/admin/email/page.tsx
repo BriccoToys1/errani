@@ -26,6 +26,14 @@ interface NlCustomer {
   orderCount: number;
 }
 
+function buildSafeEmailDocument(html: string, text: string): string {
+  const fallback = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src 'none'"><style>html{color-scheme:dark}body{margin:0;padding:16px;background:#111116;color:#e8e8ed;font:14px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow-wrap:anywhere}a{color:#ff9a62}img{max-width:100%;height:auto}pre{white-space:pre-wrap;font:inherit}</style></head><body>${html || `<pre>${fallback || "(без текста)"}</pre>`}</body></html>`;
+}
+
 export default function AdminEmailPage() {
   const router = useRouter();
   const [emails, setEmails] = useState<Email[]>([]);
@@ -442,13 +450,11 @@ export default function AdminEmailPage() {
                   {new Date(selected.createdAt).toLocaleString("ru-RU")}
                 </div>
               </div>
-              <div
-                style={{
-                  background: "var(--cms-surface)", padding: 16, borderRadius: 8,
-                  fontSize: 13, lineHeight: 1.7, maxHeight: 400, overflowY: "auto",
-                  wordBreak: "break-word",
-                }}
-                dangerouslySetInnerHTML={{ __html: selected.body }}
+              <iframe
+                title={`Письмо: ${selected.subject || "без темы"}`}
+                sandbox=""
+                srcDoc={buildSafeEmailDocument(selected.body, selected.textBody)}
+                className="cms-email-preview"
               />
             </div>
             <div className="cms-modal-actions" style={{ display: "flex", gap: 8 }}>

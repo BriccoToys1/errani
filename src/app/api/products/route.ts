@@ -5,6 +5,7 @@ import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 import { normalizeProductMediaList } from '@/lib/product-media';
+import { DEFAULT_LIMITED_EDITION_TEXT_EN, DEFAULT_LIMITED_EDITION_TEXT_RU } from '@/lib/product-defaults';
 
 const PRODUCTS_STALE_TTL_MS = 60 * 60 * 1000;
 const PRODUCTS_FRESH_TTL_MS = 20 * 1000;
@@ -21,6 +22,7 @@ const FALLBACK_PRODUCTS = [
     descriptionRu: 'Авторская колода Таро Tenderly Vibe.',
     price: 5690,
     shippingFee: 0,
+    freeDelivery: false,
     oldPrice: null,
     discount: 0,
     currency: 'RUB',
@@ -33,8 +35,8 @@ const FALLBACK_PRODUCTS = [
     preorderAvailableDate: null,
     isAuthor: true,
     isLimited: true,
-    limitedEditionText: '',
-    limitedEditionTextEn: '',
+    limitedEditionText: DEFAULT_LIMITED_EDITION_TEXT_RU,
+    limitedEditionTextEn: DEFAULT_LIMITED_EDITION_TEXT_EN,
     characteristics: '[]',
     colors: '[]',
     isActive: true,
@@ -258,6 +260,7 @@ export async function POST(req: NextRequest) {
         descriptionRu: nullableString(descriptionRu),
         price: Number(body.price) || 0,
         shippingFee: Number(body.shippingFee) || 0,
+        freeDelivery: Boolean(body.freeDelivery),
         oldPrice: body.oldPrice !== null && body.oldPrice !== undefined && body.oldPrice !== ''
           ? Number(body.oldPrice)
           : null,
@@ -272,11 +275,10 @@ export async function POST(req: NextRequest) {
         preorderAvailableDate: body.preorderAvailableDate ? new Date(body.preorderAvailableDate) : null,
         isAuthor: body.isAuthor ?? false,
         isLimited: body.isLimited ?? false,
-        limitedEditionText: body.limitedEditionText ?? '',
-        limitedEditionTextEn: body.limitedEditionTextEn ?? '',
+        limitedEditionText: body.limitedEditionText || (body.isLimited ? DEFAULT_LIMITED_EDITION_TEXT_RU : ''),
+        limitedEditionTextEn: body.limitedEditionTextEn || (body.isLimited ? DEFAULT_LIMITED_EDITION_TEXT_EN : ''),
         noticeText: body.noticeText ?? '',
         noticeTextEn: body.noticeTextEn ?? '',
-        shippingConditions: normalizeJsonArrayString(body.shippingConditions),
         characteristics: normalizeJsonArrayString(body.characteristics),
         colors: normalizeJsonArrayString(body.colors),
         isActive: body.isActive ?? true,

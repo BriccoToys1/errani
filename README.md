@@ -3,7 +3,7 @@
 E-commerce сайт для бренда **errani** — авторские колоды таро и аксессуары.
 
 **Стек:** Next.js 16 · React 19 · TypeScript · Prisma · PostgreSQL (Neon) · Tailwind CSS 4  
-**Хостинг:** VPS (89.169.152.115) · PM2 · Nginx · Let's Encrypt SSL  
+**Хостинг:** SmartApe VPS (188.127.251.184) · PM2 · Nginx · Let's Encrypt SSL
 **Платежи:** ЮKassa · **Email:** Resend · **Маркетплейс:** Avito API
 
 ---
@@ -30,10 +30,25 @@ npm run dev          # http://localhost:3000
 | Переменная | Описание |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string (Neon) |
+| `PRISMA_CONNECTION_LIMIT` | Размер пула Prisma для VPS, по умолчанию `5` |
+| `PRISMA_POOL_TIMEOUT` | Таймаут ожидания соединения с БД, по умолчанию `20` сек |
 | `JWT_SECRET` | Секрет для JWT токенов админ-панели |
 | `RESEND_API_KEY` | API ключ Resend для отправки email |
 | `YUKASSA_SHOP_ID` | Shop ID ЮKassa (1265018) |
 | `YUKASSA_SECRET_KEY` | Секретный ключ ЮKassa |
+| `CDEK_CLIENT_ID` | Client ID из раздела интеграции личного кабинета СДЭК |
+| `CDEK_CLIENT_SECRET` | Client secret СДЭК |
+| `CDEK_FROM_CITY_CODE` | Код города отправителя в системе СДЭК |
+| `CDEK_TARIFF_CODE` | Код тарифа; по умолчанию `137` (склад → дверь) |
+| `CDEK_COURIER_TARIFF_CODE` | Код тарифа курьерской доставки; по умолчанию `137` |
+| `CDEK_PICKUP_TARIFF_CODE` | Код тарифа до ПВЗ; по умолчанию `136` |
+| `CDEK_UNIT_WEIGHT_GRAMS` | Вес одной товарной единицы с упаковкой, г |
+| `CDEK_UNIT_LENGTH_CM` | Длина одной товарной единицы с упаковкой, см |
+| `CDEK_UNIT_WIDTH_CM` | Ширина одной товарной единицы с упаковкой, см |
+| `CDEK_UNIT_HEIGHT_CM` | Высота одной товарной единицы с упаковкой, см |
+| `CDEK_API_URL` | Необязательно: `https://api.edu.cdek.ru/v2` для тестового API |
+
+Расчёт СДЭК выполняется только на сервере через OAuth 2.0. Checkout поддерживает доставку курьером и выбор ПВЗ на карте. После подтверждения оплаты заказ автоматически создаётся в личном кабинете СДЭК. Для заказа из нескольких единиц вес и высота упаковки умножаются на количество товаров.
 
 ---
 
@@ -159,16 +174,16 @@ errani-site/
 
 ## Доставка и оплата
 
-- **Способы доставки:** OZON, Яндекс Маркет (300 ₽, от 6 товаров — 650 ₽)
+- **Способы доставки:** СДЭК курьером или до выбранного ПВЗ, стоимость рассчитывается через API
 - **Оплата:** ЮKassa (Visa, Mastercard, МИР, СБП)
 - **Валюта:** RUB
 
 ## Деплой
 
-### Ручной деплой (VPS)
+### Ручной деплой на SmartApe VPS
 
 ```bash
-ssh -i ~/.ssh/id_ed25519 errani@89.169.152.115 "cd /var/www/errani && pm2 stop errani-site && git fetch --all && git reset --hard origin/main && rm -rf .next/lock && npm run build 2>&1 | tail -25 && pm2 start errani-site"
+./deploy.sh
 ```
 
 ### Локальная разработка → деплой
@@ -177,8 +192,8 @@ ssh -i ~/.ssh/id_ed25519 errani@89.169.152.115 "cd /var/www/errani && pm2 stop e
 # Коммит и пуш
 git add . && git commit -m "feat: описание" && git push origin main
 
-# Деплой на VPS (автоматически применяет схему БД)
-ssh -i ~/.ssh/id_ed25519 errani@89.169.152.115 "cd /var/www/errani && pm2 stop errani-site && git fetch --all && git reset --hard origin/main && rm -rf .next/lock && npm run build && pm2 start errani-site"
+# Деплой на SmartApe VPS
+./deploy.sh
 ```
 
 ### Изменение схемы БД
@@ -187,9 +202,8 @@ ssh -i ~/.ssh/id_ed25519 errani@89.169.152.115 "cd /var/www/errani && pm2 stop e
 # Локально (тест + prod Neon)
 npx prisma db push
 
-# На VPS (схема применяется автоматически через npm run build → prisma generate)
-# Для применения новых таблиц запусти явно:
-ssh -i ~/.ssh/id_ed25519 errani@89.169.152.115 "cd /var/www/errani && npx prisma db push"
+# На VPS — только вручную, когда изменение схемы запланировано:
+ssh root@188.127.251.184 "cd /var/www/errani && npx prisma db push"
 ```
 
 ## Nginx
@@ -234,7 +248,7 @@ npm run setup        # db:push + db:seed
 
 
 **Стек:** Next.js 16 · React 19 · TypeScript · Prisma · PostgreSQL (Neon) · Tailwind CSS 4  
-**Хостинг:** VPS (89.169.152.115) · PM2 · Nginx · Let's Encrypt SSL  
+**Хостинг:** SmartApe VPS (188.127.251.184) · PM2 · Nginx · Let's Encrypt SSL
 **Платежи:** ЮKassa · **Email:** Resend · **Маркетплейс:** Avito API
 
 ---
@@ -376,29 +390,27 @@ errani-site/
 
 ## Доставка и оплата
 
-- **Способы доставки:** OZON, Яндекс Маркет (300 ₽, от 6 товаров — 650 ₽)
+- **Способы доставки:** СДЭК курьером или до выбранного ПВЗ, стоимость рассчитывается через API
 - **Оплата:** ЮKassa (Visa, Mastercard, МИР, СБП)
 - **Валюта:** RUB
 
 ## Деплой
 
-### GitHub Actions (автоматический)
+### GitHub Actions
 
-Push в `main` → `.github/workflows/deploy.yml` → SSH на VPS → `git fetch && git reset --hard origin/main` → build → PM2 reload.
+Сейчас workflow выполняет build-check. Автодеплой на VPS можно включить через SSH-ключ и secrets `SMARTAPE_HOST`, `SMARTAPE_USER`, `SMARTAPE_PORT`, `SMARTAPE_SSH_KEY`.
 
 ### Ручной деплой
 
 ```bash
-ssh -i ~/.ssh/id_ed25519 errani@89.169.152.115
-cd /var/www/errani
 ./deploy.sh
 ```
 
-### Шаги деплоя (`deploy.sh`):
+### Шаги деплоя (`scripts/deploy-server.sh`):
 
-1. `git pull origin main`
-2. `npm ci --omit=dev`
-3. `npx prisma generate && npx prisma migrate deploy`
+1. `./deploy.sh` загружает текущие локальные файлы на VPS без `.env`, `.git`, `node_modules`, `.next`
+2. `npm ci --ignore-scripts`
+3. `npx prisma generate`
 4. `npm run build`
 5. `pm2 reload ecosystem.config.js --update-env`
 

@@ -7,11 +7,11 @@ import { t } from '@/lib/i18n';
 const PRIVACY_SECTIONS_RU = [
   {
     title: '1. Оператор персональных данных',
-    text: 'Оператором персональных данных на сайте errani.ru является самозанятый Вахрушева Екатерина Михайловна, ИНН 325402793102 (далее — «Оператор»). Настоящая Политика разработана в соответствии с Федеральным законом №152-ФЗ «О персональных данных».',
+    text: 'Оператором персональных данных на сайте errani.ru является Индивидуальный предприниматель Вахрушева Екатерина Михайловна, ИНН 325402793102, ОГРНИП 326320000033790 от 25 июня 2026 г. (далее — «Оператор»). Настоящая Политика разработана в соответствии с Федеральным законом №152-ФЗ «О персональных данных».',
   },
   {
     title: '2. Какие данные мы собираем',
-    text: 'При оформлении заказа или заполнении форм на сайте мы собираем: имя и фамилию, адрес электронной почты, номер телефона, адрес доставки (страна, регион, город, индекс, улица, дом, квартира). Автоматически собираются технические данные: IP-адрес, тип и язык браузера, дата и время визита, просмотренные страницы, cookie-файлы.',
+    text: 'При оформлении заказа или заполнении форм на сайте мы собираем: имя и фамилию, адрес электронной почты, номер телефона, адрес доставки (страна, регион, город, индекс, улица, дом, квартира). После согласия на cookie автоматически собираются технические данные: IP-адрес, идентификатор сессии, источник перехода и UTM-метки, тип устройства, браузер, операционная система, язык, размер экрана, часовой пояс, дата и время визита, просмотренные страницы, длительность активного просмотра и глубина прокрутки.',
   },
   {
     title: '3. Цели обработки данных',
@@ -23,15 +23,15 @@ const PRIVACY_SECTIONS_RU = [
   },
   {
     title: '5. Cookie-файлы',
-    text: 'Сайт использует cookie-файлы для корректной работы, сохранения языковых предпочтений и содержимого корзины. Cookie не содержат персональных данных в явном виде. Вы можете отключить cookie в настройках браузера, однако это может повлиять на функциональность сайта.',
+    text: 'Сайт использует cookie-файлы и локальное хранилище для корректной работы, сохранения языковых предпочтений, содержимого корзины и обезличенного идентификатора аналитической сессии. Аналитика начинает собираться после нажатия «Принять». Вы можете удалить эти данные в настройках браузера.',
   },
   {
     title: '6. Передача данных третьим лицам',
-    text: 'Мы не продаём и не передаём персональные данные третьим лицам, за исключением: служб доставки — для исполнения заказа; платёжного сервиса ЮKassa — для проведения платежа; органов государственной власти — по основаниям, предусмотренным законодательством.',
+    text: 'Мы не продаём и не передаём персональные данные третьим лицам, за исключением: служб доставки — для исполнения заказа; платёжного сервиса Точка Банк — для проведения платежа; органов государственной власти — по основаниям, предусмотренным законодательством.',
   },
   {
     title: '7. Хранение данных',
-    text: 'Персональные данные хранятся на серверах, расположенных на территории Российской Федерации и в Европейском Союзе (Neon.tech, соответствует GDPR). Срок хранения: данные заказов — 5 лет; данные аналитики — 1 год.',
+    text: 'Персональные данные хранятся на серверах, расположенных на территории Российской Федерации. Срок хранения: данные заказов — 5 лет; данные аналитики — 1 год, если иной срок не требуется законодательством РФ.',
   },
   {
     title: '8. Защита данных',
@@ -47,18 +47,18 @@ const PRIVACY_SECTIONS_RU = [
   },
   {
     title: '11. Контактная информация',
-    text: 'По вопросам обработки персональных данных: mail@errani.ru. Самозанятый Вахрушева Екатерина Михайловна, ИНН 325402793102.',
+    text: 'По вопросам обработки персональных данных: mail@errani.ru. Индивидуальный предприниматель Вахрушева Екатерина Михайловна, ИНН 325402793102, ОГРНИП 326320000033790 от 25 июня 2026 г., дата регистрации 25.06.2026.',
   },
 ];
 
 const PRIVACY_SECTIONS_EN = [
   {
     title: '1. Data Controller',
-    text: 'The data controller for errani.ru is self-employed Ekaterina Vakhrusheva (Вахрушева Екатерина Михайловна), TIN 325402793102 ("Operator"). This Policy is developed in accordance with Russian Federal Law No. 152-FZ "On Personal Data".',
+    text: 'The data controller for errani.ru is Individual Entrepreneur Ekaterina Vakhrusheva (Вахрушева Екатерина Михайловна), TIN 325402793102, OGRNIP 326320000033790 dated June 25, 2026 ("Operator"). This Policy is developed in accordance with Russian Federal Law No. 152-FZ "On Personal Data".',
   },
   {
     title: '2. Data We Collect',
-    text: 'When placing an order or filling out forms, we collect: full name, email address, phone number, delivery address (country, region, city, postal code, street, house, apartment). Technical data is collected automatically: IP address, browser type and language, visit date and time, pages viewed, cookies.',
+    text: 'When placing an order or filling out forms, we collect: full name, email address, phone number and delivery address. After cookie consent, technical data is collected: IP address, session identifier, referrer and UTM tags, device, browser, operating system, language, screen size, timezone, visit date and time, pages viewed, active viewing duration and scroll depth.',
   },
   {
     title: '3. Purpose of Processing',
@@ -70,15 +70,15 @@ const PRIVACY_SECTIONS_EN = [
   },
   {
     title: '5. Cookies',
-    text: 'The website uses cookies for correct operation, saving language preferences and cart contents. Cookies do not contain personal data in plain form. You can disable cookies in your browser settings, but this may affect website functionality.',
+    text: 'The website uses cookies and local storage for core functionality, language preferences, cart contents and a pseudonymous analytics session identifier. Analytics starts after you click Accept. You can remove this data in your browser settings.',
   },
   {
     title: '6. Third-Party Sharing',
-    text: 'We do not sell or transfer personal data to third parties, except: delivery services — to fulfil the order; YuKassa payment service — to process payment; government authorities — as required by law.',
+    text: 'We do not sell or transfer personal data to third parties, except: delivery services — to fulfil the order; Tochka Bank payment service — to process payment; government authorities — as required by law.',
   },
   {
     title: '7. Data Storage',
-    text: 'Personal data is stored on servers located in Russia and the EU (Neon.tech, GDPR-compliant). Retention: order data — 5 years; analytics data — 1 year.',
+    text: 'Personal data is stored on servers located in the Russian Federation. Retention: order data — 5 years; analytics data — 1 year, unless another period is required by Russian law.',
   },
   {
     title: '8. Data Protection',
@@ -94,7 +94,7 @@ const PRIVACY_SECTIONS_EN = [
   },
   {
     title: '11. Contact',
-    text: 'For data protection queries: mail@errani.ru. Self-employed Ekaterina Vakhrusheva, TIN 325402793102.',
+    text: 'For data protection queries: mail@errani.ru. Individual Entrepreneur Ekaterina Vakhrusheva, TIN 325402793102, OGRNIP 326320000033790 dated June 25, 2026, registration date 25.06.2026.',
   },
 ];
 
@@ -107,7 +107,7 @@ export default function PrivacyPage() {
       <div className="privacy-container">
         <h1 className="privacy-heading anim-fade-up">{t(lang, 'privacy.title')}</h1>
         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '2.5rem' }}>
-          {lang === 'ru' ? 'Соответствует 152-ФЗ · Редакция от 9 марта 2026 г.' : 'Complies with FZ-152 · Effective March 9, 2026'}
+          {lang === 'ru' ? 'Соответствует 152-ФЗ · Редакция от 1 июля 2026 г.' : 'Complies with FZ-152 · Effective July 1, 2026'}
         </p>
 
         <div className="privacy-content">

@@ -4,11 +4,23 @@ import { generateOrderNumber } from '@/lib/utils';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 import { withFreshPrisma } from '@/lib/fresh-prisma';
+import { createTochkaPayment, getTochkaConfig } from '@/lib/tochka';
+import { calculateCdekDelivery, CdekDeliveryMode, CdekError } from '@/lib/cdek';
+import { consumeRateLimit } from '@/lib/rate-limit';
 
 interface OrderItemInput {
   productId: string;
   quantity: number;
   selectedColor?: string;
+}
+
+interface CdekDeliveryPointInput {
+  code: string;
+  name?: string;
+  city: string;
+  cityCode: number;
+  postalCode?: string;
+  address: string;
 }
 
 // Archive unpaid orders
@@ -58,6 +70,12 @@ export async function GET(req: NextRequest) {
           house: true,
           apartment: true,
           shippingMethod: true,
+          cdekDeliveryPointCode: true,
+          cdekDeliveryPointAddress: true,
+          cdekTariffCode: true,
+          cdekUuid: true,
+          cdekNumber: true,
+          cdekError: true,
           status: true,
           paymentMethod: true,
           totalAmount: true,
@@ -135,8 +153,16 @@ export async function GET(req: NextRequest) {
 // POST create order
 export async function POST(req: NextRequest) {
   try {
+    const rate = consumeRateLimit(req, { key: 'create-order', limit: 20, windowMs: 10 * 60_000 });
+    if (!rate.allowed) {
+      return NextResponse.json(
+        { error: 'Too many checkout attempts. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } }
+      );
+    }
+
     const body = await req.json();
-    const { name, email, phone, country, customCountry, oblast, city, zipCode, street, house, apartment, shippingMethod, items } = body as {
+    const { name, email, phone, country, customCountry, oblast, city, zipCode, street, house, apartment, shippingMethod, items, cdekDeliveryPoint } = body as {
       name: string;
       email: string;
       phone: string;
@@ -150,11 +176,36 @@ export async function POST(req: NextRequest) {
       apartment: string;
       shippingMethod: string;
       items: OrderItemInput[];
+      cdekDeliveryPoint?: CdekDeliveryPointInput | null;
     };
 
     // Validate
-    if (!name || !email || !items?.length) {
+    if (!name || !email || !phone || !city || !Array.isArray(items) || !items.length) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+    if (
+      items.length > 30
+      || String(name).trim().length > 120
+      || String(email).trim().length > 254
+      || String(phone).trim().length > 32
+      || String(city).trim().length > 120
+      || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())
+    ) {
+      return NextResponse.json({ error: 'Invalid order data' }, { status: 400 });
+    }
+    if (country !== 'RU') {
+      return NextResponse.json({ error: 'Онлайн-заказ доступен только для доставки по России.' }, { status: 400 });
+    }
+
+    const deliveryMode: CdekDeliveryMode = shippingMethod === 'cdek_pvz' ? 'pickup' : 'courier';
+    if (!['cdek_courier', 'cdek_pvz'].includes(shippingMethod)) {
+      return NextResponse.json({ error: 'Выберите способ доставки СДЭК.' }, { status: 400 });
+    }
+    if (deliveryMode === 'pickup' && (!cdekDeliveryPoint?.code || !cdekDeliveryPoint.address || !cdekDeliveryPoint.cityCode)) {
+      return NextResponse.json({ error: 'Выберите пункт выдачи СДЭК.' }, { status: 400 });
+    }
+    if (deliveryMode === 'courier' && ((!street || !house) || (zipCode && !/^\d{6}$/.test(zipCode)))) {
+      return NextResponse.json({ error: 'Укажите адрес для курьерской доставки.' }, { status: 400 });
     }
 
     // Check if user is blocked
@@ -173,9 +224,14 @@ export async function POST(req: NextRequest) {
       .map((item) => ({
         productId: String(item.productId || ''),
         quantity: Number(item.quantity || 0),
-        selectedColor: item.selectedColor || '',
+        selectedColor: String(item.selectedColor || '').slice(0, 80),
       }))
-      .filter((item) => item.productId && item.quantity > 0);
+      .filter((item) => (
+        item.productId.length <= 64
+        && Number.isSafeInteger(item.quantity)
+        && item.quantity > 0
+        && item.quantity <= 20
+      ));
 
     if (normalizedItems.length !== items.length) {
       return NextResponse.json({ error: 'Invalid cart items' }, { status: 400 });
@@ -238,11 +294,9 @@ export async function POST(req: NextRequest) {
     }
 
     let totalAmount = 0;
-    let perProductShippingAmount = 0;
     const orderItems = normalizedItems.map(item => {
       const product = products.find(p => p.id === item.productId)!;
       totalAmount += product.price * item.quantity;
-      perProductShippingAmount += (Number((product as { shippingFee?: number }).shippingFee || 0) * item.quantity);
       return {
         productId: item.productId,
         quantity: item.quantity,
@@ -251,14 +305,30 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    // Legacy fallback for products without per-product shipping configured
     const totalItemCount = normalizedItems.reduce((sum, item) => sum + item.quantity, 0);
-    const legacyShipping = country === 'RU'
-      ? (totalItemCount <= 2 ? 350 : totalItemCount <= 5 ? 470 : 790)
-      : 0;
-    const hasConfiguredPerProductShipping = products.some((p) => Number((p as { shippingFee?: number }).shippingFee || 0) > 0);
-    const shippingAmount = hasConfiguredPerProductShipping ? perProductShippingAmount : legacyShipping;
-    totalAmount += shippingAmount;
+    const freeDelivery = products.some((product) => product.freeDelivery);
+    let cdekQuote;
+    try {
+      cdekQuote = await calculateCdekDelivery({
+        city: deliveryMode === 'pickup' ? cdekDeliveryPoint!.city : city,
+        postalCode: deliveryMode === 'pickup' ? cdekDeliveryPoint!.postalCode : zipCode,
+        address: deliveryMode === 'courier' ? [street, house].filter(Boolean).join(', ') : undefined,
+        street: deliveryMode === 'courier' ? street : undefined,
+        house: deliveryMode === 'courier' ? house : undefined,
+        region: deliveryMode === 'courier' ? oblast : undefined,
+        itemCount: totalItemCount,
+        mode: deliveryMode,
+        cityCode: deliveryMode === 'pickup' ? Number(cdekDeliveryPoint!.cityCode) : undefined,
+        deliveryPointCode: deliveryMode === 'pickup' ? cdekDeliveryPoint!.code : undefined,
+        freeDelivery,
+      });
+    } catch (error) {
+      if (error instanceof CdekError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
+    }
+    totalAmount += cdekQuote.amount;
 
     // Build notes from color selections
     const colorNotes = normalizedItems
@@ -277,7 +347,7 @@ export async function POST(req: NextRequest) {
         customerName: name,
         customerEmail: email,
         customerPhone: phone || '',
-        country: (country === 'OTHER' ? (customCountry || 'Другая страна') : country) || 'RU',
+        country: 'RU',
         oblast: oblast || '',
         city: city || '',
         zipCode: zipCode || '',
@@ -285,6 +355,9 @@ export async function POST(req: NextRequest) {
         house: house || '',
         apartment: apartment || '',
         shippingMethod: shippingMethod || '',
+        cdekDeliveryPointCode: cdekDeliveryPoint?.code || '',
+        cdekDeliveryPointAddress: cdekDeliveryPoint?.address || '',
+        cdekTariffCode: cdekQuote.tariffCode,
         totalAmount,
         currency: 'RUB',
         status: 'pending',
@@ -305,24 +378,38 @@ export async function POST(req: NextRequest) {
     let paymentUrl: string | null = null;
 
     if (isRussia) {
-      const yukassaResponse = await createYukassaPayment(order);
-      if (yukassaResponse?.confirmation?.confirmation_url) {
-        paymentUrl = yukassaResponse.confirmation.confirmation_url;
+      const tochkaConfig = getTochkaConfig();
+      const tochkaResponse = tochkaConfig ? await createTochkaPayment(order) : null;
+
+      if (tochkaResponse?.paymentLink && tochkaResponse.operationId) {
+        paymentUrl = tochkaResponse.paymentLink;
         await prisma.order.update({
           where: { id: order.id },
-          data: { paymentId: yukassaResponse.id, paymentMethod: 'yukassa' },
+          data: { paymentId: tochkaResponse.operationId, paymentMethod: 'tochka' },
         });
       } else {
-        // Payment URL creation failed — cancel the order so it doesn't litter the DB
-        await prisma.order.update({
-          where: { id: order.id },
-          data: { status: 'cancelled' },
-        });
-        const detail = yukassaResponse?.__error || 'no response';
-        return NextResponse.json(
-          { error: `Не удалось создать платёж: ${detail}` },
-          { status: 502 }
-        );
+        const yukassaResponse = !tochkaConfig ? await createYukassaPayment(order) : null;
+        if (yukassaResponse?.confirmation?.confirmation_url) {
+          paymentUrl = yukassaResponse.confirmation.confirmation_url;
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { paymentId: yukassaResponse.id, paymentMethod: 'yukassa' },
+          });
+        } else {
+          // Payment URL creation failed — cancel the order so it doesn't litter the DB
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { status: 'cancelled' },
+          });
+          const detail = (tochkaResponse?.raw as { __error?: string } | undefined)?.__error
+            || yukassaResponse?.__error
+            || 'no response';
+          console.error('Payment link creation failed:', detail);
+          return NextResponse.json(
+            { error: 'Не удалось создать платёж. Попробуйте ещё раз или свяжитесь с нами.' },
+            { status: 502 }
+          );
+        }
       }
     } else {
       await prisma.order.update({
@@ -338,8 +425,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Error creating order:', error);
-    const msg = error instanceof Error ? error.message : String(error);
-    return NextResponse.json({ error: 'Failed to create order', detail: msg }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
   }
 }
 

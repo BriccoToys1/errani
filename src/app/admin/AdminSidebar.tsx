@@ -34,6 +34,13 @@ const NAV_ITEMS = [
   { href: '/admin/settings', icon: 'settings', label: 'Настройки' },
 ];
 
+const MOBILE_NAV_ITEMS = [
+  { href: '/admin', icon: 'dashboard', label: 'Главная' },
+  { href: '/admin/orders', icon: 'orders', label: 'Заказы', countKey: 'newOrders' },
+  { href: '/admin/products', icon: 'products', label: 'Товары' },
+  { href: '/admin/email', icon: 'email', label: 'Почта', countKey: 'newEmails' },
+] as const;
+
 const ICONS: Record<string, React.ReactNode> = {
   dashboard: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/></svg>,
   chart: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M7 16l4-6 4 3 5-7"/></svg>,
@@ -66,7 +73,6 @@ export function AdminSidebar() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>('system');
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -100,27 +106,8 @@ export function AdminSidebar() {
   }, []);
 
   useEffect(() => {
-    const saved = localStorage.getItem('cms_theme_mode');
-    if (saved === 'light' || saved === 'dark' || saved === 'system') {
-      setThemeMode(saved);
-    }
+    document.documentElement.setAttribute('data-cms-theme', 'dark');
   }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const root = document.documentElement;
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const apply = () => {
-      const resolved = themeMode === 'system' ? (media.matches ? 'dark' : 'light') : themeMode;
-      root.setAttribute('data-cms-theme', resolved);
-    };
-
-    apply();
-    localStorage.setItem('cms_theme_mode', themeMode);
-    media.addEventListener('change', apply);
-    return () => media.removeEventListener('change', apply);
-  }, [themeMode]);
 
   // Close on route change
   useEffect(() => {
@@ -150,16 +137,10 @@ export function AdminSidebar() {
     return pathname.startsWith(href);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await fetch('/api/admin/login', { method: 'DELETE' }).catch(() => undefined);
     localStorage.removeItem('admin_token');
-    document.cookie = 'admin_token=; path=/; max-age=0';
     router.push('/admin/login');
-  };
-
-  const THEME_LABEL: Record<'light' | 'dark' | 'system', string> = {
-    light: 'Light',
-    dark: 'Dark',
-    system: 'System',
   };
 
   const getCount = (countKey?: string) => {
@@ -351,21 +332,6 @@ export function AdminSidebar() {
       </nav>
 
       <div className="cms-sidebar-footer">
-        {!collapsed && (
-          <div className="cms-theme-switch" role="group" aria-label="Theme mode">
-            {(['light', 'dark', 'system'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                className={`cms-theme-switch-btn ${themeMode === mode ? 'active' : ''}`}
-                onClick={() => setThemeMode(mode)}
-                title={THEME_LABEL[mode]}
-              >
-                {THEME_LABEL[mode]}
-              </button>
-            ))}
-          </div>
-        )}
         <button
           onClick={handleLogout}
           title="Выйти"
@@ -378,6 +344,36 @@ export function AdminSidebar() {
         </button>
       </div>
       </aside>
+
+      <nav className="cms-mobile-bottom-nav" aria-label="Основная навигация">
+        {MOBILE_NAV_ITEMS.map((item) => {
+          const count = getCount('countKey' in item ? item.countKey : undefined);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`cms-mobile-bottom-item ${isActive(item.href) ? 'active' : ''}`}
+              aria-current={isActive(item.href) ? 'page' : undefined}
+            >
+              <span className="cms-mobile-bottom-icon">
+                {ICONS[item.icon]}
+                {count > 0 && <span className="cms-mobile-bottom-badge">{count > 9 ? '9+' : count}</span>}
+              </span>
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+        <button
+          type="button"
+          className={`cms-mobile-bottom-item ${mobileOpen ? 'active' : ''}`}
+          onClick={() => setMobileOpen(true)}
+          aria-expanded={mobileOpen}
+          aria-label="Открыть всё меню"
+        >
+          <span className="cms-mobile-bottom-icon">{ICONS.settings}</span>
+          <span>Ещё</span>
+        </button>
+      </nav>
     </>
   );
 }

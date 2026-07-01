@@ -4,16 +4,39 @@ import fs from 'fs/promises';
 import path from 'path';
 
 // Base directory for file operations (public folder only for security)
-const PUBLIC_DIR = path.join(process.cwd(), 'public');
+const PUBLIC_DIR = path.resolve('public');
 
 // Allowed extensions for editing
-const EDITABLE_EXTENSIONS = ['.txt', '.md', '.json', '.css', '.js', '.html', '.xml', '.svg', '.env'];
+const EDITABLE_EXTENSIONS = ['.txt', '.md', '.json', '.css', '.xml'];
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.ico', '.svg'];
+const MAX_EDITABLE_BYTES = 1024 * 1024;
 
-// Security check: ensure path is within public directory
-function isPathSafe(filePath: string): boolean {
+function resolvePublicPath(filePath: unknown): string | null {
+  if (typeof filePath !== 'string' || filePath.includes('\0') || path.isAbsolute(filePath)) return null;
   const resolvedPath = path.resolve(PUBLIC_DIR, filePath);
-  return resolvedPath.startsWith(PUBLIC_DIR);
+  const relative = path.relative(PUBLIC_DIR, resolvedPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return null;
+  return resolvedPath;
+}
+
+async function containsSymlink(fullPath: string): Promise<boolean> {
+  const relative = path.relative(PUBLIC_DIR, fullPath);
+  let cursor = PUBLIC_DIR;
+  for (const part of relative.split(path.sep).filter(Boolean)) {
+    cursor = path.join(cursor, part);
+    try {
+      const stats = await fs.lstat(cursor);
+      if (stats.isSymbolicLink()) return true;
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw error;
+    }
+  }
+  return false;
+}
+
+function isEditableFile(fullPath: string): boolean {
+  return EDITABLE_EXTENSIONS.includes(path.extname(fullPath).toLowerCase());
 }
 
 // GET: List files or read file content
@@ -25,17 +48,22 @@ export async function GET(req: NextRequest) {
   const relativePath = url.searchParams.get('path') || '';
   const action = url.searchParams.get('action') || 'list';
 
-  if (!isPathSafe(relativePath)) {
+  const fullPath = resolvePublicPath(relativePath);
+  if (!fullPath || await containsSymlink(fullPath)) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
   }
 
-  const fullPath = path.join(PUBLIC_DIR, relativePath);
-
   try {
     if (action === 'read') {
+      if (!isEditableFile(fullPath)) {
+        return NextResponse.json({ error: 'File type is not editable' }, { status: 400 });
+      }
       // Read file content
-      const content = await fs.readFile(fullPath, 'utf-8');
       const stats = await fs.stat(fullPath);
+      if (!stats.isFile() || stats.size > MAX_EDITABLE_BYTES) {
+        return NextResponse.json({ error: 'File is too large or is not a regular file' }, { status: 400 });
+      }
+      const content = await fs.readFile(fullPath, 'utf-8');
       return NextResponse.json({
         path: relativePath,
         content,
@@ -100,11 +128,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { path: relativePath, content, isDirectory } = body;
 
-    if (!relativePath || !isPathSafe(relativePath)) {
+    const fullPath = resolvePublicPath(relativePath);
+    if (!relativePath || !fullPath || await containsSymlink(fullPath)) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
-
-    const fullPath = path.join(PUBLIC_DIR, relativePath);
 
     if (isDirectory) {
       await fs.mkdir(fullPath, { recursive: true });
@@ -112,6 +139,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Create file with content
+    if (!isEditableFile(fullPath) || typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > MAX_EDITABLE_BYTES) {
+      return NextResponse.json({ error: 'Unsupported file type or file too large' }, { status: 400 });
+    }
     const dir = path.dirname(fullPath);
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(fullPath, content || '', 'utf-8');
@@ -132,11 +162,13 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const { path: relativePath, content } = body;
 
-    if (!relativePath || !isPathSafe(relativePath)) {
+    const fullPath = resolvePublicPath(relativePath);
+    if (!relativePath || !fullPath || await containsSymlink(fullPath)) {
       return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
     }
-
-    const fullPath = path.join(PUBLIC_DIR, relativePath);
+    if (!isEditableFile(fullPath) || typeof content !== 'string' || Buffer.byteLength(content, 'utf8') > MAX_EDITABLE_BYTES) {
+      return NextResponse.json({ error: 'Unsupported file type or file too large' }, { status: 400 });
+    }
     
     // Check if file exists
     await fs.access(fullPath);
@@ -163,11 +195,10 @@ export async function DELETE(req: NextRequest) {
   const url = new URL(req.url);
   const relativePath = url.searchParams.get('path');
 
-  if (!relativePath || !isPathSafe(relativePath)) {
+  const fullPath = resolvePublicPath(relativePath);
+  if (!relativePath || !fullPath || await containsSymlink(fullPath)) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
   }
-
-  const fullPath = path.join(PUBLIC_DIR, relativePath);
 
   try {
     const stats = await fs.stat(fullPath);

@@ -5,11 +5,16 @@ const SHIPPING_LABELS: Record<string, string> = {
   yandex: 'Яндекс Маркет',
   pochta_ru: 'Почта России',
   cdek: 'СДЭК',
+  cdek_courier: 'СДЭК — курьером',
+  cdek_pvz: 'СДЭК — пункт выдачи',
   pochta_int: 'Почта России (международная)',
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
   yukassa: 'ЮKassa (карта)',
+  tochka: 'Картой / СБП',
+  card: 'Карта',
+  sbp: 'СБП',
   stripe: 'Банковская карта',
   apple_pay: 'Apple Pay',
   google_pay: 'Google Pay',
@@ -63,6 +68,7 @@ export interface ReceiptOrder {
   house: string;
   apartment: string;
   shippingMethod: string;
+  cdekDeliveryPointAddress?: string;
   paymentMethod: string;
   status: string;
   totalAmount: number;
@@ -103,14 +109,16 @@ export function buildReceiptHtml(order: ReceiptOrder, forPdf = false): string {
     hour12: false,
   });
 
-  const addressParts = [
-    order.zipCode,
-    order.oblast,
-    order.city,
-    order.street && `ул. ${order.street}`,
-    order.house && `д. ${order.house}`,
-    order.apartment && `кв. ${order.apartment}`,
-  ].filter(Boolean);
+  const addressParts = (order.shippingMethod === 'cdek_pvz'
+    ? [order.zipCode, order.city, order.cdekDeliveryPointAddress]
+    : [
+        order.zipCode,
+        order.oblast,
+        order.city,
+        order.street && `ул. ${order.street}`,
+        order.house && `д. ${order.house}`,
+        order.apartment && `кв. ${order.apartment}`,
+      ]).filter(Boolean);
 
   const shippingLabel = SHIPPING_LABELS[order.shippingMethod] || order.shippingMethod || '—';
   const paymentLabel = PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod || '—';

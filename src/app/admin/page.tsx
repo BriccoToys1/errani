@@ -33,12 +33,38 @@ interface DashboardData {
 }
 
 interface AnalyticsData {
-  realtime: { onlineNow: number };
-  today: { views: number; visitors: number; orders: number; avgDuration: number };
-  chart: Array<{ date: string; views: number; visitors: number; orders: number; revenue: number }>;
-  countries: Array<{ country: string; count: number }>;
-  totals: { views: number; orders: number; revenue: number; products: number; uniqueIPs: number };
+  status: { enabled: boolean; firstEventAt: string | null; lastEventAt: string | null; hasFreshData: boolean };
+  period: { value: string; from: string; to: string };
+  realtime: { onlineNow: number; activePages: BreakdownItem[] };
+  today: { views: number; visitors: number; orders: number; revenue: number; avgDuration: number; bounceRate: number };
+  chart: Array<{ date: string; views: number; visitors: number; orders: number; revenue: number; avgDuration: number }>;
+  countries: Array<{ country: string; count: number; percentage: number }>;
+  totals: {
+    views: number; visitors: number; uniqueIPs: number; orders: number; paidOrders: number;
+    revenue: number; products: number; avgDuration: number; avgPageDuration: number;
+    pagesPerSession: number; bounceRate: number; conversionRate: number; avgScroll: number;
+  };
+  allTime: { views: number; visitors: number; uniqueIPs: number; orders: number; revenue: number; avgDuration: number; pagesPerSession: number; bounceRate: number };
+  pages: Array<{ path: string; title: string; views: number; visitors: number; avgDuration: number; avgScroll: number }>;
+  entryPages: BreakdownItem[];
+  exitPages: BreakdownItem[];
+  sources: BreakdownItem[];
+  cities: BreakdownItem[];
+  devices: BreakdownItem[];
+  browsers: BreakdownItem[];
+  operatingSystems: BreakdownItem[];
+  languages: BreakdownItem[];
+  campaigns: BreakdownItem[];
+  mediums: BreakdownItem[];
+  screens: BreakdownItem[];
+  hourly: Array<{ hour: number; views: number }>;
+  recent: Array<{
+    at: string; path: string; title: string; duration: number; scroll: number; device: string;
+    browser: string; os: string; country: string; city: string; source: string; session: string;
+  }>;
 }
+
+interface BreakdownItem { label: string; count: number; percentage: number }
 
 interface ServerStats {
   cpu: { usage: number; cores: number };
@@ -156,6 +182,45 @@ function GaugeBar({ value, max = 100, color }: { value: number; max?: number; co
   );
 }
 
+function AnalyticsBreakdown({ title, items, empty = "Нет данных" }: { title: string; items: BreakdownItem[]; empty?: string }) {
+  const max = items[0]?.count || 1;
+  return (
+    <div className="cms-table-wrap" style={{ padding: "14px 16px", minWidth: 0 }}>
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>{title}</div>
+      {items.length > 0 ? (
+        <div style={{ display: "grid", gap: 9 }}>
+          {items.slice(0, 10).map((item) => (
+            <div key={item.label}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 4, fontSize: 12 }}>
+                <span style={{ color: "var(--cms-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.label}>{item.label}</span>
+                <span style={{ flexShrink: 0, fontWeight: 600 }}>{item.count} · {item.percentage}%</span>
+              </div>
+              <GaugeBar value={item.count} max={max} color="var(--cms-accent)" />
+            </div>
+          ))}
+        </div>
+      ) : <div style={{ color: "var(--cms-text-muted)", fontSize: 12 }}>{empty}</div>}
+    </div>
+  );
+}
+
+function HourlyActivity({ data }: { data: Array<{ hour: number; views: number }> }) {
+  const max = Math.max(...data.map((item) => item.views), 1);
+  return (
+    <div className="cms-table-wrap" style={{ padding: "14px 16px" }}>
+      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>Активность по часам · МСК</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(24, minmax(8px, 1fr))", gap: 3, alignItems: "end", height: 110 }}>
+        {data.map((item) => (
+          <div key={item.hour} title={`${String(item.hour).padStart(2, "0")}:00 — ${item.views} просмотров`} style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 5 }}>
+            <div style={{ minHeight: 2, height: `${Math.max(2, (item.views / max) * 82)}px`, borderRadius: "3px 3px 1px 1px", background: item.views ? "var(--cms-accent)" : "var(--cms-border)" }} />
+            {item.hour % 3 === 0 && <span style={{ fontSize: 8, color: "var(--cms-text-muted)", textAlign: "center" }}>{item.hour}</span>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Metric Card ──────────────────────────────────────────────────────────────
 function MetricCard({ label, value, sub, accent, icon }: {
   label: string;
@@ -199,7 +264,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chartMode, setChartMode] = useState<"views" | "visitors" | "orders">("views");
-  const [period, setPeriod] = useState<"7" | "14" | "30" | "90">("30");
+  const [period, setPeriod] = useState<"7" | "14" | "30" | "90" | "365" | "all">("all");
   const [siteOnline, setSiteOnline] = useState<boolean | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const serverRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -281,7 +346,7 @@ export default function AdminDashboard() {
       setLoading(false);
 
       const [analyticsResult, serverResult] = await Promise.allSettled([
-        fetchWithTimeout(`/api/admin/analytics?period=${period}`, token, 7000),
+        fetchWithTimeout(`/api/admin/analytics?period=${period}`, token, 20000),
         fetchWithTimeout("/api/admin/server-stats", token, 4000),
       ]);
 
@@ -485,7 +550,7 @@ export default function AdminDashboard() {
         <div className="cms-content">
 
           {/* ── Row 1: Business Metrics ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+          <div className="cms-dashboard-metrics" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
             <MetricCard
               label="Заказов оплачено"
               value={data?.orderCount ?? 0}
@@ -518,26 +583,32 @@ export default function AdminDashboard() {
             />
           </div>
 
+          {analytics && !analytics.status.hasFreshData && (
+            <div style={{ marginBottom: 14, padding: "11px 14px", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 10, background: "rgba(245,158,11,0.08)", color: "#fbbf24", fontSize: 12 }}>
+              Новых событий за последние 24 часа нет. Последняя запись: {analytics.status.lastEventAt ? new Date(analytics.status.lastEventAt).toLocaleString("ru-RU") : "никогда"}. Сбор начнётся после согласия посетителя на cookie.
+            </div>
+          )}
+
           {/* ── Row 2: Analytics Today ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
+          <div className="cms-dashboard-metrics" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
             <MetricCard
               label="Просмотры сегодня"
               value={analytics?.today.views ?? 0}
-              sub={`всего: ${analytics?.totals.views ?? 0}`}
+              sub={`за всё время: ${analytics?.allTime.views ?? 0}`}
               accent="rgba(59,130,246,0.15)"
               icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
             />
             <MetricCard
               label="Посетители сегодня"
               value={analytics?.today.visitors ?? 0}
-              sub={`уник. IP: ${analytics?.totals.uniqueIPs ?? 0}`}
+              sub={`за всё время: ${analytics?.allTime.visitors ?? 0}`}
               accent="rgba(139,92,246,0.15)"
               icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>}
             />
             <MetricCard
               label="Заказов сегодня"
               value={analytics?.today.orders ?? 0}
-              sub={`товаров: ${data?.productCount ?? 0}`}
+              sub={`выручка: ${fmt(analytics?.today.revenue ?? 0)}`}
               accent="rgba(6,182,212,0.15)"
               icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>}
             />
@@ -551,18 +622,20 @@ export default function AdminDashboard() {
           </div>
 
           {/* ── Row 3: Chart + Server ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, marginBottom: 14 }}>
+          <div className="cms-dashboard-split" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, marginBottom: 14 }}>
 
             {/* Chart */}
             <div className="cms-table-wrap" style={{ padding: "18px 20px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: 14 }}>Тренд за {period} дней</span>
+                <span style={{ fontWeight: 700, fontSize: 14 }}>Тренд: {period === "all" ? "всё время" : `${period} дней`}</span>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <select className="cms-select" value={period} onChange={(e) => setPeriod(e.target.value as typeof period)} style={{ padding: "3px 8px", fontSize: 12 }}>
                     <option value="7">7 дней</option>
                     <option value="14">14 дней</option>
                     <option value="30">30 дней</option>
                     <option value="90">90 дней</option>
+                    <option value="365">365 дней</option>
+                    <option value="all">Всё время</option>
                   </select>
                   <div className="cms-tabs">
                     {(["views", "visitors", "orders"] as const).map((m) => (
@@ -653,7 +726,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* ── Row 4: Orders + Geography ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, marginBottom: 20 }}>
+          <div className="cms-dashboard-split" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, marginBottom: 20 }}>
 
             {/* Recent Orders */}
             <div className="cms-table-wrap">
@@ -689,7 +762,7 @@ export default function AdminDashboard() {
 
             {/* Geography */}
             <div className="cms-table-wrap" style={{ padding: "14px 16px" }}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>География (сегодня)</div>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>География за период</div>
               {analytics?.countries && analytics.countries.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                   {analytics.countries.slice(0, 6).map((c, i) => {
@@ -698,7 +771,7 @@ export default function AdminDashboard() {
                       <div key={i}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
                           <span style={{ color: "var(--cms-text-muted)" }}>{COUNTRY_NAMES[c.country] || c.country}</span>
-                          <span style={{ fontWeight: 600 }}>{c.count}</span>
+                          <span style={{ fontWeight: 600 }}>{c.count} · {c.percentage}%</span>
                         </div>
                         <GaugeBar value={c.count} max={maxC} color="var(--cms-accent)" />
                       </div>
@@ -710,6 +783,98 @@ export default function AdminDashboard() {
               )}
             </div>
           </div>
+
+          {analytics && (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 12, margin: "24px 0 12px", flexWrap: "wrap" }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 18 }}>Полная аналитика сайта</h2>
+                  <div style={{ marginTop: 4, color: "var(--cms-text-muted)", fontSize: 11 }}>
+                    Период: {new Date(analytics.period.from).toLocaleDateString("ru-RU")} — {new Date(analytics.period.to).toLocaleDateString("ru-RU")}
+                  </div>
+                </div>
+                <div style={{ color: "var(--cms-text-muted)", fontSize: 11 }}>
+                  Данные с {analytics.status.firstEventAt ? new Date(analytics.status.firstEventAt).toLocaleDateString("ru-RU") : "—"}
+                </div>
+              </div>
+
+              <div className="cms-dashboard-metrics" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
+                <MetricCard label="Посетители за период" value={analytics.totals.visitors} sub={`${analytics.totals.uniqueIPs} уникальных IP`} accent="rgba(139,92,246,0.15)" icon={<span style={{ color: "#a78bfa", fontWeight: 800 }}>UV</span>} />
+                <MetricCard label="Страниц за визит" value={analytics.totals.pagesPerSession} sub={`${analytics.totals.views} просмотров`} accent="rgba(59,130,246,0.15)" icon={<span style={{ color: "#60a5fa", fontWeight: 800 }}>PV</span>} />
+                <MetricCard label="Средний визит" value={fmtDur(analytics.totals.avgDuration)} sub={`страница: ${fmtDur(analytics.totals.avgPageDuration)}`} accent="rgba(236,72,153,0.12)" icon={<span style={{ color: "#f472b6", fontWeight: 800 }}>T</span>} />
+                <MetricCard label="Глубина прокрутки" value={`${analytics.totals.avgScroll}%`} sub="средняя по страницам" accent="rgba(6,182,212,0.15)" icon={<span style={{ color: "#22d3ee", fontWeight: 800 }}>↓</span>} />
+                <MetricCard label="Показатель отказов" value={`${analytics.totals.bounceRate}%`} sub="одна страница за визит" accent="rgba(245,158,11,0.14)" icon={<span style={{ color: "#fbbf24", fontWeight: 800 }}>↩</span>} />
+                <MetricCard label="Конверсия в оплату" value={`${analytics.totals.conversionRate}%`} sub={`${analytics.totals.paidOrders} оплаченных`} accent="rgba(34,197,94,0.14)" icon={<span style={{ color: "#4ade80", fontWeight: 800 }}>%</span>} />
+                <MetricCard label="Заказы за период" value={analytics.totals.orders} sub={`оплачено: ${analytics.totals.paidOrders}`} accent="rgba(6,182,212,0.15)" icon={<span style={{ color: "#22d3ee", fontWeight: 800 }}>#</span>} />
+                <MetricCard label="Выручка за период" value={fmt(analytics.totals.revenue)} sub={`за всё время: ${fmt(analytics.allTime.revenue)}`} accent="rgba(34,197,94,0.14)" icon={<span style={{ color: "#4ade80", fontWeight: 800 }}>₽</span>} />
+              </div>
+
+              {analytics.realtime.activePages.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <AnalyticsBreakdown title={`Сейчас онлайн: ${analytics.realtime.onlineNow}`} items={analytics.realtime.activePages} />
+                </div>
+              )}
+
+              <div className="cms-table-wrap" style={{ marginBottom: 14 }}>
+                <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--cms-border)", fontWeight: 700, fontSize: 13 }}>Страницы сайта</div>
+                <div style={{ overflowX: "auto" }}>
+                  <table className="cms-table" style={{ minWidth: 720 }}>
+                    <thead><tr><th>Страница</th><th>Просмотры</th><th>Посетители</th><th>Ср. время</th><th>Прокрутка</th></tr></thead>
+                    <tbody>
+                      {analytics.pages.length > 0 ? analytics.pages.map((page) => (
+                        <tr key={page.path}>
+                          <td style={{ maxWidth: 360 }}>
+                            <div className="cms-td-bold" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{page.title || page.path}</div>
+                            <div className="cms-td-mono" style={{ marginTop: 2, fontSize: 10 }}>{page.path}</div>
+                          </td>
+                          <td>{page.views}</td><td>{page.visitors}</td><td>{fmtDur(page.avgDuration)}</td><td>{page.avgScroll}%</td>
+                        </tr>
+                      )) : <tr><td colSpan={5} style={{ textAlign: "center", padding: 24, color: "var(--cms-text-muted)" }}>Нет данных</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 12, marginBottom: 14 }}>
+                <AnalyticsBreakdown title="Источники переходов" items={analytics.sources} />
+                <AnalyticsBreakdown title="Входные страницы" items={analytics.entryPages} />
+                <AnalyticsBreakdown title="Страницы выхода" items={analytics.exitPages} />
+                <AnalyticsBreakdown title="Устройства" items={analytics.devices} />
+                <AnalyticsBreakdown title="Браузеры" items={analytics.browsers} />
+                <AnalyticsBreakdown title="Операционные системы" items={analytics.operatingSystems} />
+                <AnalyticsBreakdown title="Страны" items={analytics.countries.map((item) => ({ label: COUNTRY_NAMES[item.country] || item.country || "Не определено", count: item.count, percentage: item.percentage }))} />
+                <AnalyticsBreakdown title="Города" items={analytics.cities} />
+                <AnalyticsBreakdown title="Языки" items={analytics.languages} />
+                <AnalyticsBreakdown title="Размеры экранов" items={analytics.screens} />
+                <AnalyticsBreakdown title="UTM-кампании" items={analytics.campaigns} />
+                <AnalyticsBreakdown title="UTM-каналы" items={analytics.mediums} />
+              </div>
+
+              <div style={{ marginBottom: 14 }}><HourlyActivity data={analytics.hourly} /></div>
+
+              <div className="cms-table-wrap" style={{ marginBottom: 20 }}>
+                <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--cms-border)", fontWeight: 700, fontSize: 13 }}>Последние посещения</div>
+                <div style={{ overflowX: "auto" }}>
+                  <table className="cms-table" style={{ minWidth: 900 }}>
+                    <thead><tr><th>Время</th><th>Страница</th><th>Визит</th><th>Источник</th><th>Устройство</th><th>Время</th><th>Scroll</th><th>География</th></tr></thead>
+                    <tbody>
+                      {analytics.recent.length > 0 ? analytics.recent.map((visit, index) => (
+                        <tr key={`${visit.at}-${visit.session}-${index}`}>
+                          <td style={{ whiteSpace: "nowrap" }}>{new Date(visit.at).toLocaleString("ru-RU")}</td>
+                          <td className="cms-td-mono" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={visit.path}>{visit.path}</td>
+                          <td className="cms-td-mono">{visit.session}</td>
+                          <td>{visit.source}</td>
+                          <td>{visit.device}<div style={{ fontSize: 10, color: "var(--cms-text-muted)" }}>{visit.browser} · {visit.os}</div></td>
+                          <td>{fmtDur(visit.duration)}</td><td>{visit.scroll}%</td>
+                          <td>{[COUNTRY_NAMES[visit.country] || visit.country, visit.city].filter(Boolean).join(", ") || "—"}</td>
+                        </tr>
+                      )) : <tr><td colSpan={8} style={{ textAlign: "center", padding: 24, color: "var(--cms-text-muted)" }}>Нет данных</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* ── Quick Links ── */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>

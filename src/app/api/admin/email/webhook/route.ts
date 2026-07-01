@@ -19,6 +19,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const rawPayload = await req.text();
+    if (rawPayload.length > 2_000_000) {
+      return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
+    }
     const webhookSecret =
       process.env.RESEND_WEBHOOK_SECRET ||
       (await withPrismaRetry(
@@ -34,24 +37,25 @@ export async function POST(req: NextRequest) {
       signature: req.headers.get('svix-signature') || req.headers.get('x-svix-signature') || '',
     };
 
-    if (webhookSecret && (!signatureHeaders.id || !signatureHeaders.timestamp || !signatureHeaders.signature)) {
+    if (!webhookSecret) {
+      console.error('RESEND_WEBHOOK_SECRET is not configured');
+      return NextResponse.json({ error: 'Webhook is not configured' }, { status: 503 });
+    }
+
+    if (!signatureHeaders.id || !signatureHeaders.timestamp || !signatureHeaders.signature) {
       return NextResponse.json({ error: 'Missing webhook signature' }, { status: 400 });
     }
 
     let payload: Record<string, unknown>;
-    if (webhookSecret) {
-      try {
-        const verifiedPayload = resend.webhooks.verify({
-          payload: rawPayload,
-          headers: signatureHeaders,
-          webhookSecret,
-        });
-        payload = verifiedPayload as unknown as Record<string, unknown>;
-      } catch {
-        return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
-      }
-    } else {
-      payload = JSON.parse(rawPayload) as Record<string, unknown>;
+    try {
+      const verifiedPayload = resend.webhooks.verify({
+        payload: rawPayload,
+        headers: signatureHeaders,
+        webhookSecret,
+      });
+      payload = verifiedPayload as unknown as Record<string, unknown>;
+    } catch {
+      return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
     }
 
     console.log('Email webhook received:', JSON.stringify(payload).substring(0, 1000));
@@ -91,9 +95,9 @@ export async function POST(req: NextRequest) {
         toAddr = t.address || t.email || t.name || JSON.stringify(t);
       }
 
-      const subject = String(emailData.subject || '(без темы)');
-      const html = String(emailData.html || emailData.body || '');
-      const text = String(emailData.text || emailData.text_body || '');
+      const subject = String(emailData.subject || '(без темы)').slice(0, 500);
+      const html = String(emailData.html || emailData.body || '').slice(0, 1_000_000);
+      const text = String(emailData.text || emailData.text_body || '').slice(0, 1_000_000);
       const messageId = String(emailData.message_id || emailData.email_id || emailData.id || '').trim();
       const inReplyTo = String(emailData.in_reply_to || emailData.reply_to || '').trim();
 

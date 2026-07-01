@@ -11,6 +11,7 @@ function SuccessContent() {
   const params = useSearchParams();
   const orderNumber = params.get('order');
   const [status, setStatus] = useState<'loading' | 'paid' | 'pending' | 'error'>('loading');
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   useEffect(() => {
     if (!orderNumber) { setStatus('error'); return; }
@@ -37,6 +38,24 @@ function SuccessContent() {
     };
     check();
   }, [orderNumber]);
+
+  const sendReceipt = async () => {
+    if (!orderNumber || emailStatus === 'sending') return;
+
+    setEmailStatus('sending');
+    try {
+      const response = await fetch('/api/orders/receipt/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderNumber }),
+      });
+
+      if (!response.ok) throw new Error('Failed to send receipt');
+      setEmailStatus('sent');
+    } catch {
+      setEmailStatus('error');
+    }
+  };
 
   if (status === 'loading') {
     return (
@@ -91,12 +110,13 @@ function SuccessContent() {
   // paid
   return (
     <main style={{
-      minHeight: '70vh',
+      minHeight: '100svh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '2rem',
+      padding: 'calc(72px + 2rem) 2rem 8rem',
       textAlign: 'center',
+      boxSizing: 'border-box',
     }}>
       <div style={{ maxWidth: '480px' }}>
         <div style={{
@@ -115,7 +135,7 @@ function SuccessContent() {
         </div>
 
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1rem' }}>
-          {lang === 'ru' ? 'Заказ оформлен!' : 'Order placed!'}
+          {lang === 'ru' ? 'Успешная оплата' : 'Payment successful'}
         </h1>
 
         {orderNumber && (
@@ -131,7 +151,57 @@ function SuccessContent() {
             : 'Thank you for your purchase! We will send a confirmation to your email and contact you once the order is ready.'}
         </p>
 
-        <Link href="/" className="product-btn" style={{ display: 'inline-flex', justifyContent: 'center' }}>
+        {orderNumber && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.9rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+            <a
+              href={`/api/orders/receipt?number=${encodeURIComponent(orderNumber)}`}
+              aria-label={lang === 'ru' ? 'Скачать чек' : 'Download receipt'}
+              title={lang === 'ru' ? 'Скачать чек' : 'Download receipt'}
+              style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: 'var(--orange)',
+                color: '#fff',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flex: '0 0 auto',
+              }}
+            >
+              <svg width="21" height="21" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
+              </svg>
+            </a>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              {lang === 'ru' ? 'или' : 'or'}
+            </span>
+            <button
+              type="button"
+              onClick={sendReceipt}
+              disabled={emailStatus === 'sending' || emailStatus === 'sent'}
+              className="product-btn"
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.55rem', border: 0, cursor: emailStatus === 'sending' || emailStatus === 'sent' ? 'default' : 'pointer' }}
+            >
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m3 11 18-8-8 18-2-8-8-2Zm8 2 4-4" />
+              </svg>
+              {emailStatus === 'sending'
+                ? (lang === 'ru' ? 'Отправляем…' : 'Sending…')
+                : emailStatus === 'sent'
+                  ? (lang === 'ru' ? 'Чек отправлен' : 'Receipt sent')
+                  : (lang === 'ru' ? 'Отправить чек по почте' : 'Email receipt')}
+            </button>
+          </div>
+        )}
+
+        {emailStatus === 'error' && (
+          <p style={{ color: '#ef4444', fontSize: '0.85rem', margin: '-0.5rem 0 1.25rem' }}>
+            {lang === 'ru' ? 'Не удалось отправить чек. Попробуйте ещё раз.' : 'Could not send the receipt. Please try again.'}
+          </p>
+        )}
+
+        <Link href="/" className="product-btn" style={{ display: 'inline-flex', justifyContent: 'center', marginTop: '0.75rem' }}>
           {lang === 'ru' ? 'На главную' : 'Back to home'}
         </Link>
       </div>

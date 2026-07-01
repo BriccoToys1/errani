@@ -43,6 +43,7 @@ model Product {
   descriptionRu String?        // Russian description
   price         Float
   shippingFee   Float          @default(0) // Per-product delivery fee in RUB
+  freeDelivery  Boolean        @default(false) // Free delivery for the whole order when this product is in cart
   oldPrice      Float?         // Original price (for discount display)
   discount      Int            @default(0) // Discount percentage 0-100
   currency      String         @default("RUB")
@@ -59,7 +60,7 @@ model Product {
   limitedEditionTextEn String         @default("")
   noticeText         String         @default("") // Per-product notice/badge text (RU)
   noticeTextEn       String         @default("") // Per-product notice/badge text (EN)
-  shippingConditions String         @default("[]") // JSON [{fromQty,toQty,price}] tiered shipping
+  shippingConditions String         @default("[]") // Legacy column, no longer used
   isActive           Boolean        @default(true) // Show in catalog
   isAvailable        Boolean        @default(true) // Can be purchased (add to cart enabled)
   isSaleDisabled     Boolean        @default(false) // "Скоро" — товар в каталоге, кнопка "Скоро"
@@ -105,7 +106,13 @@ model Order {
   street          String      @default("")
   house           String      @default("")
   apartment       String      @default("")
-  shippingMethod  String      @default("") // ozon, yandex, pochta_ru, cdek, pochta_int
+  shippingMethod  String      @default("") // cdek_courier, cdek_pvz
+  cdekDeliveryPointCode    String @default("")
+  cdekDeliveryPointAddress String @default("")
+  cdekTariffCode           Int    @default(0)
+  cdekUuid                 String @default("")
+  cdekNumber               String @default("")
+  cdekError                String @default("")
   status          String      @default("assembling") // assembling, shipped, in_transit, delivered, cancelled
   paymentMethod   String      @default("") // yukassa, stripe, apple_pay, google_pay
   paymentId       String      @default("")
@@ -205,20 +212,41 @@ model Review {
 // ─── Analytics ───
 
 model PageView {
-  id        String   @id @default(uuid())
-  sessionId String
-  path      String
-  referrer  String   @default("")
-  userAgent String   @default("")
-  ip        String   @default("")
-  country   String   @default("")
-  city      String   @default("")
-  lang      String   @default("")
-  duration  Int      @default(0)  // seconds on page
-  createdAt DateTime @default(now())
+  id           String   @id @default(uuid())
+  viewId       String   @default("")
+  sessionId    String
+  path         String
+  query        String   @default("")
+  title        String   @default("")
+  previousPath String   @default("")
+  referrer     String   @default("")
+  userAgent    String   @default("")
+  ip           String   @default("")
+  country      String   @default("")
+  city         String   @default("")
+  lang         String   @default("")
+  device       String   @default("")
+  browser      String   @default("")
+  os           String   @default("")
+  screenWidth  Int      @default(0)
+  screenHeight Int      @default(0)
+  timezone     String   @default("")
+  utmSource    String   @default("")
+  utmMedium    String   @default("")
+  utmCampaign  String   @default("")
+  utmContent   String   @default("")
+  utmTerm      String   @default("")
+  duration     Int      @default(0)  // active seconds on page
+  maxScroll    Int      @default(0)  // maximum scroll depth, 0..100
+  isBot        Boolean  @default(false)
+  lastActiveAt DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   @@index([createdAt])
+  @@index([lastActiveAt])
+  @@index([viewId])
   @@index([sessionId])
+  @@index([path])
   @@index([ip])
   @@index([country])
 }

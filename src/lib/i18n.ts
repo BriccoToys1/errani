@@ -1,3 +1,5 @@
+import { DEFAULT_LIMITED_EDITION_TEXT_EN, DEFAULT_LIMITED_EDITION_TEXT_RU } from './product-defaults';
+
 export type Lang = 'ru' | 'en';
 
 export const LANGUAGES: { code: Lang; label: string }[] = [
@@ -37,7 +39,7 @@ const translations: Translations = {
     'product.description.p3': 'Tenderly Vibe помогает не просто получить ответ, а прикоснуться к своему внутреннему состоянию.',
     'product.description.p4': 'Колода создана на основе RWS, вы можете следовать этой системе.',
     'product.limited.title': 'Лимитированный тираж',
-    'product.limited.text': 'Тираж ограничен — всего 50 экземпляров. Каждая колода будет сопровождаться номерным сертификатом, подтверждающим её уникальность и принадлежность к первому выпуску. Tenderly Vibe — это не массовая история.',
+    'product.limited.text': DEFAULT_LIMITED_EDITION_TEXT_RU,
 
     // Specs
     'spec.count': 'Количество карт',
@@ -135,7 +137,7 @@ const translations: Translations = {
     'product.description.p3': 'Tenderly Vibe helps not just to get an answer, but to touch your inner state.',
     'product.description.p4': 'The deck is based on RWS tradition, you can follow this system.',
     'product.limited.title': 'Limited Edition',
-    'product.limited.text': 'Limited run — only 50 copies. Each deck comes with a numbered certificate confirming its uniqueness and belonging to the first edition. Tenderly Vibe is not a mass-produced story.',
+    'product.limited.text': DEFAULT_LIMITED_EDITION_TEXT_EN,
 
     'spec.count': 'Number of cards',
     'spec.count.value': '80 cards (two Empresses)',

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
+import { withPrismaRetry } from '@/lib/prisma-retry';
 
 // GET all inquiries (admin only)
 export async function GET(req: NextRequest) {
@@ -10,23 +11,14 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const includeArchived = searchParams.get('includeArchived') === 'true';
-    const withTimeout = async <T,>(promise: Promise<T>, fallback: T, ms = 5000): Promise<T> => {
-      try {
-        return await Promise.race([
-          promise,
-          new Promise<T>((_, reject) => setTimeout(() => reject(new Error('inquiries timeout')), ms)),
-        ]);
-      } catch {
-        return fallback;
-      }
-    };
 
-    const inquiries = await withTimeout(
-      prisma.inquiry.findMany({
+    const inquiries = await withPrismaRetry(
+      () => prisma.inquiry.findMany({
         where: includeArchived ? {} : { status: { not: 'archived' } },
         orderBy: { createdAt: 'desc' },
       }),
-      []
+      3,
+      120
     );
     return NextResponse.json(inquiries);
   } catch (error) {
@@ -41,10 +33,12 @@ export async function PUT(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const result = await prisma.inquiry.updateMany({
-      where: { status: 'new' },
-      data: { status: 'read' },
-    });
+    const result = await withPrismaRetry(() =>
+      prisma.inquiry.updateMany({
+        where: { status: 'new' },
+        data: { status: 'read' },
+      })
+    );
     return NextResponse.json({ updated: result.count });
   } catch (error) {
     console.error('Error marking inquiries as read:', error);
@@ -66,17 +60,19 @@ export async function POST(req: NextRequest) {
     const ip = forwarded ? forwarded.split(',')[0].trim() : req.headers.get('x-real-ip') || '';
     const userAgent = req.headers.get('user-agent') || '';
 
-    const inquiry = await prisma.inquiry.create({
-      data: {
-        name: body.name.trim(),
-        email: body.email.trim(),
-        phone: body.phone?.trim() || '',
-        message: body.message.trim(),
-        source: body.source || 'contact_form',
-        ip,
-        userAgent,
-      },
-    });
+    const inquiry = await withPrismaRetry(() =>
+      prisma.inquiry.create({
+        data: {
+          name: body.name.trim(),
+          email: body.email.trim(),
+          phone: body.phone?.trim() || '',
+          message: body.message.trim(),
+          source: body.source || 'contact_form',
+          ip,
+          userAgent,
+        },
+      })
+    );
 
     return NextResponse.json({ success: true, id: inquiry.id });
   } catch (error) {

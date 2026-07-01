@@ -4,6 +4,7 @@ import prisma from '@/lib/db';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 import { normalizeProductMedia } from '@/lib/product-media';
 import { ProductContent } from '../[slug]/ProductContent';
+import { DEFAULT_LIMITED_EDITION_TEXT_EN, DEFAULT_LIMITED_EDITION_TEXT_RU } from '@/lib/product-defaults';
 
 export const dynamic = 'force-dynamic';
 const DB_PAGE_TIMEOUT_MS = 4_000;
@@ -28,7 +29,8 @@ const TENDERLY_FALLBACK_PRODUCT = {
   preorderClosed: false,
   preorderAvailableDate: null,
   isLimited: true,
-  limitedEditionText: '',
+  limitedEditionText: DEFAULT_LIMITED_EDITION_TEXT_RU,
+  limitedEditionTextEn: DEFAULT_LIMITED_EDITION_TEXT_EN,
   isAuthor: true,
   characteristics: '[]',
   colors: '[]',

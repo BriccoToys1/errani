@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
+import { usePathname } from 'next/navigation';
 
 const CONSENT_KEY = 'errani_consent';
 
@@ -30,6 +31,7 @@ function saveConsent() {
 
 export function CookieConsent() {
   const { lang } = useLanguage();
+  const pathname = usePathname();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -41,10 +43,11 @@ export function CookieConsent() {
 
   const handleAccept = () => {
     saveConsent();
+    window.dispatchEvent(new Event('errani:consent'));
     setVisible(false);
   };
 
-  if (!visible) return null;
+  if (!visible || pathname.startsWith('/admin')) return null;
 
   return (
     <div className="cookie-banner">

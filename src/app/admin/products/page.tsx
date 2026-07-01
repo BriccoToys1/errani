@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AdminSidebar } from "../AdminSidebar";
+import { DEFAULT_LIMITED_EDITION_TEXT_EN, DEFAULT_LIMITED_EDITION_TEXT_RU } from "@/lib/product-defaults";
 
 const SUPPORTED_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"];
 const SUPPORTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
@@ -57,14 +58,13 @@ function slugify(text: string): string {
 interface Product {
   id: string; name: string; nameRu: string; slug: string;
   description: string; descriptionRu: string;
-  price: number; shippingFee: number; oldPrice: number | null; discount: number;
+  price: number; shippingFee: number; freeDelivery: boolean; oldPrice: number | null; discount: number;
   stock: number; currency: string; image: string; images: string;
   inStock: boolean; isPreorder: boolean; preorderClosed: boolean;
   preorderAvailableDate: string | null;
   isAuthor: boolean; isLimited: boolean; limitedEditionText: string;
   limitedEditionTextEn?: string;
   noticeText?: string; noticeTextEn?: string;
-  shippingConditions?: string;
   isActive: boolean; isAvailable: boolean; isSaleDisabled: boolean; isSoldOut: boolean;
   sortOrder: number; characteristics: string; colors: string; customBadges?: string; createdAt: string;
 }
@@ -81,11 +81,13 @@ type BulkAction = "none"|"activate"|"deactivate"|"makeAvailable"|"makeUnavailabl
 
 const emptyProduct = {
   name: "", nameRu: "", slug: "", description: "", descriptionRu: "",
-  price: 0, shippingFee: 0, oldPrice: null as number | null, discount: 0, stock: 0,
+  price: 0, shippingFee: 0, freeDelivery: false, oldPrice: null as number | null, discount: 0, stock: 0,
   currency: "RUB", image: "", images: "[]", inStock: true, isPreorder: false,
   preorderClosed: false, preorderAvailableDate: "",
-  isAuthor: false, isLimited: false, limitedEditionText: "", limitedEditionTextEn: "",
-  noticeText: "", noticeTextEn: "", shippingConditions: "[]",
+  isAuthor: false, isLimited: false,
+  limitedEditionText: DEFAULT_LIMITED_EDITION_TEXT_RU,
+  limitedEditionTextEn: DEFAULT_LIMITED_EDITION_TEXT_EN,
+  noticeText: "", noticeTextEn: "",
   isActive: true, isAvailable: true, isSaleDisabled: false, isSoldOut: false, sortOrder: 0,
   characteristics: "[]", colors: "[]", customBadges: "[]",
 };
@@ -583,17 +585,16 @@ export default function AdminProductsPage() {
     setForm({
       name: p.name, nameRu: p.nameRu || "", slug: p.slug,
       description: p.description, descriptionRu: p.descriptionRu || "",
-      price: p.price, shippingFee: p.shippingFee ?? 0, oldPrice: p.oldPrice,
+      price: p.price, shippingFee: p.shippingFee ?? 0, freeDelivery: p.freeDelivery ?? false, oldPrice: p.oldPrice,
       discount: p.discount, stock: p.stock, currency: p.currency,
       image: p.image, images: buildGallery(p),
       inStock: p.inStock, isPreorder: p.isPreorder,
       preorderClosed: p.preorderClosed || false,
       preorderAvailableDate: p.preorderAvailableDate ? new Date(p.preorderAvailableDate).toISOString().split("T")[0] : "",
       isAuthor: p.isAuthor, isLimited: p.isLimited || false,
-      limitedEditionText: p.limitedEditionText || "",
-      limitedEditionTextEn: p.limitedEditionTextEn || "",
+      limitedEditionText: p.limitedEditionText || DEFAULT_LIMITED_EDITION_TEXT_RU,
+      limitedEditionTextEn: p.limitedEditionTextEn || DEFAULT_LIMITED_EDITION_TEXT_EN,
       noticeText: p.noticeText || "", noticeTextEn: p.noticeTextEn || "",
-      shippingConditions: p.shippingConditions || "[]",
       isActive: p.isActive, isAvailable: p.isAvailable ?? true, isSaleDisabled: p.isSaleDisabled || false,
       isSoldOut: p.isSoldOut || false, sortOrder: p.sortOrder,
       characteristics: p.characteristics || "[]", colors: p.colors || "[]",
@@ -609,16 +610,15 @@ export default function AdminProductsPage() {
     setForm({
       name: p.name + " (copy)", nameRu: (p.nameRu || p.name) + " (копия)",
       slug: p.slug + "-copy", description: p.description, descriptionRu: p.descriptionRu || "",
-      price: p.price, shippingFee: p.shippingFee ?? 0, oldPrice: p.oldPrice,
+      price: p.price, shippingFee: p.shippingFee ?? 0, freeDelivery: p.freeDelivery ?? false, oldPrice: p.oldPrice,
       discount: p.discount, stock: p.stock, currency: p.currency,
       image: p.image, images: buildGallery(p),
       inStock: p.inStock, isPreorder: p.isPreorder, preorderClosed: false,
       preorderAvailableDate: "",
       isAuthor: p.isAuthor, isLimited: p.isLimited || false,
-      limitedEditionText: p.limitedEditionText || "",
-      limitedEditionTextEn: p.limitedEditionTextEn || "",
+      limitedEditionText: p.limitedEditionText || DEFAULT_LIMITED_EDITION_TEXT_RU,
+      limitedEditionTextEn: p.limitedEditionTextEn || DEFAULT_LIMITED_EDITION_TEXT_EN,
       noticeText: p.noticeText || "", noticeTextEn: p.noticeTextEn || "",
-      shippingConditions: p.shippingConditions || "[]",
       isActive: false, isAvailable: true, isSaleDisabled: p.isSaleDisabled || false,
       isSoldOut: false, characteristics: p.characteristics || "[]",
       colors: p.colors || "[]", customBadges: p.customBadges || "[]", sortOrder: p.sortOrder,
@@ -642,7 +642,7 @@ export default function AdminProductsPage() {
     const payload = {
       name: p.name, nameRu: p.nameRu || "", slug: p.slug,
       description: p.description, descriptionRu: p.descriptionRu || "",
-      price: p.price, shippingFee: p.shippingFee ?? 0, oldPrice: p.oldPrice,
+      price: p.price, shippingFee: p.shippingFee ?? 0, freeDelivery: p.freeDelivery ?? false, oldPrice: p.oldPrice,
       discount: p.discount, stock: p.stock, currency: p.currency,
       image: gallery[0] || p.image || "", images: p.images,
       inStock: p.inStock, isPreorder: p.isPreorder, preorderClosed: p.preorderClosed || false,
@@ -717,6 +717,7 @@ export default function AdminProductsPage() {
     if (p.discount > 0) b.push({ label: `-${p.discount}%`, cls: "cms-badge-green" });
     if (p.isAuthor) b.push({ label: "Signature", cls: "cms-badge-blue" });
     if (p.isLimited) b.push({ label: "Limited", cls: "cms-badge-yellow" });
+    if (p.freeDelivery) b.push({ label: "Доставка 0 ₽", cls: "cms-badge-green" });
     if (p.inStock && p.stock <= LOW_STOCK_THRESHOLD && !p.isSaleDisabled && !p.isSoldOut) b.push({ label: `Мало: ${p.stock}`, cls: "cms-badge-red" });
     if (b.length === 0 && p.inStock) b.push({ label: "В продаже", cls: "cms-badge-green" });
     return b;
@@ -1107,45 +1108,14 @@ export default function AdminProductsPage() {
                     <input className="cms-input" type="number" value={form.sortOrder} onChange={e => setForm({ ...form, sortOrder: Number(e.target.value) })} />
                   </label>
                 </div>
-                {/* Shipping conditions */}
-                <div style={{ marginTop: 12, padding: "10px 12px", background: "rgba(155,135,245,0.05)", border: "1px solid rgba(155,135,245,0.15)", borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
-                    Условия доставки по кол-ву (до 10)
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--cms-text-muted)", marginBottom: 8 }}>
-                    Если заказ от X до Y шт. → цена доставки. Если не попадает в условие — используется базовая цена выше.
-                  </div>
-                  {(() => {
-                    let conds: Array<{fromQty: number; toQty: number; price: number}> = [];
-                    try { conds = JSON.parse(form.shippingConditions || "[]"); } catch { conds = []; }
-                    const updateConds = (next: typeof conds) => setForm(prev => ({ ...prev, shippingConditions: JSON.stringify(next) }));
-                    return (
-                      <>
-                        {conds.map((c, i) => (
-                          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 28px", gap: 6, marginBottom: 6, alignItems: "center" }}>
-                            <input className="cms-input" type="number" min="1" placeholder="От (шт.)" value={c.fromQty}
-                              onChange={e => updateConds(conds.map((x, j) => j === i ? { ...x, fromQty: Number(e.target.value) } : x))}
-                              style={{ fontSize: 12 }} />
-                            <input className="cms-input" type="number" min="1" placeholder="До (шт.)" value={c.toQty}
-                              onChange={e => updateConds(conds.map((x, j) => j === i ? { ...x, toQty: Number(e.target.value) } : x))}
-                              style={{ fontSize: 12 }} />
-                            <input className="cms-input" type="number" min="0" placeholder="Цена (₽)" value={c.price}
-                              onChange={e => updateConds(conds.map((x, j) => j === i ? { ...x, price: Number(e.target.value) } : x))}
-                              style={{ fontSize: 12 }} />
-                            <button type="button" onClick={() => updateConds(conds.filter((_, j) => j !== i))}
-                              style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: 16, padding: 0 }}>×</button>
-                          </div>
-                        ))}
-                        {conds.length < 10 && (
-                          <button type="button" className="cms-btn cms-btn-xs"
-                            onClick={() => updateConds([...conds, { fromQty: 1, toQty: 9, price: 0 }])}>
-                            + Добавить условие
-                          </button>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
+                <label style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, marginTop: 12, padding: "12px 14px", border: `1px solid ${form.freeDelivery ? "rgba(34,197,94,0.55)" : "var(--cms-border)"}`, borderRadius: 10, background: form.freeDelivery ? "rgba(34,197,94,0.1)" : "rgba(255,255,255,0.025)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={form.freeDelivery} onChange={e => setForm(prev => ({ ...prev, freeDelivery: e.target.checked }))} />
+                  <span style={{ flex: 1 }}>
+                    <strong style={{ display: "block", color: form.freeDelivery ? "#4ade80" : "var(--cms-text-heading)", fontSize: 13 }}>Бесплатная доставка</strong>
+                    <span style={{ display: "block", marginTop: 3, color: "var(--cms-text-muted)", fontSize: 11 }}>Если включено, стоимость СДЭК для заказа будет 0 ₽.</span>
+                  </span>
+                  <code style={{ marginLeft: "auto", color: form.freeDelivery ? "#4ade80" : "var(--cms-text-muted)", fontSize: 11 }}>freeDelivery = {String(form.freeDelivery)}</code>
+                </label>
               </Section>
 
               {/* ── Статус / Плашки ── */}
@@ -1166,7 +1136,12 @@ export default function AdminProductsPage() {
                         {tog(form.isActive, () => setForm(p => ({ ...p, isActive: !p.isActive })), "Активен")}
                         {tog(form.isAvailable, () => setForm(p => ({ ...p, isAvailable: !p.isAvailable })), "Доступен", "#16a34a", "rgba(22,163,74,0.12)")}
                         {tog(form.isPreorder, () => setForm(p => ({ ...p, isPreorder: !p.isPreorder, inStock: !p.isPreorder ? true : p.inStock })), "Предзаказ", "#f59e0b", "rgba(245,158,11,0.12)")}
-                        {tog(form.isLimited, () => setForm(p => ({ ...p, isLimited: !p.isLimited })), "Лимитированный", "#8b5cf6", "rgba(139,92,246,0.12)")}
+                        {tog(form.isLimited, () => setForm(p => ({
+                          ...p,
+                          isLimited: !p.isLimited,
+                          limitedEditionText: p.limitedEditionText || DEFAULT_LIMITED_EDITION_TEXT_RU,
+                          limitedEditionTextEn: p.limitedEditionTextEn || DEFAULT_LIMITED_EDITION_TEXT_EN,
+                        })), "Лимитированный", "#8b5cf6", "rgba(139,92,246,0.12)")}
                         {tog(form.isAuthor, () => setForm(p => ({ ...p, isAuthor: !p.isAuthor })), "Авторская", "#0ea5e9", "rgba(14,165,233,0.12)")}
                         {tog(form.isSoldOut, () => setForm(p => ({ ...p, isSoldOut: !p.isSoldOut })), "Sold Out", "#ef4444", "rgba(239,68,68,0.12)")}
                         {tog(form.inStock, () => setForm(p => ({ ...p, inStock: !p.inStock })), "В наличии", "#16a34a", "rgba(22,163,74,0.12)")}

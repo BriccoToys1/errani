@@ -4,9 +4,13 @@ function tuneDatabaseUrl(raw: string | undefined): string | undefined {
   if (!raw) return raw;
   try {
     const url = new URL(raw);
-    url.searchParams.set('connection_limit', '3');
-    url.searchParams.set('pool_timeout', '10');
-    url.searchParams.set('connect_timeout', '10');
+    const connectionLimit = process.env.FRESH_PRISMA_CONNECTION_LIMIT || '1';
+    const poolTimeout = process.env.PRISMA_POOL_TIMEOUT || '20';
+    const connectTimeout = process.env.PRISMA_CONNECT_TIMEOUT || '10';
+
+    url.searchParams.set('connection_limit', connectionLimit);
+    url.searchParams.set('pool_timeout', poolTimeout);
+    url.searchParams.set('connect_timeout', connectTimeout);
     return url.toString();
   } catch {
     return raw;

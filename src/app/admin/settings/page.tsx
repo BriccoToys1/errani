@@ -61,8 +61,8 @@ const DEFAULT_SETTINGS: Settings = {
   enablePreorders: true,
   enableFavorites: true,
   enableReviews: false,
-  shippingMethods: ["ozon", "yandex", "pochta_ru", "cdek", "pochta_int"],
-  paymentMethods: ["yukassa", "stripe", "apple_pay", "google_pay"],
+  shippingMethods: ["cdek_courier", "cdek_pvz"],
+  paymentMethods: ["tochka", "stripe", "apple_pay", "google_pay"],
   socialLinks: { instagram: "", telegram: "", vk: "", tiktok: "" },
   emailNotifications: true,
   orderNotifyEmail: "info@errani.ru",
@@ -82,13 +82,12 @@ const LANGS = [
 ];
 
 const SHIPPING = [
-  { id: "ozon", label: "OZON" }, { id: "yandex", label: "Яндекс Доставка" },
-  { id: "pochta_ru", label: "Почта России" }, { id: "cdek", label: "СДЭК" },
-  { id: "pochta_int", label: "Почта международная" }, { id: "dhl", label: "DHL" },
+  { id: "cdek_courier", label: "СДЭК — курьером" },
+  { id: "cdek_pvz", label: "СДЭК — пункт выдачи" },
 ];
 
 const PAYMENT = [
-  { id: "yukassa", label: "ЮKassa" }, { id: "stripe", label: "Stripe" },
+  { id: "tochka", label: "Точка Банк" }, { id: "yukassa", label: "ЮKassa" }, { id: "stripe", label: "Stripe" },
   { id: "apple_pay", label: "Apple Pay" }, { id: "google_pay", label: "Google Pay" },
   { id: "crypto", label: "Криптовалюта" },
 ];

@@ -9,17 +9,15 @@ function tuneDatabaseUrl(raw: string | undefined): string | undefined {
   if (!raw) return raw;
   try {
     const url = new URL(raw);
-    // On serverless (Vercel) each function instance must use 1 connection
-    // to avoid exhausting Neon's connection limit across concurrent invocations
-    if (!url.searchParams.has('connection_limit')) {
-      url.searchParams.set('connection_limit', '1');
-    }
-    if (!url.searchParams.has('pool_timeout')) {
-      url.searchParams.set('pool_timeout', '10');
-    }
-    if (!url.searchParams.has('connect_timeout')) {
-      url.searchParams.set('connect_timeout', '15');
-    }
+    const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+    const defaultConnectionLimit = isServerless ? '1' : '5';
+    const connectionLimit = process.env.PRISMA_CONNECTION_LIMIT || defaultConnectionLimit;
+    const poolTimeout = process.env.PRISMA_POOL_TIMEOUT || '20';
+    const connectTimeout = process.env.PRISMA_CONNECT_TIMEOUT || '10';
+
+    url.searchParams.set('connection_limit', connectionLimit);
+    url.searchParams.set('pool_timeout', poolTimeout);
+    url.searchParams.set('connect_timeout', connectTimeout);
     return url.toString();
   } catch {
     return raw;

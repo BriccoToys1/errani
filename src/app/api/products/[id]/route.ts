@@ -77,6 +77,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         descriptionRu: nullableString(descriptionRu),
         price: Number(body.price) || 0,
         shippingFee: Number(body.shippingFee) || 0,
+        freeDelivery: Boolean(body.freeDelivery),
         oldPrice: body.oldPrice !== null && body.oldPrice !== undefined && body.oldPrice !== ''
           ? Number(body.oldPrice)
           : null,
@@ -97,7 +98,6 @@ export async function PUT(req: NextRequest, { params }: Params) {
         limitedEditionTextEn: body.limitedEditionTextEn ?? '',
         noticeText: body.noticeText ?? '',
         noticeTextEn: body.noticeTextEn ?? '',
-        shippingConditions: normalizeJsonArrayString(body.shippingConditions),
         isActive: body.isActive ?? true,
         isAvailable: body.isAvailable ?? true,
         isSaleDisabled: body.isSaleDisabled ?? false,
