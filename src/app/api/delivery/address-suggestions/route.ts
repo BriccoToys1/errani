@@ -1,24 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CdekError, getCdekRussianLocationsCatalog } from '@/lib/cdek';
 
-interface NominatimAddress {
-  road?: string;
-  pedestrian?: string;
-  residential?: string;
-  neighbourhood?: string;
-  quarter?: string;
-  suburb?: string;
+interface PhotonProperties {
+  name?: string;
+  street?: string;
+  type?: string;
+  osm_key?: string;
   city?: string;
   town?: string;
   village?: string;
-  municipality?: string;
+  county?: string;
   state?: string;
-  country_code?: string;
+  countrycode?: string;
 }
 
-interface NominatimResult {
-  display_name?: string;
-  address?: NominatimAddress;
+interface PhotonResponse {
+  features?: Array<{ properties?: PhotonProperties }>;
 }
 
 function normalize(value: string): string {
@@ -63,33 +60,31 @@ export async function GET(req: NextRequest) {
 
     if (type === 'street' && (city || region)) {
       const search = new URLSearchParams({
-        street: query,
-        format: 'jsonv2',
-        addressdetails: '1',
-        countrycodes: 'ru',
-        layer: 'address',
-        limit: '10',
+        q: [query, city, region, 'Россия'].filter(Boolean).join(', '),
+        limit: '20',
       });
-      if (city) search.set('city', city);
-      if (region) search.set('state', region);
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${search.toString()}`, {
+      const response = await fetch(`https://photon.komoot.io/api/?${search.toString()}`, {
         headers: {
-          'User-Agent': 'errani.ru user-triggered delivery address search',
+          'User-Agent': 'errani.ru delivery address suggestions',
           Referer: 'https://errani.ru/',
-          'Accept-Language': 'ru',
         },
-        next: { revalidate: 86_400 },
+        next: { revalidate: 3600 },
       });
       if (!response.ok) return NextResponse.json([], { status: response.status });
-      const results = await response.json().catch(() => []) as NominatimResult[];
+      const data = await response.json().catch(() => ({})) as PhotonResponse;
+      const cityKey = normalize(city);
+      const regionKey = normalize(region);
       const unique = new Map<string, { value: string; label: string }>();
-      for (const result of results) {
-        const address = result.address || {};
-        if (address.country_code?.toLowerCase() !== 'ru') continue;
-        const value = address.road || address.pedestrian || address.residential
-          || address.quarter || address.neighbourhood || address.suburb || '';
+      for (const feature of data.features || []) {
+        const address = feature.properties || {};
+        if (address.countrycode?.toUpperCase() !== 'RU') continue;
+        const settlement = address.city || address.town || address.village || '';
+        if (cityKey && !normalize(settlement).includes(cityKey) && !cityKey.includes(normalize(settlement))) continue;
+        if (regionKey && !normalize(address.state || '').includes(regionKey) && !regionKey.includes(normalize(address.state || ''))) continue;
+        const value = address.type === 'street' || address.osm_key === 'highway'
+          ? address.name || address.street || ''
+          : address.street || '';
         if (!value) continue;
-        const settlement = address.city || address.town || address.village || address.municipality || city;
         unique.set(normalize(value), {
           value,
           label: [value, settlement, address.state].filter(Boolean).join(', '),
