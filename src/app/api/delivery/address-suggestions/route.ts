@@ -5,7 +5,6 @@ interface PhotonProperties {
   name?: string;
   street?: string;
   type?: string;
-  osm_key?: string;
   city?: string;
   town?: string;
   village?: string;
@@ -81,7 +80,7 @@ export async function GET(req: NextRequest) {
         const settlement = address.city || address.town || address.village || '';
         if (cityKey && !normalize(settlement).includes(cityKey) && !cityKey.includes(normalize(settlement))) continue;
         if (regionKey && !normalize(address.state || '').includes(regionKey) && !regionKey.includes(normalize(address.state || ''))) continue;
-        const value = address.type === 'street' || address.osm_key === 'highway'
+        const value = address.type === 'street'
           ? address.name || address.street || ''
           : address.street || '';
         if (!value) continue;
