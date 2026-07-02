@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const RUSSIAN_REGIONS = [
   'Алтайский край', 'Амурская область', 'Архангельская область', 'Астраханская область',
@@ -53,6 +53,7 @@ export function AddressSuggestField({
   onSelect?: (suggestion: Suggestion) => void;
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const skipNextSearchRef = useRef(false);
   const [items, setItems] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -74,40 +75,50 @@ export function AddressSuggestField({
     return () => document.removeEventListener('mousedown', close);
   }, []);
 
+  const loadSuggestions = useCallback(async (query: string, signal?: AbortSignal) => {
+    if (kind === 'region' || (kind === 'street' && !city.trim() && !region.trim())) return;
+    setLoading(true);
+    setSearched(true);
+    try {
+      const params = new URLSearchParams({ type: kind, q: query });
+      if (region) params.set('region', region);
+      if (city) params.set('city', city);
+      const response = await fetch(`/api/delivery/address-suggestions?${params}`, { signal });
+      const data = await response.json();
+      setItems(response.ok && Array.isArray(data) ? data : []);
+      setOpen(true);
+    } catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) setItems([]);
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, [city, kind, region]);
+
   useEffect(() => {
     const isCitySearch = kind === 'city';
     const isStreetSearch = kind === 'street';
     const hasStreetContext = Boolean(city.trim() || region.trim());
-    if ((!isCitySearch && !isStreetSearch) || value.trim().length < 2 || (isStreetSearch && !hasStreetContext)) {
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false;
+      return;
+    }
+    if ((!isCitySearch && !isStreetSearch) || !value.trim() || (isStreetSearch && !hasStreetContext)) {
       if (isCitySearch || isStreetSearch) setItems([]);
       return;
     }
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
-      setLoading(true);
-      setSearched(true);
-      try {
-        const params = new URLSearchParams({ type: kind, q: value.trim() });
-        if (region) params.set('region', region);
-        if (city) params.set('city', city);
-        const response = await fetch(`/api/delivery/address-suggestions?${params}`, { signal: controller.signal });
-        const data = await response.json();
-        setItems(response.ok && Array.isArray(data) ? data : []);
-        setOpen(true);
-      } catch (error) {
-        if (!(error instanceof Error && error.name === 'AbortError')) setItems([]);
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    }, 450);
+      await loadSuggestions(value.trim(), controller.signal);
+    }, 350);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [city, kind, region, value]);
+  }, [city, kind, loadSuggestions, region, value]);
 
   const visibleItems = kind === 'region' ? regionItems : items;
   const choose = (item: Suggestion) => {
+    skipNextSearchRef.current = true;
     onChange(item.value);
     onSelect?.(item);
     setOpen(false);
@@ -122,12 +133,18 @@ export function AddressSuggestField({
           className="form-field"
           value={value}
           onChange={(event) => {
-            onChange(event.target.value);
+            const nextValue = event.target.value;
+            onChange(nextValue);
             setSearched(false);
             if (kind === 'region') setOpen(true);
+            if (kind !== 'region' && !nextValue.trim()) {
+              setItems([]);
+              void loadSuggestions('');
+            }
           }}
           onFocus={() => {
-            if (kind === 'region' || visibleItems.length > 0) setOpen(true);
+            setOpen(true);
+            if (kind !== 'region' && visibleItems.length === 0) void loadSuggestions(value.trim());
           }}
           autoComplete={kind === 'region' ? 'address-level1' : kind === 'city' ? 'address-level2' : 'address-line1'}
           style={error ? { borderColor: '#ef4444' } : undefined}
@@ -149,9 +166,6 @@ export function AddressSuggestField({
           ))}
           {searched && !loading && visibleItems.length === 0 && (
             <div style={{ padding: '0.8rem', color: '#555', fontSize: '0.78rem' }}>Ничего не найдено</div>
-          )}
-          {kind === 'street' && visibleItems.length > 0 && (
-            <div style={{ padding: '0.45rem 0.8rem', background: '#f7f7f7', color: '#777', fontSize: '0.65rem' }}>© OpenStreetMap contributors</div>
           )}
         </div>
       )}

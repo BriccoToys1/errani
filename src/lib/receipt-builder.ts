@@ -85,7 +85,7 @@ export interface ReceiptOrder {
  * @param order   — order data
  * @param forPdf  — when true, strips interactive buttons/scripts (clean PDF output)
  */
-export function buildReceiptHtml(order: ReceiptOrder, forPdf = false): string {
+export function buildReceiptHtml(order: ReceiptOrder, forPdf = false, downloadUrl = ''): string {
   const createdAt = new Date(order.createdAt);
   const dateStr = createdAt.toLocaleDateString('ru-RU', {
     day: '2-digit',
@@ -150,10 +150,14 @@ export function buildReceiptHtml(order: ReceiptOrder, forPdf = false): string {
     ? ''
     : `<script>
     function savePdf() {
-      var orig = document.title;
-      document.title = '${saveFilename}';
-      window.print();
-      setTimeout(function(){ document.title = orig; }, 2000);
+      ${downloadUrl
+        ? `var link = document.createElement('a');
+      link.href = ${JSON.stringify(downloadUrl)};
+      link.download = ${JSON.stringify(`${saveFilename}.pdf`)};
+      document.body.appendChild(link);
+      link.click();
+      link.remove();`
+        : 'window.print();'}
     }
   </script>`;
 
@@ -179,9 +183,10 @@ export function buildReceiptHtml(order: ReceiptOrder, forPdf = false): string {
       font-display: block;
     }
     @page { margin: 0; }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Montserrat', sans-serif; }
+    html { font-family: 'Montserrat', sans-serif; font-synthesis: none; }
     body {
-      font-family: 'Montserrat', Arial, sans-serif;
+      font-family: 'Montserrat', sans-serif;
       font-size: 12px;
       color: #1a1a1a;
       background: #e4e4e4;

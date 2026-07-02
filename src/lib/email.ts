@@ -254,36 +254,28 @@ export async function sendReceiptEmail(data: {
 </html>`;
 
   try {
+    const resend = new Resend(apiKey);
     let resendId = '';
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: 'errani <mail@errani.ru>',
-          to: [data.recipientEmail],
-          subject,
-          html,
-          attachments: [{
-            filename: `receipt-${data.orderNumber}.pdf`,
-            content: data.receiptPdf.toString('base64'),
-          }],
-        }),
-        signal: AbortSignal.timeout(15_000),
+      const result = await resend.emails.send({
+        from: 'errani <mail@errani.ru>',
+        to: data.recipientEmail,
+        subject,
+        html,
+        attachments: [{
+          filename: `receipt-${data.orderNumber}.pdf`,
+          content: data.receiptPdf,
+        }],
       });
-      const result = await response.json() as { id?: string; message?: string };
 
-      if (response.ok && result.id) {
-        resendId = result.id;
+      if (result.data?.id) {
+        resendId = result.data.id;
         break;
       }
 
-      console.error('Failed to send receipt email:', response.status, result.message || result);
-      if (response.status < 500) return false;
+      console.error('Failed to send receipt email:', result.error);
+      if (result.error && 'statusCode' in result.error && Number(result.error.statusCode) < 500) return false;
     }
 
     if (!resendId) return false;
