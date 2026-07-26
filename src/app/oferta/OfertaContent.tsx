@@ -75,7 +75,7 @@ const SECTIONS_RU: OfferSection[] = [
   {
     title: '9. Обработка персональных данных',
     text: [
-      'Оформляя заказ, Покупатель соглашается на обработку своих персональных данных в соответствии с Федеральным законом №152-ФЗ «О персональных данных» и Политикой конфиденциальности сайта errani.ru.',
+      'Оформляя заказ, Покупатель соглашается на обработку своих персональных данных в соответствии с Федеральным законом №152-ФЗ «О персональных данных» и Политикой обработки персональных данных сайта errani.ru.',
     ],
   },
   {
@@ -85,6 +85,7 @@ const SECTIONS_RU: OfferSection[] = [
       'ИНН: 325402793102',
       'ОГРНИП: 326320000033790 от 25 июня 2026 г.',
       'Дата регистрации: 25.06.2026',
+      'Адрес регистрации: 242504, Россия, Брянская область, Карачевское городское поселение, деревня Масловка, Первомайская улица, 76',
       'Электронная почта: mail@errani.ru',
       'Сайт: https://errani.ru',
     ],
@@ -194,6 +195,7 @@ const SECTIONS_EN: OfferSection[] = [
       'TIN: 325402793102',
       'OGRNIP: 326320000033790 dated June 25, 2026',
       'Registration date: June 25, 2026',
+      'Registered address: 242504, Russia, Bryansk region, Karachev urban settlement, village Maslovka, Pervomayskaya str., 76',
       'Email: mail@errani.ru',
       'Website: https://errani.ru',
     ],
@@ -257,7 +259,7 @@ export function OfertaContent() {
 
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.5rem', marginTop: '2rem', display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
         <Link href="/privacy" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textDecoration: 'underline' }}>
-          {lang === 'ru' ? 'Политика конфиденциальности' : 'Privacy Policy'}
+          {lang === 'ru' ? 'Политика обработки персональных данных' : 'Personal Data Processing Policy'}
         </Link>
         <Link href="/catalog" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textDecoration: 'underline' }}>
           {lang === 'ru' ? 'Каталог товаров' : 'Product Catalog'}

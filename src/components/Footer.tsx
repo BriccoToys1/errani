@@ -51,12 +51,17 @@ export function Footer() {
         {/* Legal + copyright */}
         <div style={{ textAlign: 'center' }}>
           <p className="footer-copy">&copy; {year} errani. {lang === 'ru' ? 'Все права защищены.' : 'All rights reserved.'}</p>
+          <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.35rem', lineHeight: 1.5 }}>
+            {lang === 'ru'
+              ? 'ИП Вахрушева Екатерина Михайловна · ИНН 325402793102 · ОГРНИП 326320000033790 · 242504, Брянская обл., д. Масловка, ул. Первомайская, 76'
+              : 'IE Vakhrusheva Ekaterina Mikhaylovna · TIN 325402793102 · OGRNIP 326320000033790 · 242504, Bryansk region, vil. Maslovka, Pervomayskaya str., 76, Russia'}
+          </p>
           <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.5rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link href="/oferta" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textDecoration: 'underline', letterSpacing: 0 }}>
               {lang === 'ru' ? 'Публичная оферта' : 'Public Offer'}
             </Link>
             <Link href="/privacy" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textDecoration: 'underline', letterSpacing: 0 }}>
-              {lang === 'ru' ? 'Политика конфиденциальности' : 'Privacy Policy'}
+              {lang === 'ru' ? 'Политика обработки персональных данных' : 'Personal Data Processing Policy'}
             </Link>
           </div>
         </div>
