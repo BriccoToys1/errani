@@ -15,7 +15,7 @@ const PRIVACY_SECTIONS_RU: PrivacySection[] = [
     items: [
       '1.1. Настоящая Политика в отношении обработки персональных данных (далее — Политика) направлена на защиту прав и свобод физических лиц, персональные данные которых обрабатывает ИП Вахрушева Екатерина Михайловна (далее — Оператор), владелец интернет-магазина errani.ru.',
       '1.2. Политика разработана в соответствии с п. 2 ч. 1 ст. 18.1 Федерального закона от 27 июля 2006 г. № 152-ФЗ «О персональных данных» и является общедоступным документом.',
-      '1.3. Используя сайт errani.ru, вы подтверждаете, что ознакомились с настоящей Политикой и принимаете её условия. Если вы не согласны — пожалуйста, не используйте сайт и не передавайте нам свои данные.',
+      '1.3. Используя сайт errani.ru и предоставляя персональные данные, пользователь подтверждает, что ознакомился с настоящей Политикой. В случаях, предусмотренных законодательством Российской Федерации, обработка персональных данных осуществляется на основании отдельного согласия пользователя.',
     ],
   },
   {
@@ -37,6 +37,11 @@ const PRIVACY_SECTIONS_RU: PrivacySection[] = [
       '3.2. Мы собираем только те данные, которые действительно нужны для конкретной цели — никаких избыточных полей.',
       '3.3. Данные хранятся не дольше, чем это необходимо для достижения заявленной цели или требуется законодательством.',
       '3.4. Мы не продаём персональные данные третьим лицам в коммерческих целях.',
+      '3.5. Оператор обрабатывает персональные данные следующих категорий субъектов: покупателей интернет-магазина; посетителей сайта; лиц, направивших обращения через формы обратной связи; лиц, оставивших отзывы на товары; лиц, подписавшихся на уведомления о поступлении товара (лист ожидания).',
+      '3.6. Обработка персональных данных осуществляется с использованием средств автоматизации, а также без их использования, посредством сбора, записи, систематизации, накопления, хранения, уточнения (обновления, изменения), использования, передачи, обезличивания, блокирования, удаления и уничтожения персональных данных.',
+      '3.7. В случаях, предусмотренных законодательством Российской Федерации, предоставление отдельных персональных данных является обязательным условием для заключения и исполнения договора купли-продажи.',
+      '3.8. Оператор не принимает решений, порождающих юридические последствия для субъекта персональных данных, исключительно на основании автоматизированной обработки.',
+      '3.9. По достижении целей обработки либо при наступлении иных оснований, предусмотренных законодательством Российской Федерации, персональные данные уничтожаются либо обезличиваются в разумные сроки.',
     ],
   },
   {
@@ -119,7 +124,7 @@ const PRIVACY_SECTIONS_RU: PrivacySection[] = [
       '— Источник перехода на сайт',
       '— Действия на сайте (клики, прокрутка)',
       'Цель: улучшение работы сайта, понимание потребностей пользователей.',
-      'Вы можете отозвать согласие в любой момент, удалив cookie errani_consent через настройки браузера. Часть функций сайта при этом будет недоступна.',
+      'Вы можете отозвать согласие в любой момент, удалив cookie errani_consent через настройки браузера или повторно взаимодействуя с баннером cookie (очистка куки-файлов для errani.ru). Часть функций сайта при этом будет недоступна.',
       'Срок хранения аналитических данных: не более 1 года.',
     ],
   },
@@ -176,7 +181,7 @@ const PRIVACY_SECTIONS_RU: PrivacySection[] = [
     items: [
       '14.1. Настоящая Политика действует бессрочно с момента её публикации на сайте.',
       '14.2. Оператор вправе вносить изменения в Политику. Актуальная редакция всегда размещается по адресу errani.ru/privacy.',
-      '14.3. Продолжение использования сайта после публикации обновлённой редакции означает согласие с изменениями.',
+      '14.3. Новая редакция Политики вступает в силу с момента её размещения на сайте, если иное не предусмотрено законодательством Российской Федерации.',
       'Дата актуальной редакции: 26 июля 2026 г.',
     ],
   },
@@ -188,7 +193,7 @@ const PRIVACY_SECTIONS_EN: PrivacySection[] = [
     items: [
       '1.1. This Personal Data Processing Policy (the "Policy") is aimed at protecting the rights and freedoms of individuals whose personal data is processed by IE Ekaterina Vakhrusheva (the "Operator"), owner of the errani.ru online store.',
       '1.2. The Policy has been developed in accordance with clause 2, part 1, article 18.1 of Federal Law No. 152-FZ of 27 July 2006 "On Personal Data" and is a publicly available document.',
-      '1.3. By using errani.ru, you confirm that you have read this Policy and accept its terms. If you do not agree, please do not use the website or submit your personal data to us.',
+      '1.3. By using errani.ru and submitting personal data, the user confirms that they have read this Policy. Where required by Russian law, processing of personal data is carried out on the basis of a separate consent from the user.',
     ],
   },
   {
@@ -210,6 +215,11 @@ const PRIVACY_SECTIONS_EN: PrivacySection[] = [
       '3.2. We collect only the data that is genuinely necessary for a specific purpose — no excessive fields.',
       '3.3. Data is not retained longer than necessary to achieve the stated purpose or as required by law.',
       '3.4. We do not sell personal data to third parties for commercial purposes.',
+      '3.5. The Operator processes personal data of the following categories of data subjects: online store customers; website visitors; individuals who submitted enquiries via contact forms; individuals who left product reviews; individuals who subscribed to back-in-stock notifications (waitlist).',
+      '3.6. Personal data is processed both by automated means and without the use of automation, through collection, recording, systematisation, accumulation, storage, updating (modification), use, transfer, depersonalisation, blocking, deletion and destruction.',
+      '3.7. Where required by Russian law, providing certain personal data is a necessary condition for entering into and performing the purchase agreement.',
+      '3.8. The Operator does not make decisions that have legal consequences for a data subject solely on the basis of automated processing.',
+      '3.9. When processing purposes are achieved or other grounds provided by Russian law arise, personal data is destroyed or depersonalised within a reasonable period.',
     ],
   },
   {
@@ -292,7 +302,7 @@ const PRIVACY_SECTIONS_EN: PrivacySection[] = [
       '— Traffic source (how you arrived at the site)',
       '— On-site behaviour (clicks, scrolling)',
       'Purpose: improving the website and understanding user needs.',
-      'You may withdraw consent at any time by deleting the errani_consent cookie in your browser settings. Some website features may become unavailable.',
+      'You may withdraw consent at any time by deleting the errani_consent cookie via your browser settings or by clearing cookies for errani.ru. Some website features may become unavailable.',
       'Analytics data retention: up to 1 year.',
     ],
   },
@@ -349,7 +359,7 @@ const PRIVACY_SECTIONS_EN: PrivacySection[] = [
     items: [
       '14.1. This Policy is effective indefinitely from the date of its publication on the website.',
       '14.2. The Operator may amend this Policy. The current version is always available at errani.ru/privacy.',
-      '14.3. Continued use of the website after an updated version is published constitutes acceptance of the changes.',
+      '14.3. An updated version of the Policy takes effect upon its publication on the website, unless otherwise required by Russian law.',
       'Current version date: July 26, 2026.',
     ],
   },
