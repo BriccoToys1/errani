@@ -107,10 +107,10 @@ const translations: Translations = {
     // Cookie consent
     'cookie.text': 'Мы используем cookie для улучшения работы сайта.',
     'cookie.accept': 'Принять',
-    'cookie.privacy': 'Политика конфиденциальности',
+    'cookie.privacy': 'Политика обработки персональных данных',
 
     // Privacy
-    'privacy.title': 'Политика конфиденциальности',
+    'privacy.title': 'Политика обработки персональных данных',
   },
 
   en: {
@@ -197,9 +197,9 @@ const translations: Translations = {
 
     'cookie.text': 'We use cookies to improve your experience.',
     'cookie.accept': 'Accept',
-    'cookie.privacy': 'Privacy Policy',
+    'cookie.privacy': 'Personal Data Processing Policy',
 
-    'privacy.title': 'Privacy Policy',
+    'privacy.title': 'Personal Data Processing Policy',
   },
 };
 

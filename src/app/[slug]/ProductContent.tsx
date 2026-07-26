@@ -481,7 +481,7 @@ export function ProductContent({ product }: { product: Product }) {
                     ? 'Я даю согласие на обработку персональных данных.'
                     : 'I consent to the processing of personal data.'}{' '}
                   <Link href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--text)', textDecoration: 'underline' }}>
-                    {lang === 'ru' ? 'Политика конфиденциальности' : 'Privacy policy'}
+                    {lang === 'ru' ? 'Политика обработки персональных данных' : 'Personal data processing policy'}
                   </Link>
                 </span>
               </label>

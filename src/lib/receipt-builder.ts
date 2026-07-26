@@ -80,12 +80,19 @@ export interface ReceiptOrder {
   items: ReceiptOrderItem[];
 }
 
+export interface ReceiptBuildOptions {
+  forPdf?: boolean;
+  downloadUrl?: string;
+}
+
 /**
  * Builds the full receipt HTML.
  * @param order   — order data
- * @param forPdf  — when true, strips interactive buttons/scripts (clean PDF output)
+ * @param options — pass true or { forPdf: true } to strip buttons/scripts
  */
-export function buildReceiptHtml(order: ReceiptOrder, forPdf = false, downloadUrl = ''): string {
+export function buildReceiptHtml(order: ReceiptOrder, options: boolean | ReceiptBuildOptions = false): string {
+  const forPdf = typeof options === 'boolean' ? options : Boolean(options.forPdf);
+  const downloadUrl = typeof options === 'boolean' ? '' : options.downloadUrl || '';
   const createdAt = new Date(order.createdAt);
   const dateStr = createdAt.toLocaleDateString('ru-RU', {
     day: '2-digit',
@@ -150,14 +157,18 @@ export function buildReceiptHtml(order: ReceiptOrder, forPdf = false, downloadUr
     ? ''
     : `<script>
     function savePdf() {
-      ${downloadUrl
-        ? `var link = document.createElement('a');
-      link.href = ${JSON.stringify(downloadUrl)};
-      link.download = ${JSON.stringify(`${saveFilename}.pdf`)};
+      var url = '${downloadUrl}';
+      if (!url) {
+        var current = new URL(window.location.href);
+        current.searchParams.set('download', '1');
+        url = current.toString();
+      }
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = 'receipt-${saveFilename}.pdf';
       document.body.appendChild(link);
       link.click();
-      link.remove();`
-        : 'window.print();'}
+      link.remove();
     }
   </script>`;
 
@@ -183,10 +194,9 @@ export function buildReceiptHtml(order: ReceiptOrder, forPdf = false, downloadUr
       font-display: block;
     }
     @page { margin: 0; }
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Montserrat', sans-serif; }
-    html { font-family: 'Montserrat', sans-serif; font-synthesis: none; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'Montserrat', sans-serif;
+      font-family: 'Montserrat', Arial, sans-serif;
       font-size: 12px;
       color: #1a1a1a;
       background: #e4e4e4;

@@ -62,7 +62,6 @@ export async function GET(req: NextRequest) {
       invite: {
         id: invite.id,
         email: invite.email,
-        customerName: invite.customerName,
         expiresAt: invite.expiresAt,
       },
       product: invite.product,
@@ -79,7 +78,6 @@ export async function POST(req: NextRequest) {
     const token = String(body?.token || '').trim();
     const rating = Number(body?.rating);
     const text = String(body?.text || '').trim();
-    const customerNameRaw = String(body?.customerName || '').trim();
     const media = parseMedia(body?.media);
 
     if (!token) {
@@ -110,8 +108,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Ссылка уже использована' }, { status: 409 });
     }
 
-    const customerName = customerNameRaw || invite.customerName || invite.email.split('@')[0];
-
     const result = await withPrismaRetry(() =>
       prisma.$transaction(async (tx) => {
         const already = await tx.review.findUnique({ where: { inviteId: invite.id }, select: { id: true } });
@@ -124,7 +120,7 @@ export async function POST(req: NextRequest) {
             productId: invite.productId,
             inviteId: invite.id,
             customerEmail: normalizeEmail(invite.email),
-            customerName,
+            customerName: '',
             rating,
             text: text.slice(0, 6000),
             media: JSON.stringify(media),

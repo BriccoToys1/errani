@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import { htmlToPdf } from '@/lib/pdf';
 import { buildReceiptHtml } from '@/lib/receipt-builder';
 import { consumeRateLimit } from '@/lib/rate-limit';
+import { refreshPaidOrderStatus } from '@/lib/payment-status';
 
 export async function GET(req: NextRequest) {
   const rate = consumeRateLimit(req, { key: 'receipt-download', limit: 30, windowMs: 10 * 60_000 });
@@ -18,6 +19,15 @@ export async function GET(req: NextRequest) {
 
   if (!orderNumber || orderNumber.length > 64 || !/^ER-[A-Z0-9-]+$/.test(orderNumber)) {
     return new Response('Missing order number', { status: 400 });
+  }
+
+  const refreshed = await refreshPaidOrderStatus(orderNumber);
+  if (!refreshed) {
+    return new Response('Not found', { status: 404 });
+  }
+
+  if (refreshed.status !== 'paid') {
+    return new Response('Receipt is available after successful payment', { status: 409 });
   }
 
   const order = await prisma.order.findUnique({

@@ -160,7 +160,7 @@ export default function AdminOrdersPage() {
   const [showSortDrop, setShowSortDrop] = useState(false);
   const [manualForm, setManualForm] = useState<typeof emptyManualForm>(emptyManualForm);
   const [creatingManual, setCreatingManual] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const viewMode: 'list' = 'list';
   const [kanbanStages, setKanbanStages] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
   const [showStageManager, setShowStageManager] = useState(false);
   const [stageEdits, setStageEdits] = useState<KanbanStage[]>(DEFAULT_KANBAN_STAGES);
@@ -429,7 +429,7 @@ export default function AdminOrdersPage() {
       return;
     }
     popup.opener = null;
-    popup.document.write("<p style='font-family:Arial,sans-serif;padding:16px'>Загрузка чека...</p>");
+    popup.document.write("<p style='font-family:Montserrat,Arial,sans-serif;padding:16px'>Загрузка чека...</p>");
 
     try {
       const res = await fetch(`/api/admin/orders/${orderId}/receipt`, {
@@ -631,7 +631,7 @@ export default function AdminOrdersPage() {
   return (
     <div className="cms-root">
       <AdminSidebar />
-      <main className="cms-main" style={viewMode === 'kanban' ? { height: '100vh', overflow: 'hidden' } : undefined}>
+      <main className="cms-main">
         <div className="cms-header">
           <h1 className="cms-header-title">
             Заказы
@@ -661,17 +661,8 @@ export default function AdminOrdersPage() {
           </div>
         </div>
 
-        <div className="cms-content" style={viewMode === 'kanban' ? { border: 'none', background: 'transparent', boxShadow: 'none', padding: '8px 8px 4px' } : undefined}>
+        <div className="cms-content">
           <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
-            {/* List / Kanban toggle */}
-            <div style={{ display: 'flex', border: '1px solid var(--cms-border)', borderRadius: 6, overflow: 'hidden' }}>
-              <button className={`cms-btn cms-btn-xs${viewMode === 'list' ? ' cms-btn-primary' : ''}`} onClick={() => setViewMode('list')} title="Список" style={{ borderRadius: 0, border: 'none' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-              </button>
-              <button className={`cms-btn cms-btn-xs${viewMode === 'kanban' ? ' cms-btn-primary' : ''}`} onClick={() => setViewMode('kanban')} title="Канбан" style={{ borderRadius: 0, border: 'none', borderLeft: '1px solid var(--cms-border)' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>
-              </button>
-            </div>
             <input
               className="cms-input cms-input-sm"
               placeholder="Поиск по номеру, имени, email..."
@@ -744,18 +735,11 @@ export default function AdminOrdersPage() {
               )}
             </div>
 
-            {viewMode === 'list' && (
-              <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3 }}>
-                <button className={`cms-btn cms-btn-sm${orderView === 'active' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('active')} style={{ fontSize: 12 }}>Действующие</button>
-                <button className={`cms-btn cms-btn-sm${orderView === 'done' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('done')} style={{ fontSize: 12 }}>Завершенные</button>
-                <button className={`cms-btn cms-btn-sm${orderView === 'archive' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('archive')} style={{ fontSize: 12 }}>Архив</button>
-              </div>
-            )}
-            {viewMode === 'kanban' && (
-              <button className="cms-btn cms-btn-sm" onClick={() => { setStageEdits(kanbanStages); setShowStageManager(true); }} title="Управление стадиями">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3 }}>
+              <button className={`cms-btn cms-btn-sm${orderView === 'active' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('active')} style={{ fontSize: 12 }}>Действующие</button>
+              <button className={`cms-btn cms-btn-sm${orderView === 'done' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('done')} style={{ fontSize: 12 }}>Завершенные</button>
+              <button className={`cms-btn cms-btn-sm${orderView === 'archive' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('archive')} style={{ fontSize: 12 }}>Архив</button>
+            </div>
 
             <span style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginLeft: "auto" }}>
               {periodLabel} · {filtered.length} заказов
@@ -770,7 +754,7 @@ export default function AdminOrdersPage() {
           </div>
 
 
-          {viewMode === 'list' && <div className="cms-table-wrap">
+          <div className="cms-table-wrap">
             <table className="cms-table">
               <thead>
                 <tr>
@@ -882,7 +866,7 @@ export default function AdminOrdersPage() {
                 )}
               </tbody>
             </table>
-          </div>}
+          </div>
         </div>
       </main>
 

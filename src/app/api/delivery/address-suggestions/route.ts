@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CdekError, getCdekRussianLocationsCatalog } from '@/lib/cdek';
 
+const POPULAR_CITIES = [
+  'Москва',
+  'Санкт-Петербург',
+  'Екатеринбург',
+  'Казань',
+  'Новосибирск',
+  'Нижний Новгород',
+  'Краснодар',
+  'Ростов-на-Дону',
+  'Самара',
+  'Воронеж',
+  'Пермь',
+  'Уфа',
+];
+
 interface PhotonProperties {
   name?: string;
   street?: string;
@@ -17,25 +32,6 @@ interface PhotonResponse {
   features?: Array<{ properties?: PhotonProperties }>;
 }
 
-const POPULAR_CITIES = [
-  { value: 'Москва', region: 'Москва' },
-  { value: 'Санкт-Петербург', region: 'Санкт-Петербург' },
-  { value: 'Новосибирск', region: 'Новосибирская область' },
-  { value: 'Екатеринбург', region: 'Свердловская область' },
-  { value: 'Казань', region: 'Республика Татарстан' },
-  { value: 'Краснодар', region: 'Краснодарский край' },
-  { value: 'Нижний Новгород', region: 'Нижегородская область' },
-  { value: 'Челябинск', region: 'Челябинская область' },
-  { value: 'Самара', region: 'Самарская область' },
-  { value: 'Ростов-на-Дону', region: 'Ростовская область' },
-  { value: 'Уфа', region: 'Республика Башкортостан' },
-  { value: 'Красноярск', region: 'Красноярский край' },
-  { value: 'Омск', region: 'Омская область' },
-  { value: 'Воронеж', region: 'Воронежская область' },
-  { value: 'Пермь', region: 'Пермский край' },
-  { value: 'Волгоград', region: 'Волгоградская область' },
-];
-
 function normalize(value: string): string {
   return value.toLocaleLowerCase('ru-RU').replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
@@ -47,28 +43,27 @@ export async function GET(req: NextRequest) {
     const query = params.get('q')?.trim() || '';
     const region = params.get('region')?.trim() || '';
     const city = params.get('city')?.trim() || '';
+
     if (type === 'city') {
-      if (!query && !region) {
-        return NextResponse.json(POPULAR_CITIES.map((item) => ({
-          ...item,
-          label: `${item.value}, ${item.region}`,
-        })), {
-          headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' },
-        });
-      }
       const locations = await getCdekRussianLocationsCatalog();
       const queryKey = normalize(query);
       const regionKey = normalize(region);
       const unique = new Map<string, { value: string; label: string; region: string }>();
-      const popularRank = new Map(POPULAR_CITIES.map((item, index) => [normalize(item.value), index]));
-      const matched = locations
-        .filter((location) => queryKey
-          ? normalize(location.city).includes(queryKey)
-          : Boolean(regionKey) || popularRank.has(normalize(location.city)))
+      const source = queryKey
+        ? locations
+        : [
+            ...POPULAR_CITIES.map((popular) => locations.find((location) => location.city === popular)).filter(Boolean),
+            ...locations,
+          ];
+      const matched = source
+        .filter((location): location is NonNullable<typeof location> => Boolean(location))
+        .filter((location) => !queryKey || normalize(location.city).includes(queryKey))
         .filter((location) => !regionKey || normalize(location.region).includes(regionKey) || regionKey.includes(normalize(location.region)))
         .sort((left, right) => {
-          if (!queryKey && !regionKey) {
-            return (popularRank.get(normalize(left.city)) ?? 999) - (popularRank.get(normalize(right.city)) ?? 999);
+          if (!queryKey) {
+            const leftPopular = POPULAR_CITIES.indexOf(left.city);
+            const rightPopular = POPULAR_CITIES.indexOf(right.city);
+            if (leftPopular !== rightPopular) return (leftPopular < 0 ? 999 : leftPopular) - (rightPopular < 0 ? 999 : rightPopular);
           }
           const leftStarts = normalize(left.city).startsWith(queryKey) ? 0 : 1;
           const rightStarts = normalize(right.city).startsWith(queryKey) ? 0 : 1;
@@ -88,9 +83,11 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    if (query.length < 2) return NextResponse.json([]);
+
     if (type === 'street' && (city || region)) {
       const search = new URLSearchParams({
-        q: [query || 'улица', city, region, 'Россия'].filter(Boolean).join(', '),
+        q: [query, city, region, 'Россия'].filter(Boolean).join(', '),
         limit: '20',
       });
       const response = await fetch(`https://photon.komoot.io/api/?${search.toString()}`, {

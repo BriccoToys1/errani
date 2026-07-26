@@ -2596,17 +2596,13 @@ select.form-field {
   flex-direction: column;
   justify-content: center;
   overflow: hidden;
-  background: var(--bg);
+  background: #000;
   padding: 80px clamp(1.5rem, 5vw, 5rem) clamp(4rem, 8vw, 6rem);
 }
 
 /* Ambient glow orbs */
 .preorder-orb {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  filter: blur(120px);
-  opacity: 0.12;
+  display: none;
 }
 .preorder-orb-1 {
   width: clamp(300px, 50vw, 700px);

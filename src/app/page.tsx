@@ -24,9 +24,6 @@ export default function HomePage() {
     <>
       {/* Pink Gothic Vibe Tarot Hero */}
       <main className="preorder-hero">
-        <div className="preorder-orb preorder-orb-1" />
-        <div className="preorder-orb preorder-orb-2" />
-
         <div className="preorder-content">
           <div className="preorder-text">
             <h1 className="preorder-title anim-fade-up anim-fade-up-d2">

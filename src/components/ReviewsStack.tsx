@@ -19,13 +19,10 @@ interface Props {
   heading?: string;
 }
 
-function ReviewCard({ review, lang }: { review: Review; lang: string }) {
+function ReviewCard({ review }: { review: Review }) {
   return (
     <article className="review-list-card">
       <div className="review-list-card-header">
-        <span className="review-list-author">
-          {(review.customerName || '').split(' ')[0] || (lang === 'ru' ? 'Клиент' : 'Customer')}
-        </span>
         <span className="review-list-rating">{review.rating.toFixed(1)} ★</span>
       </div>
       <p className="review-list-text">{review.text}</p>
@@ -63,7 +60,7 @@ export default function ReviewsStack({ slug, lang = 'ru', heading }: Props) {
 
       <div className="reviews-list">
         {visibleReviews.map((review) => (
-          <ReviewCard key={review.id} review={review} lang={lang} />
+          <ReviewCard key={review.id} review={review} />
         ))}
       </div>
 

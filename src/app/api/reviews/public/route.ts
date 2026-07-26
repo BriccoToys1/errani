@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
         const displayMedia = approved.length > 0 ? approved : allMedia;
         return {
           id: review.id,
-          customerName: review.customerName,
+          customerName: '',
           rating: review.rating,
           text: review.text,
           media: displayMedia,

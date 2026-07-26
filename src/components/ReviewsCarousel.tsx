@@ -137,7 +137,6 @@ function CardInner({ review }: { review: Review }) {
   return (
     <>
       <div className="rc-card-header">
-        <span className="rc-card-name">{review.customerName.split(' ')[0]}</span>
         <span className="rc-card-rating">
           {review.rating.toFixed(1)} <span className="rc-star">★</span>
         </span>

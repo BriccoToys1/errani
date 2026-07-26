@@ -32,6 +32,30 @@ function extractAddr(raw: unknown): string {
   return '';
 }
 
+function extractList(rawData: unknown): { emails: Record<string, unknown>[]; hasMore: boolean } {
+  if (Array.isArray(rawData)) {
+    return { emails: rawData as Record<string, unknown>[], hasMore: false };
+  }
+  if (rawData && typeof rawData === 'object') {
+    const obj = rawData as Record<string, unknown>;
+    const nested = Array.isArray(obj.data) ? obj.data : [];
+    return {
+      emails: nested as Record<string, unknown>[],
+      hasMore: Boolean(obj.has_more),
+    };
+  }
+  return { emails: [], hasMore: false };
+}
+
+function pickBody(email: Record<string, unknown>) {
+  const html = String(email.html || email.body || '');
+  const text = String(email.text || email.text_body || email.subject || '');
+  return {
+    body: html || `<pre style="white-space:pre-wrap;font-family:inherit;">${text || '(без текста)'}</pre>`,
+    textBody: text,
+  };
+}
+
 export async function POST(req: NextRequest) {
   const denied = adminGuard(req);
   if (denied) return denied;
@@ -44,22 +68,20 @@ export async function POST(req: NextRequest) {
   try {
     const resend = new Resend(apiKey);
 
-    // Fetch received emails via Resend API
-    const { data, error } = await resend.emails.receiving.list();
+    const emails: Record<string, unknown>[] = [];
+    let after: string | undefined;
+    for (let page = 0; page < 5; page++) {
+      const { data, error } = await resend.emails.receiving.list({ limit: 100, ...(after ? { after } : {}) });
+      if (error) {
+        console.error('Resend receiving.list error:', error);
+        return NextResponse.json({ error: `Resend error: ${error.message}`, synced: 0 });
+      }
 
-    if (error) {
-      console.error('Resend receiving.list error:', error);
-      return NextResponse.json({ error: `Resend error: ${error.message}`, synced: 0 });
-    }
-
-    // Resend returns { data: [...] } or { data: { data: [...] } }
-    const rawData = data as unknown;
-    let emails: Record<string, unknown>[] = [];
-    if (Array.isArray(rawData)) {
-      emails = rawData as Record<string, unknown>[];
-    } else if (rawData && typeof rawData === 'object') {
-      const nested = (rawData as Record<string, unknown>).data;
-      if (Array.isArray(nested)) emails = nested as Record<string, unknown>[];
+      const pageData = extractList(data as unknown);
+      emails.push(...pageData.emails);
+      const lastId = String(pageData.emails.at(-1)?.id || '').trim();
+      if (!pageData.hasMore || !lastId) break;
+      after = lastId;
     }
 
     console.log(`Resend receiving: ${emails.length} emails found`);
@@ -67,33 +89,24 @@ export async function POST(req: NextRequest) {
     let synced = 0;
     for (const email of emails) {
       const resendId = String(email.id || '').trim();
+      const messageId = String(email.message_id || '').trim();
       if (!resendId) continue;
 
       // Skip duplicates
       const existing = await prisma.adminEmail.findFirst({
-        where: { resendId },
+        where: { OR: [{ resendId }, ...(messageId ? [{ resendId: messageId }] : [])] },
         select: { id: true },
       });
       if (existing) continue;
 
       // Fetch full email body via receiving.get()
-      let body = '';
-      let textBody = '';
+      let bodyData = pickBody(email);
       try {
-        const { data: full } = await resend.emails.receiving.get(resendId);
+        const { data: full } = await resend.emails.receiving.get(resendId, { html_format: 'data_uri' });
         if (full) {
-          const f = full as unknown as Record<string, unknown>;
-          body = String(f.html || f.body || '');
-          textBody = String(f.text || f.text_body || '');
+          bodyData = pickBody(full as unknown as Record<string, unknown>);
         }
       } catch { /* use list data as fallback */ }
-
-      if (!body) {
-        body = String(email.html || email.body || `<pre style="white-space:pre-wrap;font-family:inherit;">${email.text || email.text_body || '(без текста)'}</pre>`);
-      }
-      if (!textBody) {
-        textBody = String(email.text || email.text_body || email.subject || '');
-      }
 
       const spamStatus = String(email.spam_status || 'pass').toLowerCase();
       const isSpam = spamStatus === 'spam';
@@ -102,14 +115,14 @@ export async function POST(req: NextRequest) {
         data: {
           direction: 'inbound',
           fromAddr: extractAddr(email.from) || 'unknown',
-          toAddr: extractAddr(email.to) || 'mail@errani.ru',
+          toAddr: extractAddr(email.to) || extractAddr(email.received_for) || 'mail@errani.ru',
           subject: String(email.subject || '(без темы)'),
-          body,
-          textBody,
+          body: bodyData.body,
+          textBody: bodyData.textBody,
           status: isSpam ? 'spam' : 'received',
           isRead: false,
-          resendId,
-          inReplyTo: String(email.in_reply_to || ''),
+          resendId: resendId || messageId,
+          inReplyTo: String(email.in_reply_to || email.reply_to || ''),
           createdAt: email.created_at ? new Date(String(email.created_at)) : new Date(),
         },
       }), 2, 80);

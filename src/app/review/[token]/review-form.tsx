@@ -7,7 +7,7 @@ type InviteState = {
   valid: boolean;
   expired: boolean;
   alreadyUsed: boolean;
-  invite?: { email: string; customerName: string; expiresAt: string | null };
+  invite?: { email: string; expiresAt: string | null };
   product?: { id: string; slug: string; name: string; nameRu: string | null; image: string };
 };
 
@@ -77,7 +77,6 @@ export default function ReviewForm({ token }: { token: string }) {
   const [state, setState] = useState<InviteState | null>(null);
   const [error, setError] = useState('');
 
-  const [customerName, setCustomerName] = useState('');
   const [rating, setRating] = useState(0);
   const [text, setText] = useState('');
 
@@ -106,7 +105,6 @@ export default function ReviewForm({ token }: { token: string }) {
     expired: lang === 'ru' ? 'Срок действия ссылки истёк.' : 'This link has expired.',
     invalid: lang === 'ru' ? 'Ссылка недействительна.' : 'The link is invalid.',
     successMsg: lang === 'ru' ? 'Спасибо! Отзыв отправлен' : 'Thank you! Your review has been submitted!',
-    yourName: lang === 'ru' ? 'Ваше имя' : 'Your name',
     rating: lang === 'ru' ? 'Оценка' : 'Rating',
     reviewText: lang === 'ru' ? 'Текст отзыва' : 'Review text',
     reviewPlaceholder: lang === 'ru' ? 'Поделитесь впечатлениями...' : 'Share your impressions...',
@@ -127,7 +125,7 @@ export default function ReviewForm({ token }: { token: string }) {
         const res = await fetch(`/api/reviews?token=${encodeURIComponent(token)}`);
         const data = await res.json();
         if (!res.ok) { if (!canceled) setError(data.message || T.networkError); return; }
-        if (!canceled) { setState(data); setCustomerName(data?.invite?.customerName || ''); }
+        if (!canceled) setState(data);
       } catch { if (!canceled) setError(T.networkError); }
       finally { if (!canceled) setLoading(false); }
     };
@@ -194,7 +192,7 @@ export default function ReviewForm({ token }: { token: string }) {
       const res = await fetch('/api/reviews', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, customerName: customerName.trim(), rating, text: text.trim(), media }),
+        body: JSON.stringify({ token, rating, text: text.trim(), media }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.message || T.networkError); return; }
@@ -266,16 +264,6 @@ export default function ReviewForm({ token }: { token: string }) {
 
           {!loading && state?.valid && (
             <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {/* Name — read-only */}
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-dim-2)', marginBottom: 8 }}>
-                  {T.yourName}
-                </label>
-                <div style={{ padding: '12px 16px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text-dim)', fontSize: 15 }}>
-                  {customerName || '—'}
-                </div>
-              </div>
-
               {/* Star rating */}
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-dim-2)', marginBottom: 10 }}>

@@ -7,6 +7,7 @@ import { withFreshPrisma } from '@/lib/fresh-prisma';
 import { createTochkaPayment, getTochkaConfig } from '@/lib/tochka';
 import { calculateCdekDelivery, CdekDeliveryMode, CdekError } from '@/lib/cdek';
 import { consumeRateLimit } from '@/lib/rate-limit';
+import { refreshPaidOrderStatus } from '@/lib/payment-status';
 
 interface OrderItemInput {
   productId: string;
@@ -51,6 +52,17 @@ export async function GET(req: NextRequest) {
     const take = Number.isFinite(takeRaw) && takeRaw > 0 ? Math.min(takeRaw, 1000) : undefined;
     const light = searchParams.get('light') === '1';
     const includeArchived = searchParams.get('includeArchived') === '1';
+
+    const pendingPayments = await prisma.order.findMany({
+      where: {
+        status: { in: ['pending', 'unpaid'] },
+        paymentId: { not: '' },
+      },
+      select: { orderNumber: true },
+      orderBy: { createdAt: 'desc' },
+      take: 12,
+    });
+    await Promise.allSettled(pendingPayments.map((order) => refreshPaidOrderStatus(order.orderNumber)));
 
     const { orders, items, products } = await withFreshPrisma(async (db) => {
       const orders = await db.order.findMany({

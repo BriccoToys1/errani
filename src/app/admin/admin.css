@@ -2,6 +2,22 @@
    errani CMS — Premium Dark Admin Theme
    ═══════════════════════════════════════════════════════════ */
 
+@font-face {
+  font-family: 'Montserrat';
+  src: url('/fonts/Montserrat.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Montserrat';
+  src: url('/fonts/Montserrat-Italic.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: optional;
+}
+
 :root {
   --cms-bg:              #0b0b10;
   --cms-sidebar:         #0e0e14;
@@ -29,7 +45,15 @@
 }
 
 /* ── Reset ── */
-.cms-root *, .cms-login-wrap * { box-sizing: border-box; }
+.cms-root *, .cms-login-wrap * {
+  box-sizing: border-box;
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+body:has(.cms-root),
+body:has(.cms-login-wrap) {
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
 
 body:has(.cms-root),
 body:has(.cms-login-wrap),

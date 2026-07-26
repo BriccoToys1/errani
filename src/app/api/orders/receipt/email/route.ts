@@ -4,6 +4,7 @@ import { sendReceiptEmail } from '@/lib/email';
 import { buildReceiptHtml } from '@/lib/receipt-builder';
 import { htmlToPdf } from '@/lib/pdf';
 import { consumeRateLimit } from '@/lib/rate-limit';
+import { refreshPaidOrderStatus } from '@/lib/payment-status';
 
 const recentSends = new Map<string, number>();
 const RESEND_DELAY_MS = 60_000;
@@ -28,6 +29,15 @@ export async function POST(req: NextRequest) {
     const lastSentAt = recentSends.get(orderNumber) || 0;
     if (Date.now() - lastSentAt < RESEND_DELAY_MS) {
       return NextResponse.json({ error: 'Receipt was already sent recently' }, { status: 429 });
+    }
+
+    const refreshed = await refreshPaidOrderStatus(orderNumber);
+    if (!refreshed) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    if (refreshed.status !== 'paid') {
+      return NextResponse.json({ error: 'Receipt is available after successful payment' }, { status: 409 });
     }
 
     const order = await prisma.order.findUnique({
