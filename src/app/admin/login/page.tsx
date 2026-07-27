@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function AdminLoginPage() {
@@ -10,28 +10,6 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
-  // Challenge state
-  const [challengeToken, setChallengeToken] = useState("");
-  const [challengeQuestion, setChallengeQuestion] = useState("");
-  const [challengeAnswer, setChallengeAnswer] = useState("");
-  const [challengeLoading, setChallengeLoading] = useState(true);
-
-  const loadChallenge = useCallback(async () => {
-    setChallengeLoading(true);
-    try {
-      const res = await fetch("/api/admin/login");
-      if (res.ok) {
-        const data = await res.json();
-        setChallengeToken(data.challengeToken);
-        setChallengeQuestion(data.question);
-        setChallengeAnswer("");
-      }
-    } catch { /* ignore */ }
-    setChallengeLoading(false);
-  }, []);
-
-  useEffect(() => { loadChallenge(); }, [loadChallenge]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +20,7 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, challengeToken, challengeAnswer }),
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
@@ -50,8 +28,6 @@ export default function AdminLoginPage() {
       if (!res.ok) {
         setError(data.error || "Ошибка входа");
         setLoading(false);
-        // Reload challenge on failure
-        loadChallenge();
         return;
       }
 
@@ -140,29 +116,7 @@ export default function AdminLoginPage() {
             </div>
           </label>
 
-          {/* Security challenge */}
-          <label className="cms-label">
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--cms-text-muted)" }}>
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
-              </svg>
-              Проверка: сколько будет {challengeLoading ? "..." : challengeQuestion}?
-            </span>
-            <input
-              type="text"
-              className="cms-input"
-              value={challengeAnswer}
-              onChange={(e) => setChallengeAnswer(e.target.value.replace(/[^0-9]/g, ""))}
-              required
-              autoComplete="off"
-              placeholder="Ответ"
-              inputMode="numeric"
-              maxLength={3}
-              disabled={challengeLoading}
-            />
-          </label>
-
-          <button type="submit" className="cms-login-submit" disabled={loading || challengeLoading}>
+          <button type="submit" className="cms-login-submit" disabled={loading}>
             {loading ? (
               <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                 <span className="cms-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />

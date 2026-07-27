@@ -71,38 +71,6 @@ async function recordAdminSession(req: NextRequest, email: string, name: string)
   }
 }
 
-// Stateless challenge: signed JWT containing the expected answer
-export async function GET(req: NextRequest) {
-  const rate = consumeRateLimit(req, { key: 'admin-challenge', limit: 60, windowMs: 10 * 60_000 });
-  if (!rate.allowed) {
-    return NextResponse.json(
-      { error: 'Слишком много запросов. Попробуйте позже.' },
-      { status: 429, headers: { 'Retry-After': String(rate.retryAfter), 'Cache-Control': 'no-store' } }
-    );
-  }
-
-  const jwtSecret = getJwtSecret();
-  if (!jwtSecret) return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
-
-  const a = Math.floor(Math.random() * 20) + 1;
-  const b = Math.floor(Math.random() * 20) + 1;
-  const answer = String(a + b);
-
-  // Sign the expected answer — expires in 10 minutes
-  const challengeToken = jwt.sign({ answer }, jwtSecret, {
-    algorithm: 'HS256',
-    expiresIn: '10m',
-    issuer: 'errani-admin',
-    audience: 'errani-login-challenge',
-    jwtid: crypto.randomUUID(),
-  });
-
-  return NextResponse.json(
-    { challengeToken, question: `${a} + ${b}` },
-    { headers: { 'Cache-Control': 'no-store' } }
-  );
-}
-
 export async function POST(req: NextRequest) {
   try {
     const rate = consumeRateLimit(req, { key: LOGIN_RATE_LIMIT_KEY, limit: 7, windowMs: 15 * 60_000 });
@@ -118,34 +86,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
     }
 
-    const { email, password, challengeToken, challengeAnswer } = await req.json();
+    const { email, password } = await req.json();
 
     if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return NextResponse.json({ error: 'Email и пароль обязательны' }, { status: 400 });
     }
     if (email.length > 254 || password.length > 256) {
       return NextResponse.json({ error: 'Некорректные данные входа' }, { status: 400 });
-    }
-
-    // Verify stateless challenge
-    if (!challengeToken || !challengeAnswer) {
-      return NextResponse.json({ error: 'Пройдите проверку' }, { status: 400 });
-    }
-
-    let expectedAnswer: string;
-    try {
-      const decoded = jwt.verify(challengeToken, jwtSecret, {
-        algorithms: ['HS256'],
-        issuer: 'errani-admin',
-        audience: 'errani-login-challenge',
-      }) as { answer: string };
-      expectedAnswer = decoded.answer;
-    } catch {
-      return NextResponse.json({ error: 'Проверка истекла, обновите страницу' }, { status: 400 });
-    }
-
-    if (String(challengeAnswer).trim() !== expectedAnswer) {
-      return NextResponse.json({ error: 'Неверный ответ на проверку' }, { status: 400 });
     }
 
     // Check env-level admin first
