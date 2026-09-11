@@ -58,6 +58,24 @@ function pickBody(email: Record<string, unknown>) {
   };
 }
 
+// The list endpoint only returns metadata (no html/text). Fetch the full
+// message body for a single inbound email; falls back to metadata on error.
+async function fetchFullBody(
+  resend: Resend,
+  resendId: string,
+  fallback: Record<string, unknown>
+): Promise<{ body: string; textBody: string }> {
+  try {
+    const { data, error } = await resend.emails.receiving.get(resendId);
+    if (!error && data) {
+      return pickBody(data as unknown as Record<string, unknown>);
+    }
+  } catch {
+    // fall through to metadata-only body
+  }
+  return pickBody(fallback);
+}
+
 export async function POST(req: NextRequest) {
   const denied = adminGuard(req);
   if (denied) return denied;
@@ -88,26 +106,48 @@ export async function POST(req: NextRequest) {
 
     console.log(`Resend receiving: ${emails.length} emails found`);
 
+    // Cap the number of per-message body fetches per run so a large backlog
+    // can't stall the request; remaining items get picked up on the next sync.
+    const MAX_BODY_FETCHES = 40;
+    let bodyFetches = 0;
     let synced = 0;
+    let backfilled = 0;
     for (const email of emails) {
       const resendId = String(email.id || '').trim();
       const messageId = String(email.message_id || '').trim();
       if (!resendId) continue;
 
-      // Skip duplicates
+      // Skip duplicates, but backfill placeholder bodies saved by the old sync logic.
       const existing = await prisma.adminEmail.findFirst({
         where: { OR: [{ resendId }, ...(messageId ? [{ resendId: messageId }] : [])] },
-        select: { id: true },
+        select: { id: true, body: true },
       });
-      if (existing) continue;
-
-      // The receiving list already contains the message metadata/body needed by
-      // the inbox. Calling receiving.get() for every message makes Resend's
-      // current API stall the sync request, so use the list payload directly.
-      const bodyData = pickBody(email);
+      if (existing) {
+        const isPlaceholder = existing.body.startsWith('<pre');
+        if (isPlaceholder && bodyFetches < MAX_BODY_FETCHES) {
+          bodyFetches++;
+          const bodyData = await fetchFullBody(resend, resendId, email);
+          if (!bodyData.body.startsWith('<pre')) {
+            await withPrismaRetry(() => prisma.adminEmail.update({
+              where: { id: existing.id },
+              data: { body: bodyData.body, textBody: bodyData.textBody },
+            }), 2, 80);
+            backfilled++;
+          }
+        }
+        continue;
+      }
 
       const spamStatus = String(email.spam_status || 'pass').toLowerCase();
       const isSpam = spamStatus === 'spam';
+
+      let bodyData: { body: string; textBody: string };
+      if (bodyFetches < MAX_BODY_FETCHES) {
+        bodyFetches++;
+        bodyData = await fetchFullBody(resend, resendId, email);
+      } else {
+        bodyData = pickBody(email);
+      }
 
       await withPrismaRetry(() => prisma.adminEmail.create({
         data: {
@@ -127,7 +167,7 @@ export async function POST(req: NextRequest) {
       synced++;
     }
 
-    return NextResponse.json({ synced, total: emails.length, ok: true });
+    return NextResponse.json({ synced, backfilled, total: emails.length, ok: true });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('Email sync error:', msg);
