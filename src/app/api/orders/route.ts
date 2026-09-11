@@ -5,7 +5,6 @@ import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 import { withFreshPrisma } from '@/lib/fresh-prisma';
 import { createTochkaPayment, getTochkaConfig } from '@/lib/tochka';
-import { calculateCdekDelivery, CdekDeliveryMode, CdekError } from '@/lib/cdek';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { refreshPaidOrderStatus } from '@/lib/payment-status';
 
@@ -15,13 +14,12 @@ interface OrderItemInput {
   selectedColor?: string;
 }
 
-interface CdekDeliveryPointInput {
-  code: string;
-  name?: string;
-  city: string;
-  cityCode: number;
-  postalCode?: string;
-  address: string;
+function formatHouseDetails(house: string, building?: string, corpus?: string) {
+  return [
+    house,
+    building ? `стр. ${building}` : '',
+    corpus ? `корп. ${corpus}` : '',
+  ].filter(Boolean).join(' ');
 }
 
 // Archive unpaid orders
@@ -177,24 +175,24 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, email, phone, country, customCountry, oblast, city, zipCode, street, house, apartment, entrance, floor, intercom, shippingMethod, items, cdekDeliveryPoint } = body as {
+    const { name, email, phone, country, oblast, city, zipCode, street, house, building, corpus, apartment, entrance, floor, intercom, shippingMethod, items } = body as {
       name: string;
       email: string;
       phone: string;
       country: string;
-      customCountry?: string;
       oblast?: string;
       city: string;
       zipCode: string;
       street: string;
       house: string;
+      building?: string;
+      corpus?: string;
       apartment: string;
       entrance?: string;
       floor?: string;
       intercom?: string;
       shippingMethod: string;
       items: OrderItemInput[];
-      cdekDeliveryPoint?: CdekDeliveryPointInput | null;
     };
 
     // Validate
@@ -207,6 +205,8 @@ export async function POST(req: NextRequest) {
       || String(email).trim().length > 254
       || String(phone).trim().length > 32
       || String(city).trim().length > 120
+      || String(building || '').trim().length > 40
+      || String(corpus || '').trim().length > 40
       || String(entrance || '').trim().length > 40
       || String(floor || '').trim().length > 40
       || String(intercom || '').trim().length > 80
@@ -218,15 +218,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Онлайн-заказ доступен только для доставки по России.' }, { status: 400 });
     }
 
-    const deliveryMode: CdekDeliveryMode = shippingMethod === 'cdek_pvz' ? 'pickup' : 'courier';
-    if (!['cdek_courier', 'cdek_pvz'].includes(shippingMethod)) {
-      return NextResponse.json({ error: 'Выберите способ доставки СДЭК.' }, { status: 400 });
+    if (shippingMethod && shippingMethod !== 'manual_delivery') {
+      return NextResponse.json({ error: 'Этот способ доставки больше недоступен. Обновите страницу и оформите заказ с ручным адресом.' }, { status: 400 });
     }
-    if (deliveryMode === 'pickup' && (!cdekDeliveryPoint?.code || !cdekDeliveryPoint.address || !cdekDeliveryPoint.cityCode)) {
-      return NextResponse.json({ error: 'Выберите пункт выдачи СДЭК.' }, { status: 400 });
-    }
-    if (deliveryMode === 'courier' && ((!street || !house) || (zipCode && !/^\d{6}$/.test(zipCode)))) {
-      return NextResponse.json({ error: 'Укажите адрес для курьерской доставки.' }, { status: 400 });
+    if ((!street || !house) || (zipCode && !/^\d{6}$/.test(zipCode))) {
+      return NextResponse.json({ error: 'Укажите адрес доставки.' }, { status: 400 });
     }
 
     // Check if user is blocked
@@ -326,30 +322,15 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    const totalItemCount = normalizedItems.reduce((sum, item) => sum + item.quantity, 0);
     const freeDelivery = products.some((product) => product.freeDelivery);
-    let cdekQuote;
-    try {
-      cdekQuote = await calculateCdekDelivery({
-        city: deliveryMode === 'pickup' ? cdekDeliveryPoint!.city : city,
-        postalCode: deliveryMode === 'pickup' ? cdekDeliveryPoint!.postalCode : zipCode,
-        address: deliveryMode === 'courier' ? [street, house].filter(Boolean).join(', ') : undefined,
-        street: deliveryMode === 'courier' ? street : undefined,
-        house: deliveryMode === 'courier' ? house : undefined,
-        region: deliveryMode === 'courier' ? oblast : undefined,
-        itemCount: totalItemCount,
-        mode: deliveryMode,
-        cityCode: deliveryMode === 'pickup' ? Number(cdekDeliveryPoint!.cityCode) : undefined,
-        deliveryPointCode: deliveryMode === 'pickup' ? cdekDeliveryPoint!.code : undefined,
-        freeDelivery,
-      });
-    } catch (error) {
-      if (error instanceof CdekError) {
-        return NextResponse.json({ error: error.message }, { status: error.status });
-      }
-      throw error;
-    }
-    totalAmount += cdekQuote.amount;
+    const deliveryHouse = formatHouseDetails(String(house || '').trim(), String(building || '').trim(), String(corpus || '').trim());
+    const shippingCost = freeDelivery
+      ? 0
+      : products.reduce((sum, product) => {
+          const quantity = quantityByProductId.get(product.id) || 0;
+          return sum + (product.shippingFee || 0) * quantity;
+        }, 0);
+    totalAmount += shippingCost;
 
     // Build notes from color selections
     const colorNotes = normalizedItems
@@ -358,7 +339,10 @@ export async function POST(req: NextRequest) {
         const product = products.find(p => p.id === item.productId)!;
         return `${product.nameRu || product.name}: ${item.selectedColor}`;
       });
-    const notes = colorNotes.length > 0 ? `Цвета: ${colorNotes.join(', ')}` : '';
+    const deliveryNote = `Доставка: ${shippingCost.toLocaleString('ru-RU')} ₽`;
+    const notes = [colorNotes.length > 0 ? `Цвета: ${colorNotes.join(', ')}` : '', deliveryNote]
+      .filter(Boolean)
+      .join('\n');
 
     // Create order
     const order = await prisma.order.create({
@@ -373,15 +357,15 @@ export async function POST(req: NextRequest) {
         city: city || '',
         zipCode: zipCode || '',
         street: street || '',
-        house: house || '',
+        house: deliveryHouse || house || '',
         apartment: apartment || '',
         entrance: apartment ? String(entrance || '').trim() : '',
         floor: apartment ? String(floor || '').trim() : '',
         intercom: apartment ? String(intercom || '').trim() : '',
-        shippingMethod: shippingMethod || '',
-        cdekDeliveryPointCode: cdekDeliveryPoint?.code || '',
-        cdekDeliveryPointAddress: cdekDeliveryPoint?.address || '',
-        cdekTariffCode: cdekQuote.tariffCode,
+        shippingMethod: 'manual_delivery',
+        cdekDeliveryPointCode: '',
+        cdekDeliveryPointAddress: '',
+        cdekTariffCode: 0,
         totalAmount,
         currency: 'RUB',
         status: 'pending',
@@ -405,46 +389,36 @@ export async function POST(req: NextRequest) {
       const tochkaConfig = getTochkaConfig();
       const tochkaResponse = tochkaConfig ? await createTochkaPayment(order) : null;
 
-      if (tochkaResponse?.paymentLink && tochkaResponse.operationId) {
+      if (tochkaResponse?.paymentLink) {
         paymentUrl = tochkaResponse.paymentLink;
         await prisma.order.update({
           where: { id: order.id },
-          data: { paymentId: tochkaResponse.operationId, paymentMethod: 'tochka' },
+          data: { paymentId: tochkaResponse.operationId || tochkaResponse.paymentLinkId || order.orderNumber, paymentMethod: 'tochka' },
         });
       } else {
-        const yukassaResponse = !tochkaConfig ? await createYukassaPayment(order) : null;
-        if (yukassaResponse?.confirmation?.confirmation_url) {
-          paymentUrl = yukassaResponse.confirmation.confirmation_url;
-          await prisma.order.update({
-            where: { id: order.id },
-            data: { paymentId: yukassaResponse.id, paymentMethod: 'yukassa' },
-          });
-        } else {
-          // Payment URL creation failed — cancel the order so it doesn't litter the DB
-          await prisma.order.update({
-            where: { id: order.id },
-            data: { status: 'cancelled' },
-          });
-          const detail = (tochkaResponse?.raw as { __error?: string } | undefined)?.__error
-            || yukassaResponse?.__error
-            || 'no response';
-          console.error('Payment link creation failed:', detail);
-          return NextResponse.json(
-            { error: 'Не удалось создать платёж. Попробуйте ещё раз или свяжитесь с нами.' },
-            { status: 502 }
-          );
-        }
+        // Payment URL creation failed — cancel the order so it doesn't litter the DB
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { status: 'cancelled' },
+        });
+        const detail = (tochkaResponse?.raw as { __error?: string } | undefined)?.__error || 'no response';
+        console.error('Payment link creation failed:', detail);
+        return NextResponse.json(
+          { error: 'Не удалось создать платёж. Попробуйте ещё раз или свяжитесь с нами.' },
+          { status: 502 }
+        );
       }
     } else {
       await prisma.order.update({
         where: { id: order.id },
-        data: { paymentMethod: 'stripe' },
+        data: { paymentMethod: 'tochka' },
       });
     }
 
     return NextResponse.json({
       orderNumber: order.orderNumber,
       total: totalAmount,
+      shippingCost,
       paymentUrl,
     });
   } catch (error) {

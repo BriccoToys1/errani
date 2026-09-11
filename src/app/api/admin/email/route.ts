@@ -8,16 +8,18 @@ import { withFreshPrisma } from '@/lib/fresh-prisma';
 const emailListCache = new Map<string, { ts: number; payload: { emails: unknown[]; unreadCount: number } }>();
 
 async function getApiKey(): Promise<string | null> {
-  const envKey = process.env.RESEND_API_KEY;
-  if (envKey) return envKey;
   try {
     const s = await withPrismaRetry(
       () => prisma.siteSettings.findUnique({ where: { key: 'resend_api_key' } }),
       2,
       80
     );
-    return s?.value || null;
-  } catch { return null; }
+    const dbKey = s?.value?.trim();
+    if (dbKey) return dbKey;
+  } catch {
+    // Fall back to the server environment when the database is unavailable.
+  }
+  return process.env.RESEND_API_KEY?.trim() || null;
 }
 
 // GET: list all emails (inbox + sent)

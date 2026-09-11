@@ -53,6 +53,7 @@
 body:has(.cms-root),
 body:has(.cms-login-wrap) {
   font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #000;
 }
 
 body:has(.cms-root),
@@ -584,7 +585,7 @@ input[type="checkbox"] { accent-color: var(--cms-accent); width: 15px; height: 1
 .cms-login-wrap {
   min-height: 100vh; display: flex;
   align-items: center; justify-content: center;
-  background: var(--cms-bg); padding: 20px;
+  background: #000; padding: 20px;
 }
 
 .cms-login-card {

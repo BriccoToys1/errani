@@ -23,6 +23,12 @@ npx prisma generate
 echo "Building Next.js app..."
 npm run build
 
+echo "Syncing nginx config..."
+install -m 644 "$APP_DIR/nginx.conf" /etc/nginx/sites-available/errani.ru
+ln -sf /etc/nginx/sites-available/errani.ru /etc/nginx/sites-enabled/errani.ru
+nginx -t
+systemctl reload nginx || service nginx reload
+
 echo "Reloading PM2..."
 if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
   pm2 reload ecosystem.config.js --update-env

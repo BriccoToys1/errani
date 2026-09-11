@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AdminSidebar } from "./AdminSidebar";
+import { clearAdminAuthToken, getAdminAuthToken } from '@/lib/admin-client';
 
 interface Expense {
   id: string;
@@ -270,7 +271,7 @@ export default function AdminDashboard() {
   const serverRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(false);
 
-  const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
+  const getToken = useCallback(() => getAdminAuthToken(), []);
 
   const fetchWithTimeout = useCallback(async (url: string, token: string, timeoutMs = 20000) => {
     const controller = new AbortController();
@@ -308,8 +309,11 @@ export default function AdminDashboard() {
 
   const fetchData = useCallback(async (isRefresh = false) => {
     const token = getToken();
-    if (!token) { router.push("/admin/login"); return; }
-
+      if (!token) {
+        clearAdminAuthToken();
+        router.push("/admin/login");
+        return;
+      }
     if (isRefresh) {
       setRefreshing(true);
     } else {
@@ -328,7 +332,7 @@ export default function AdminDashboard() {
     try {
       const dashResponse = await fetchWithTimeout("/api/admin/dashboard", token, 8000).catch(() => null);
       if (dashResponse?.status === 401) {
-        localStorage.removeItem("admin_token");
+        clearAdminAuthToken();
         router.push("/admin/login");
         return;
       }

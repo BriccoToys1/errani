@@ -2,8 +2,6 @@ import { sendOrderConfirmation } from '@/lib/email';
 import { htmlToPdf } from '@/lib/pdf';
 import { buildReceiptHtml } from '@/lib/receipt-builder';
 import { markOrderPaidAndDecrementStock } from '@/lib/stock';
-import { createCdekOrder } from '@/lib/cdek';
-import prisma from '@/lib/db';
 
 export async function fulfillPaidOrder(
   orderId: string,
@@ -15,51 +13,6 @@ export async function fulfillPaidOrder(
     paymentId,
     options.paymentMethod,
   );
-
-  if (order.shippingMethod.startsWith('cdek_') && !order.cdekUuid && (!alreadyPaid || order.cdekError)) {
-    try {
-      const created = await createCdekOrder({
-        orderNumber: order.orderNumber,
-        customerName: order.customerName,
-        customerEmail: order.customerEmail,
-        customerPhone: order.customerPhone,
-        city: order.city,
-        postalCode: order.zipCode,
-        address: [
-          order.street,
-          order.house,
-          order.apartment && `кв. ${order.apartment}`,
-          order.entrance && `подъезд ${order.entrance}`,
-          order.floor && `этаж ${order.floor}`,
-          order.intercom && `домофон ${order.intercom}`,
-        ].filter(Boolean).join(', '),
-        mode: order.shippingMethod === 'cdek_pvz' ? 'pickup' : 'courier',
-        tariffCode: order.cdekTariffCode,
-        deliveryPointCode: order.cdekDeliveryPointCode || undefined,
-        items: order.items.map((item) => ({
-          productId: item.productId,
-          name: item.product?.nameRu || item.product?.name || item.productId,
-          price: item.price,
-          quantity: item.quantity,
-        })),
-      });
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          cdekUuid: created.uuid,
-          cdekNumber: created.cdekNumber,
-          cdekError: '',
-        },
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Не удалось создать заказ СДЭК';
-      console.error(`Failed to create CDEK order ${order.orderNumber}:`, error);
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { cdekError: message.slice(0, 500) },
-      });
-    }
-  }
 
   if (alreadyPaid) {
     return { order, alreadyPaid };

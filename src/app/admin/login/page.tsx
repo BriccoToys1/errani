@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { setAdminAuthToken } from '@/lib/admin-client';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -31,10 +32,20 @@ export default function AdminLoginPage() {
         return;
       }
 
-      // Non-secret marker used by legacy admin screens. The actual JWT lives in
-      // an HttpOnly, Secure cookie and is never exposed to client-side code.
-      localStorage.setItem("admin_token", "cookie-session");
-      router.push("/admin");
+      if (res.ok && data?.authenticated) {
+        const token = data.token || "";
+        setAdminAuthToken(token);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("admin_token", token);
+          document.cookie = `admin_token=${encodeURIComponent(token)}; path=/; max-age=43200; samesite=strict; ${window.location.protocol === "https:" ? "Secure" : ""}`.trim();
+        }
+        router.replace("/admin");
+        window.location.assign("/admin");
+        return;
+      }
+
+      setError(data.error || "Ошибка входа");
+      setLoading(false);
     } catch {
       setError("Ошибка сети");
       setLoading(false);
@@ -44,19 +55,6 @@ export default function AdminLoginPage() {
   return (
     <div className="cms-login-wrap">
       <form onSubmit={handleSubmit} className="cms-login-card">
-        <div className="cms-login-brand">
-          <div className="cms-login-logo">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="3" y="3" width="7" height="9" rx="1.5"/>
-              <rect x="14" y="3" width="7" height="5" rx="1.5"/>
-              <rect x="3" y="16" width="7" height="5" rx="1.5"/>
-              <rect x="14" y="12" width="7" height="9" rx="1.5"/>
-            </svg>
-          </div>
-          <h1 className="cms-login-title">errani</h1>
-          <p className="cms-login-subtitle">Панель управления</p>
-        </div>
-
         {error && (
           <div className="cms-login-error">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
@@ -133,9 +131,6 @@ export default function AdminLoginPage() {
           </button>
         </div>
 
-        <div style={{ textAlign: "center", marginTop: "16px", fontSize: "11px", color: "var(--cms-text-muted)" }}>
-          Защищённый вход · errani.ru
-        </div>
       </form>
     </div>
   );

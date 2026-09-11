@@ -3,6 +3,7 @@
 const SHIPPING_LABELS: Record<string, string> = {
   ozon: 'OZON',
   yandex: 'Яндекс Маркет',
+  manual_delivery: 'Доставка по адресу',
   pochta_ru: 'Почта России',
   cdek: 'СДЭК',
   cdek_courier: 'СДЭК — курьером',
@@ -11,13 +12,8 @@ const SHIPPING_LABELS: Record<string, string> = {
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
-  yukassa: 'ЮKassa (карта)',
   tochka: 'СБП',
-  card: 'Карта',
   sbp: 'СБП',
-  stripe: 'Банковская карта',
-  apple_pay: 'Apple Pay',
-  google_pay: 'Google Pay',
 };
 
 const STATUS_LABELS: Record<string, string> = {

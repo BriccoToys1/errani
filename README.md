@@ -15,7 +15,7 @@ E-commerce сайт для бренда **errani** — авторские кол
 npm ci
 
 # 2. Настроить переменные окружения
-cp .env.example .env
+cp .env .env
 # Заполнить DATABASE_URL, JWT_SECRET, RESEND_API_KEY, YUKASSA_SHOP_ID, YUKASSA_SECRET_KEY
 
 # 3. Инициализировать базу данных

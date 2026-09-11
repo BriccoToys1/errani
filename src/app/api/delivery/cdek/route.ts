@@ -7,6 +7,14 @@ interface CartItemInput {
   quantity?: number;
 }
 
+function formatHouseDetails(house: string, building?: string, corpus?: string) {
+  return [
+    house,
+    building ? `стр. ${building}` : '',
+    corpus ? `корп. ${corpus}` : '',
+  ].filter(Boolean).join(' ');
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -40,12 +48,17 @@ export async function POST(req: NextRequest) {
     }
     const freeDelivery = products.some((product) => product.freeDelivery);
 
+    const house = String(body.house || '').trim();
+    const building = String(body.building || '').trim();
+    const corpus = String(body.corpus || '').trim();
+    const deliveryHouse = formatHouseDetails(house, building, corpus);
+
     const quote = await calculateCdekDelivery({
       city: String(body.city || ''),
       postalCode: String(body.zipCode || ''),
-      address: [body.street, body.house].filter(Boolean).join(', '),
+      address: [body.street, deliveryHouse].filter(Boolean).join(', '),
       street: String(body.street || ''),
-      house: String(body.house || ''),
+      house,
       region: String(body.oblast || ''),
       itemCount,
       mode,

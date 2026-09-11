@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const q = searchParams.get('q')?.trim();
-  if (!q || q.length < 2) return NextResponse.json({ results: [] });
+  if (!q || q.length < 2 || q.length > 200) return NextResponse.json({ results: [] });
 
   const search = { contains: q, mode: 'insensitive' as const };
 

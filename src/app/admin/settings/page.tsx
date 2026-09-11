@@ -61,8 +61,8 @@ const DEFAULT_SETTINGS: Settings = {
   enablePreorders: true,
   enableFavorites: true,
   enableReviews: false,
-  shippingMethods: ["cdek_courier", "cdek_pvz"],
-  paymentMethods: ["tochka", "stripe", "apple_pay", "google_pay"],
+  shippingMethods: ["manual_delivery"],
+  paymentMethods: ["tochka"],
   socialLinks: { instagram: "", telegram: "", vk: "", tiktok: "" },
   emailNotifications: true,
   orderNotifyEmail: "info@errani.ru",
@@ -81,15 +81,8 @@ const LANGS = [
   { code: "zh", name: "Китайский" },
 ];
 
-const SHIPPING = [
-  { id: "cdek_courier", label: "СДЭК — курьером" },
-  { id: "cdek_pvz", label: "СДЭК — пункт выдачи" },
-];
-
 const PAYMENT = [
-  { id: "tochka", label: "Точка Банк" }, { id: "yukassa", label: "ЮKassa" }, { id: "stripe", label: "Stripe" },
-  { id: "apple_pay", label: "Apple Pay" }, { id: "google_pay", label: "Google Pay" },
-  { id: "crypto", label: "Криптовалюта" },
+  { id: "tochka", label: "СБП" },
 ];
 
 function SettingSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -633,36 +626,6 @@ function IntegrationsTab({ notify, getToken }: { notify: (msg: string) => void; 
         )}
       </SettingSection>
 
-      <SettingSection title="ЮKassa">
-        <div style={{ marginBottom: "12px", padding: "12px", background: "rgba(34, 197, 94, 0.1)", borderRadius: "8px", display: "flex", alignItems: "center", gap: "12px" }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: "14px" }}>Платёжная система подключена</div>
-            <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>Shop ID: 1265018</div>
-          </div>
-          <a
-            href="https://yookassa.ru/my/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="cms-btn cms-btn-sm cms-btn-primary"
-            style={{ marginLeft: "auto" }}
-          >
-            Открыть кабинет ЮKassa ↗
-          </a>
-        </div>
-        <div style={{ border: "1px solid var(--cms-border)", borderRadius: "8px", overflow: "hidden" }}>
-          <iframe
-            src="https://yookassa.ru/my/"
-            style={{ width: "100%", height: "600px", border: "none" }}
-            title="ЮKassa кабинет"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-          />
-        </div>
-        <div style={{ marginTop: "8px", fontSize: "12px", color: "var(--cms-text-muted)" }}>
-          Если iframe не загружается, используйте кнопку «Открыть кабинет ЮKassa» выше для доступа в новой вкладке.
-        </div>
-      </SettingSection>
-
       <SettingSection title="Другие интеграции">
         <div style={{ padding: "20px", textAlign: "center", color: "var(--cms-text-muted)" }}>
           <div style={{ fontSize: "32px", marginBottom: "10px" }}>🔌</div>
@@ -685,6 +648,7 @@ export default function AdminSettingsPage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [featuredProductLink, setFeaturedProductLink] = useState("/tenderly-vibe");
   const [deliveryEstimate, setDeliveryEstimate] = useState("Ориентировочный срок доставки ~ начало Мая");
+  const [orderDeliveryFootnote, setOrderDeliveryFootnote] = useState("");
   const [adminSessions, setAdminSessions] = useState<AdminSessionEntry[]>([]);
   const [seoSettings, setSeoSettings] = useState<SeoSettings>(DEFAULT_SEO_SETTINGS);
   const [robotsText, setRobotsText] = useState("User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api\n\nSitemap: https://errani.ru/sitemap.xml");
@@ -727,6 +691,11 @@ export default function AdminSettingsPage() {
     fetch("/api/admin/settings?key=deliveryEstimate", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((d) => { if (d.value) setDeliveryEstimate(d.value); })
+      .catch(() => {});
+
+    fetch("/api/admin/settings?key=orderDeliveryFootnote", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => { if (d.value !== null && d.value !== undefined) setOrderDeliveryFootnote(d.value); })
       .catch(() => {});
 
     fetch("/api/admin/settings?key=admin_sessions_v1", { headers: { Authorization: `Bearer ${token}` } })
@@ -788,6 +757,11 @@ export default function AdminSettingsPage() {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ key: "deliveryEstimate", value: deliveryEstimate }),
+        }),
+        fetch("/api/admin/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ key: "orderDeliveryFootnote", value: orderDeliveryFootnote }),
         }),
         fetch("/api/admin/settings", {
           method: "POST",
@@ -1006,17 +980,20 @@ export default function AdminSettingsPage() {
                     Отображается в плашке оформления заказа (в блоке Доставка). Оставьте пустым — не показывать.
                   </div>
                 </label>
-              </SettingSection>
-
-              <SettingSection title="Способы доставки">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                  {SHIPPING.map((s) => (
-                    <label key={s.id} className="cms-checkbox-label" style={{ padding: "10px 14px", borderRadius: "8px", border: `1px solid ${settings.shippingMethods.includes(s.id) ? "var(--cms-accent)" : "var(--cms-border)"}`, background: settings.shippingMethods.includes(s.id) ? "rgba(232,114,42,0.08)" : "transparent" }}>
-                      <input type="checkbox" checked={settings.shippingMethods.includes(s.id)} onChange={() => toggleArrayItem("shippingMethods", s.id)} />
-                      {s.label}
-                    </label>
-                  ))}
-                </div>
+                <label className="cms-label" style={{ marginTop: "12px" }}>
+                  Сноска в блоке «Ваш заказ»
+                  <textarea
+                    className="cms-textarea"
+                    rows={2}
+                    value={orderDeliveryFootnote}
+                    onChange={(e) => setOrderDeliveryFootnote(e.target.value)}
+                    placeholder="Например: Доставка оплачивается при получении."
+                    style={{ width: "100%" }}
+                  />
+                  <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "4px" }}>
+                    Показывается под строкой доставки в checkout. Оставьте пустым — не показывать.
+                  </div>
+                </label>
               </SettingSection>
 
               <SettingSection title="Способы оплаты">

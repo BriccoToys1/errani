@@ -5,15 +5,17 @@ import { Resend } from 'resend';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 
 async function getApiKey(): Promise<string | null> {
-  const envKey = process.env.RESEND_API_KEY;
-  if (envKey) return envKey;
   try {
     const s = await withPrismaRetry(
       () => prisma.siteSettings.findUnique({ where: { key: 'resend_api_key' } }),
       2, 80
     );
-    return s?.value || null;
-  } catch { return null; }
+    const dbKey = s?.value?.trim();
+    if (dbKey) return dbKey;
+  } catch {
+    // Fall back to the server environment when the database is unavailable.
+  }
+  return process.env.RESEND_API_KEY?.trim() || null;
 }
 
 function extractAddr(raw: unknown): string {
@@ -99,14 +101,10 @@ export async function POST(req: NextRequest) {
       });
       if (existing) continue;
 
-      // Fetch full email body via receiving.get()
-      let bodyData = pickBody(email);
-      try {
-        const { data: full } = await resend.emails.receiving.get(resendId, { html_format: 'data_uri' });
-        if (full) {
-          bodyData = pickBody(full as unknown as Record<string, unknown>);
-        }
-      } catch { /* use list data as fallback */ }
+      // The receiving list already contains the message metadata/body needed by
+      // the inbox. Calling receiving.get() for every message makes Resend's
+      // current API stall the sync request, so use the list payload directly.
+      const bodyData = pickBody(email);
 
       const spamStatus = String(email.spam_status || 'pass').toLowerCase();
       const isSpam = spamStatus === 'spam';

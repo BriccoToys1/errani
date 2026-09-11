@@ -1112,7 +1112,7 @@ export default function AdminProductsPage() {
                   <input type="checkbox" checked={form.freeDelivery} onChange={e => setForm(prev => ({ ...prev, freeDelivery: e.target.checked }))} />
                   <span style={{ flex: 1 }}>
                     <strong style={{ display: "block", color: form.freeDelivery ? "#4ade80" : "var(--cms-text-heading)", fontSize: 13 }}>Бесплатная доставка</strong>
-                    <span style={{ display: "block", marginTop: 3, color: "var(--cms-text-muted)", fontSize: 11 }}>Если включено, стоимость СДЭК для заказа будет 0 ₽.</span>
+                    <span style={{ display: "block", marginTop: 3, color: "var(--cms-text-muted)", fontSize: 11 }}>Если включено, доставка для заказа будет 0 ₽.</span>
                   </span>
                   <code style={{ marginLeft: "auto", color: form.freeDelivery ? "#4ade80" : "var(--cms-text-muted)", fontSize: 11 }}>freeDelivery = {String(form.freeDelivery)}</code>
                 </label>

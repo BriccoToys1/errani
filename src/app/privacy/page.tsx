@@ -240,7 +240,7 @@ const PRIVACY_SECTIONS_EN: PrivacySection[] = [
   {
     title: '5. Data Processed During Payment',
     items: [
-      'Payments are processed by Tochka Bank LLC. Card details are entered directly on the payment service\'s secure page and are never transmitted to us — we do not see or store them.',
+      'Payments are processed by Tochka Bank LLC. Card details are not used on this site; payments are made through the Faster Payments System (SBP).',
       'We only receive a notification of successful or unsuccessful payment and a payment identifier.',
       'For orders paid via the Faster Payments System (SBP), data is also processed solely by the bank.',
     ],

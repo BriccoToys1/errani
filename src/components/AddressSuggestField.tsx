@@ -80,8 +80,12 @@ export function AddressSuggestField({
     const isStreetSearch = kind === 'street';
     const hasStreetContext = Boolean(city.trim() || region.trim());
     const query = value.trim();
-    if ((!isCitySearch && !isStreetSearch) || (isStreetSearch && (!hasStreetContext || query.length < 2))) {
-      if (isCitySearch || isStreetSearch) setItems([]);
+    if ((!isCitySearch && !isStreetSearch) || (isCitySearch && !query) || (isStreetSearch && (!hasStreetContext || query.length < 2))) {
+      if (isCitySearch || isStreetSearch) {
+        setItems([]);
+        setSearched(false);
+        setHint('');
+      }
       setLoading(false);
       return;
     }
@@ -129,7 +133,11 @@ export function AddressSuggestField({
             onChange(event.target.value);
             setSearched(false);
             setHint('');
-            setOpen(true);
+            if (event.target.value.trim().length > 0) {
+              setOpen(true);
+            } else {
+              setOpen(false);
+            }
           }}
           onFocus={() => {
             if (kind === 'street' && !city.trim() && !region.trim()) {
@@ -139,9 +147,13 @@ export function AddressSuggestField({
             } else {
               setHint('');
             }
-            setOpen(true);
+            if (value.trim().length > 0) {
+              setOpen(true);
+            }
           }}
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            if (value.trim().length > 0) setOpen(true);
+          }}
           autoComplete={kind === 'region' ? 'address-level1' : kind === 'city' ? 'address-level2' : 'address-line1'}
           style={error ? { borderColor: '#ef4444' } : undefined}
         />

@@ -5,22 +5,19 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
-// Whitelisted safe commands
-const SAFE_COMMANDS: Record<string, string> = {
-  'pm2 status': 'pm2 jlist',
-  'pm2 logs': 'pm2 logs errani-site --nostream --lines 80 2>&1',
-  'disk': 'df -h / 2>&1',
-  'memory': 'free -h 2>&1 || vm_stat 2>&1',
-  'uptime': 'uptime 2>&1',
-  'node version': 'node -v 2>&1',
-  'npm version': 'npm -v 2>&1',
-  'git status': 'cd /var/www/errani && git log --oneline -10 2>&1',
-  'git log': 'cd /var/www/errani && git log --oneline -20 2>&1',
-  'db status': 'cd /var/www/errani && npx prisma db execute --stdin <<< "SELECT version();" 2>&1 || echo "DB check failed"',
-  'env': 'echo "NODE_ENV=$NODE_ENV\nPORT=$PORT\nHOSTNAME=$(hostname)"',
-  'processes': 'ps aux --sort=-%mem | head -15 2>&1 || ps aux | head -15 2>&1',
-  'network': 'ss -tlnp 2>&1 || netstat -tlnp 2>&1 || echo "Network info unavailable"',
-};
+// Whitelisted safe commands — use a Map to prevent prototype-key collision
+const SAFE_COMMANDS = new Map<string, string>([
+  ['pm2 status', 'pm2 jlist'],
+  ['pm2 logs', 'pm2 logs errani-site --nostream --lines 80 2>&1'],
+  ['disk', 'df -h / 2>&1'],
+  ['memory', 'free -h 2>&1 || vm_stat 2>&1'],
+  ['uptime', 'uptime 2>&1'],
+  ['node version', 'node -v 2>&1'],
+  ['npm version', 'npm -v 2>&1'],
+  ['git status', 'cd /var/www/errani && git log --oneline -10 2>&1'],
+  ['git log', 'cd /var/www/errani && git log --oneline -20 2>&1'],
+  ['db status', 'cd /var/www/errani && npx prisma db execute --stdin <<< "SELECT version();" 2>&1 || echo "DB check failed"'],
+]);
 
 // GET — return recent logs
 export async function GET(req: NextRequest) {
@@ -46,18 +43,18 @@ export async function POST(req: NextRequest) {
   try {
     const { command } = await req.json();
     if (!command || typeof command !== 'string') {
-      return NextResponse.json({ output: 'Error: no command specified', commands: Object.keys(SAFE_COMMANDS) });
+      return NextResponse.json({ output: 'Error: no command specified', commands: [...SAFE_COMMANDS.keys()] });
     }
 
     const cmd = command.trim().toLowerCase();
 
     if (cmd === 'help') {
       return NextResponse.json({
-        output: 'Available commands:\n' + Object.keys(SAFE_COMMANDS).map(c => `  ${c}`).join('\n') + '\n  help — show this list\n  clear — clear terminal',
+        output: 'Available commands:\n' + [...SAFE_COMMANDS.keys()].map(c => `  ${c}`).join('\n') + '\n  help — show this list\n  clear — clear terminal',
       });
     }
 
-    const realCmd = SAFE_COMMANDS[cmd];
+    const realCmd = SAFE_COMMANDS.get(cmd);
     if (!realCmd) {
       return NextResponse.json({
         output: `Unknown command: "${command}"\nType "help" for available commands.`,

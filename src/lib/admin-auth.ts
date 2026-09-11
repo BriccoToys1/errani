@@ -20,15 +20,7 @@ function verifyToken(token: string, secret: string): AdminTokenPayload | null {
     if (!payload.adminId || !payload.email) return null;
     return payload;
   } catch {
-    // Legacy tokens did not include issuer/audience. Keep them valid until their
-    // existing seven-day expiry, while all newly issued tokens use strict claims.
-    try {
-      const payload = jwt.verify(token, secret, { algorithms: ['HS256'] }) as AdminTokenPayload;
-      if (!payload.adminId || !payload.email) return null;
-      return payload;
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 

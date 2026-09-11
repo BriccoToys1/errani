@@ -114,7 +114,7 @@ const emptyManualForm = {
   house: "",
   apartment: "",
   shippingMethod: "",
-  paymentMethod: "cash",
+  paymentMethod: "tochka",
   currency: "RUB",
   notes: "",
   status: "unpaid",
@@ -1056,20 +1056,13 @@ export default function AdminOrdersPage() {
                   Способ доставки
                   <select className="cms-select" value={manualForm.shippingMethod} onChange={(e) => setManualForm({ ...manualForm, shippingMethod: e.target.value })} style={{ marginTop: 4 }}>
                     <option value="">— не указан —</option>
-                    <option value="cdek_courier">СДЭК — курьером</option>
-                    <option value="cdek_pvz">СДЭК — пункт выдачи</option>
+                    <option value="manual_delivery">Доставка по адресу</option>
                   </select>
                 </label>
                 <label className="cms-label">
                   Способ оплаты
                   <select className="cms-select" value={manualForm.paymentMethod} onChange={(e) => setManualForm({ ...manualForm, paymentMethod: e.target.value })} style={{ marginTop: 4 }}>
-                    <option value="cash">Наличные</option>
-                    <option value="card">Карта (офлайн)</option>
-                    <option value="transfer">Перевод на карту</option>
                     <option value="tochka">Точка Банк</option>
-                    <option value="yukassa">ЮКасса</option>
-                    <option value="stripe">Stripe</option>
-                    <option value="manual">Другое</option>
                   </select>
                 </label>
                 <label className="cms-label">

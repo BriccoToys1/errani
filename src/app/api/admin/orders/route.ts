@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
         house: house || '',
         apartment: apartment || '',
         shippingMethod: shippingMethod || '',
-        paymentMethod: paymentMethod || 'manual',
+        paymentMethod: paymentMethod || 'tochka',
         currency: currency || 'RUB',
         totalAmount: Number(totalAmount),
         status: status || 'unpaid',

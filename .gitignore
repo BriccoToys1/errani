@@ -2,7 +2,6 @@ node_modules/
 .next/
 .env
 .env.local
-.env.production
 *.db
 *.db-journal
 .DS_Store
@@ -10,4 +9,4 @@ tsconfig.tsbuildinfo
 Montserrat/
 .vercel
 .env*.local
-.env.prod
+

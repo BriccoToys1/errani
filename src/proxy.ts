@@ -13,16 +13,16 @@ async function hasValidAdminToken(req: NextRequest): Promise<boolean> {
 
   const key = new TextEncoder().encode(secret);
   try {
-    await jwtVerify(token, key, {
+    const payload = await jwtVerify(token, key, {
       algorithms: ['HS256'],
       issuer: 'errani-admin',
       audience: 'errani-admin-panel',
     });
-    return true;
+    return Boolean(payload?.payload?.adminId || payload?.payload?.email);
   } catch {
     try {
-      await jwtVerify(token, key, { algorithms: ['HS256'] });
-      return true;
+      const fallbackPayload = await jwtVerify(token, key, { algorithms: ['HS256'] });
+      return Boolean(fallbackPayload?.payload?.adminId || fallbackPayload?.payload?.email);
     } catch {
       return false;
     }
@@ -34,12 +34,27 @@ export async function proxy(req: NextRequest) {
   const host = hostname(req);
   const isAdminHost = host === 'admin.errani.ru';
   const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+  const isPublicAsset =
+    pathname.startsWith('/fonts') ||
+    pathname.startsWith('/logos') ||
+    pathname.startsWith('/media') ||
+    pathname.startsWith('/uploads') ||
+    pathname === '/favicon.ico' ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml';
 
   if (isAdminHost) {
     if (pathname === '/' || pathname === '') {
-      return NextResponse.redirect(new URL('/admin/', req.url));
+      // Go directly to the login page. Redirecting through /admin/ causes an
+      // additional Next.js trailing-slash redirect on mobile clients.
+      return NextResponse.redirect(new URL('/admin/login', req.url));
     }
-    if (!pathname.startsWith('/admin') && !pathname.startsWith('/_next') && !pathname.startsWith('/api')) {
+    if (
+      !isPublicAsset &&
+      !pathname.startsWith('/admin') &&
+      !pathname.startsWith('/_next') &&
+      !pathname.startsWith('/api')
+    ) {
       return NextResponse.redirect(new URL(`/admin${pathname}`, req.url));
     }
   }

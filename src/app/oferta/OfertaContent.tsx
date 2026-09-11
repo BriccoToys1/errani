@@ -34,7 +34,7 @@ const SECTIONS_RU: OfferSection[] = [
     title: '4. Цена товаров и порядок оплаты',
     text: [
       'Цены на товары указаны на страницах товаров на сайте в рублях (₽), включают все применимые налоги.',
-      'Оплата производится безналичным способом через интернет-эквайринг Точка Банка. Поддерживаются банковские карты и СБП, если соответствующие способы оплаты доступны на платёжной странице.',
+      'Оплата производится безналичным способом через интернет-эквайринг Точка Банка. На сайте доступна оплата только через СБП.',
       'Продавец не хранит реквизиты банковских карт и платёжные данные Покупателя — все платёжные операции выполняются на стороне платёжного сервиса.',
     ],
   },
@@ -150,7 +150,7 @@ const SECTIONS_EN: OfferSection[] = [
     title: '4. Prices and Payment',
     text: [
       'Product prices are shown on the relevant product pages in Russian rubles (RUB) and include all applicable taxes.',
-      'Payment is made cashlessly through Tochka Bank online acquiring. Bank cards and the Faster Payments System (SBP) are supported when the corresponding payment methods are available on the payment page.',
+      'Payment is made cashlessly through Tochka Bank online acquiring. Only the Faster Payments System (SBP) is available on the site.',
       'The Seller does not store the Buyer’s bank card details or payment credentials. All payment transactions are processed by the payment service provider.',
     ],
   },

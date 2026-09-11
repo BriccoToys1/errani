@@ -82,7 +82,7 @@ export default function HomePage() {
               <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/>
             </svg>
           </span>
-          <span>{lang === 'ru' ? 'Лимитированная авторская коллекция' : 'Limited original collection'}</span>
+          <span>{lang === 'ru' ? 'Лимитированная авторская коллекция' : 'Limited artist collection'}</span>
         </article>
         <article className="home-feature-tab">
           <span className="home-feature-icon" aria-hidden="true">

@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 // Export orders to CSV/XLS format
 export async function GET(req: NextRequest) {
   const denied = adminGuard(req);
@@ -70,7 +79,7 @@ export async function GET(req: NextRequest) {
             o.items.map(i => `${i.product.name} x${i.quantity}`).join('; '),
             new Date(o.createdAt).toLocaleDateString('ru-RU'),
           ];
-          return `<tr>${cells.map(c => `<td style="border:1px solid #ccc;padding:6px">${c}</td>`).join('')}</tr>`;
+          return `<tr>${cells.map(c => `<td style="border:1px solid #ccc;padding:6px">${escapeHtml(c)}</td>`).join('')}</tr>`;
         }).join('');
 
         content = `
@@ -110,7 +119,7 @@ export async function GET(req: NextRequest) {
         const headerRow = headers.map(h => `<th style="background:#f0f0f0;font-weight:bold;border:1px solid #ccc;padding:8px">${h}</th>`).join('');
         const dataRows = products.map(p => {
           const cells = [p.name, p.slug, p.price.toLocaleString('ru-RU'), p.currency, p.inStock ? 'Да' : 'Нет', p.isAuthor ? 'Да' : 'Нет'];
-          return `<tr>${cells.map(c => `<td style="border:1px solid #ccc;padding:6px">${c}</td>`).join('')}</tr>`;
+          return `<tr>${cells.map(c => `<td style="border:1px solid #ccc;padding:6px">${escapeHtml(c)}</td>`).join('')}</tr>`;
         }).join('');
 
         content = `<html><head><meta charset="UTF-8"></head><body><table style="border-collapse:collapse">${headerRow}${dataRows}</table></body></html>`;
@@ -138,7 +147,7 @@ export async function GET(req: NextRequest) {
         const headerRow = headers.map(h => `<th style="background:#f0f0f0;font-weight:bold;border:1px solid #ccc;padding:8px">${h}</th>`).join('');
         const dataRows = inquiries.map(i => {
           const cells = [i.name, i.email, i.phone, i.message.substring(0, 100), i.status, i.source, new Date(i.createdAt).toLocaleDateString('ru-RU')];
-          return `<tr>${cells.map(c => `<td style="border:1px solid #ccc;padding:6px">${c}</td>`).join('')}</tr>`;
+          return `<tr>${cells.map(c => `<td style="border:1px solid #ccc;padding:6px">${escapeHtml(c)}</td>`).join('')}</tr>`;
         }).join('');
 
         content = `<html><head><meta charset="UTF-8"></head><body><table style="border-collapse:collapse">${headerRow}${dataRows}</table></body></html>`;

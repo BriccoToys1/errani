@@ -4,7 +4,7 @@ import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 
 // Public keys that can be read without auth
-const PUBLIC_KEYS = new Set(['featuredProductLink', 'deliveryEstimate']);
+const PUBLIC_KEYS = new Set(['featuredProductLink', 'deliveryEstimate', 'orderDeliveryFootnote']);
 const PUBLIC_SETTINGS_TTL_MS = 60_000;
 const publicSettingsCache = new Map<string, { ts: number; payload: { key: string; value: string | null } }>();
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getCart, updateQuantity, removeFromCart, clearCart, getCartTotal, CartItem } from '@/lib/cart';
@@ -8,16 +8,6 @@ import { formatPrice, COUNTRIES } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { t } from '@/lib/i18n';
 import { PhoneInput } from '@/components/PhoneInput';
-import { CdekPickupLocation, CdekPickupMap, CdekPickupPoint } from '@/components/CdekPickupMap';
-import { AddressSuggestField } from '@/components/AddressSuggestField';
-
-interface CdekDeliveryQuote {
-  amount: number;
-  periodMin: number;
-  periodMax: number;
-  tariffCode: number;
-  mode: 'courier' | 'pickup';
-}
 
 export default function CartPage() {
   const { lang } = useLanguage();
@@ -40,12 +30,14 @@ export default function CartPage() {
     zipCode: '',
     street: '',
     house: '',
+    building: '',
+    corpus: '',
     apartment: '',
     entrance: '',
     floor: '',
     intercom: '',
     noApartment: false,
-    shippingMethod: 'cdek_courier',
+    shippingMethod: 'manual_delivery',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState('');
@@ -55,18 +47,8 @@ export default function CartPage() {
   const [availabilityChecked, setAvailabilityChecked] = useState(false);
   type ProductData = { id: string; inStock: boolean; isActive: boolean; stock: number; isSaleDisabled?: boolean; shippingFee?: number; freeDelivery?: boolean; noticeText?: string; noticeTextEn?: string };
   const [productMap, setProductMap] = useState<Map<string, ProductData>>(new Map());
-  const [selectedPickupPoint, setSelectedPickupPoint] = useState<CdekPickupPoint | null>(null);
-  const [deliveryQuote, setDeliveryQuote] = useState<CdekDeliveryQuote | null>(null);
-  const [deliveryLoading, setDeliveryLoading] = useState(false);
-  const [deliveryError, setDeliveryError] = useState('');
-
   const [deliveryEstimate, setDeliveryEstimate] = useState('Ориентировочный срок доставки ~ начало Мая');
-
-  // Foreign card modal
-  const [showForeignCard, setShowForeignCard] = useState(false);
-  const [foreignForm, setForeignForm] = useState({ name: '', phone: '', email: '', contact: 'telegram', consent: false });
-  const [foreignSubmitting, setForeignSubmitting] = useState(false);
-  const [foreignDone, setForeignDone] = useState(false);
+  const [orderDeliveryFootnote, setOrderDeliveryFootnote] = useState('');
 
   useEffect(() => {
     setCart(getCart());
@@ -119,21 +101,27 @@ export default function CartPage() {
       .then(r => r.json())
       .then(d => { if (d.value) setDeliveryEstimate(d.value); })
       .catch(() => {});
+    fetch('/api/admin/settings?key=orderDeliveryFootnote')
+      .then(r => r.json())
+      .then(d => { if (d.value !== null && d.value !== undefined) setOrderDeliveryFootnote(d.value); })
+      .catch(() => {});
   }, []);
 
   const isRussia = formData.country === 'RU';
-  const deliveryMode = formData.shippingMethod === 'cdek_pvz' ? 'pickup' : 'courier';
 
   useEffect(() => {
-    if (formData.country === 'RU' && !['cdek_courier', 'cdek_pvz'].includes(formData.shippingMethod)) {
-      setFormData(prev => ({ ...prev, shippingMethod: 'cdek_courier' }));
+    if (formData.country === 'RU' && formData.shippingMethod !== 'manual_delivery') {
+      setFormData(prev => ({ ...prev, shippingMethod: 'manual_delivery' }));
     }
   }, [formData.country, formData.shippingMethod]);
 
   const handleQty = (id: string, qty: number) => setCart(updateQuantity(id, qty));
   const handleRemove = (id: string) => setCart(removeFromCart(id));
   const total = getCartTotal(cart);
-  const shippingCost = isRussia ? (deliveryQuote?.amount || 0) : 0;
+  const hasFreeDelivery = cart.some(item => productMap.get(item.productId)?.freeDelivery);
+  const shippingCost = isRussia && !hasFreeDelivery
+    ? cart.reduce((sum, item) => sum + (productMap.get(item.productId)?.shippingFee || 0) * item.quantity, 0)
+    : 0;
 
   const cartNotices = cart
     .map(item => {
@@ -144,98 +132,6 @@ export default function CartPage() {
   const grandTotal = total + shippingCost;
   const unavailableItems = cart.filter(item => unavailableProductIds.has(item.productId));
   const hasUnavailableItems = unavailableItems.length > 0;
-
-  const handlePickupLocationChange = useCallback((location: CdekPickupLocation | null) => {
-    setSelectedPickupPoint(null);
-    setDeliveryQuote(null);
-    setDeliveryError('');
-    if (!location) return;
-    setFormData(prev => ({
-      ...prev,
-      oblast: location.region || prev.oblast,
-      city: location.city,
-      zipCode: location.postalCode || location.postalCodes[0] || '',
-      street: '',
-      house: '',
-      apartment: '',
-      entrance: '',
-      floor: '',
-      intercom: '',
-    }));
-  }, []);
-
-  const handlePickupSelect = useCallback((point: CdekPickupPoint) => {
-    setSelectedPickupPoint(point);
-    setDeliveryQuote(null);
-    setDeliveryError('');
-    setFormData(prev => ({
-      ...prev,
-      city: point.city,
-      zipCode: point.postalCode || prev.zipCode,
-    }));
-  }, []);
-
-  useEffect(() => {
-    if (!isRussia || cart.length === 0) {
-      setDeliveryQuote(null);
-      setDeliveryError('');
-      setDeliveryLoading(false);
-      return;
-    }
-
-    const courierReady = formData.city.trim().length >= 2
-      && formData.street.trim().length >= 2
-      && formData.house.trim().length >= 1;
-    const pickupReady = Boolean(selectedPickupPoint);
-    if ((deliveryMode === 'courier' && !courierReady) || (deliveryMode === 'pickup' && !pickupReady)) {
-      setDeliveryQuote(null);
-      setDeliveryError('');
-      setDeliveryLoading(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setDeliveryLoading(true);
-      setDeliveryError('');
-      try {
-        const response = await fetch('/api/delivery/cdek', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            country: 'RU',
-            shippingMethod: formData.shippingMethod,
-            city: formData.city,
-            oblast: formData.oblast,
-            zipCode: formData.zipCode,
-            street: formData.street,
-            house: formData.house,
-            items: cart.map(item => ({ productId: item.productId, quantity: item.quantity })),
-            cdekDeliveryPoint: selectedPickupPoint,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) throw new Error(lang === 'ru'
-          ? (data.error || 'Не удалось рассчитать доставку СДЭК.')
-          : 'Could not calculate CDEK delivery.');
-        setDeliveryQuote(data);
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') return;
-        setDeliveryQuote(null);
-        setDeliveryError(error instanceof Error
-          ? error.message
-          : (lang === 'ru' ? 'Не удалось рассчитать доставку СДЭК.' : 'Could not calculate CDEK delivery.'));
-      } finally {
-        if (!controller.signal.aborted) setDeliveryLoading(false);
-      }
-    }, 550);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [cart, deliveryMode, formData.city, formData.country, formData.house, formData.oblast, formData.shippingMethod, formData.street, formData.zipCode, isRussia, lang, selectedPickupPoint]);
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -278,28 +174,17 @@ export default function CartPage() {
       e.customCountry = lang === 'ru' ? 'Введите название страны' : 'Enter the country name';
     }
     
-    if (deliveryMode === 'courier') {
-      if (!formData.city.trim()) {
-        e.city = lang === 'ru' ? 'Введите город' : 'Enter your city';
-      } else if (formData.city.trim().length < 2) {
-        e.city = lang === 'ru' ? 'Название города слишком короткое' : 'City name is too short';
-      }
-      const zipTrimmed = formData.zipCode.trim();
-      if (zipTrimmed && !/^\d{6}$/.test(zipTrimmed)) {
-        e.zipCode = lang === 'ru' ? 'Индекс должен содержать 6 цифр' : 'Postal code must contain 6 digits';
-      }
-      if (!formData.street.trim()) e.street = lang === 'ru' ? 'Введите улицу' : 'Enter your street';
-      if (!formData.house.trim()) e.house = lang === 'ru' ? 'Введите дом' : 'Enter your house number';
-    } else if (!selectedPickupPoint) {
-      e.delivery = lang === 'ru' ? 'Выберите пункт выдачи СДЭК' : 'Choose a CDEK pickup point';
+    if (!formData.city.trim()) {
+      e.city = lang === 'ru' ? 'Введите город' : 'Enter your city';
+    } else if (formData.city.trim().length < 2) {
+      e.city = lang === 'ru' ? 'Название города слишком короткое' : 'City name is too short';
     }
-
-    const hasDeliveryFieldError = ['city', 'zipCode', 'street', 'house', 'delivery'].some(field => e[field]);
-    if (isRussia && !hasDeliveryFieldError && !deliveryQuote) {
-      e.delivery = deliveryLoading
-        ? (lang === 'ru' ? 'Дождитесь завершения расчёта доставки' : 'Wait for the delivery calculation to finish')
-        : deliveryError || (lang === 'ru' ? 'Не удалось подтвердить адрес и рассчитать доставку' : 'Could not verify the address and calculate delivery');
+    const zipTrimmed = formData.zipCode.trim();
+    if (zipTrimmed && !/^\d{6}$/.test(zipTrimmed)) {
+      e.zipCode = lang === 'ru' ? 'Индекс должен содержать 6 цифр' : 'Postal code must contain 6 digits';
     }
+    if (!formData.street.trim()) e.street = lang === 'ru' ? 'Введите улицу' : 'Enter your street';
+    if (!formData.house.trim()) e.house = lang === 'ru' ? 'Введите дом' : 'Enter your house number';
 
     // Consent validation
     if (!consentOferta) e.consentOferta = lang === 'ru' ? 'Необходимо принять условия оферты' : 'You must accept the public offer';
@@ -329,7 +214,6 @@ export default function CartPage() {
           ...formData,
           name: [formData.lastName, formData.firstName, formData.noMiddleName ? '' : formData.middleName].filter(Boolean).join(' '),
           items: cart.map(item => ({ productId: item.productId, quantity: item.quantity, selectedColor: item.selectedColor })),
-          cdekDeliveryPoint: selectedPickupPoint,
           language: lang,
           shippingCost,
           totalAmount: grandTotal,
@@ -358,29 +242,6 @@ export default function CartPage() {
       alert(message);
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleForeignSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setForeignSubmitting(true);
-    try {
-      await fetch('/api/inquiries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: foreignForm.name,
-          email: foreignForm.email,
-          phone: foreignForm.phone || undefined,
-          message: `Иностранная карта — заявка на оплату. Предпочтительный способ связи: ${foreignForm.contact}`,
-          source: 'foreign_card',
-        }),
-      });
-      setForeignDone(true);
-    } catch {
-      alert(lang === 'ru' ? 'Ошибка при отправке. Попробуйте ещё раз.' : 'Could not send your request. Try again.');
-    } finally {
-      setForeignSubmitting(false);
     }
   };
 
@@ -598,97 +459,36 @@ export default function CartPage() {
               </div>
               {isRussia && (
                 <>
-                  <div className="full-width">
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                      {lang === 'ru' ? 'Способ доставки СДЭК' : 'CDEK delivery method'}
-                    </label>
-                    <div className="cdek-delivery-switch" role="group" aria-label={lang === 'ru' ? 'Способ доставки СДЭК' : 'CDEK delivery method'}>
-                      <button
-                        type="button"
-                        className={deliveryMode === 'courier' ? 'active' : ''}
-                        aria-pressed={deliveryMode === 'courier'}
-                        onClick={() => {
-                          setFormData(prev => ({ ...prev, shippingMethod: 'cdek_courier', zipCode: '' }));
-                          setSelectedPickupPoint(null);
-                          setDeliveryQuote(null);
-                          setDeliveryError('');
-                        }}
-                      >
-                        {lang === 'ru' ? 'Курьером' : 'Courier'}
-                      </button>
-                      <button
-                        type="button"
-                        className={deliveryMode === 'pickup' ? 'active' : ''}
-                        aria-pressed={deliveryMode === 'pickup'}
-                        onClick={() => {
-                          setFormData(prev => ({ ...prev, shippingMethod: 'cdek_pvz' }));
-                          setDeliveryQuote(null);
-                          setDeliveryError('');
-                        }}
-                      >
-                        {lang === 'ru' ? 'Пункт выдачи' : 'Pickup point'}
-                      </button>
-                    </div>
+                  <Field label={lang === 'ru' ? 'Область / Регион (по желанию)' : 'Oblast / Region (optional)'} value={formData.oblast}
+                    onChange={(v) => setFormData(prev => ({ ...prev, oblast: v }))} />
+                  <Field label={lang === 'ru' ? 'Город' : 'City'} value={formData.city} error={errors.city}
+                    onChange={(v) => setFormData(prev => ({ ...prev, city: v }))} />
+                  <Field label={lang === 'ru' ? 'Улица' : 'Street'} value={formData.street} error={errors.street}
+                    onChange={(v) => setFormData(prev => ({ ...prev, street: v }))} />
+                  <Field label={lang === 'ru' ? 'Дом' : 'House'} value={formData.house} error={errors.house}
+                    onChange={(v) => setFormData({ ...formData, house: v })} />
+                  <Field label={lang === 'ru' ? 'Строение (если есть)' : 'Building (if any)'} value={formData.building}
+                    onChange={(v) => setFormData(prev => ({ ...prev, building: v }))} />
+                  <Field label={lang === 'ru' ? 'Корпус (если есть)' : 'Block (if any)'} value={formData.corpus}
+                    onChange={(v) => setFormData(prev => ({ ...prev, corpus: v }))} />
+                  <div>
+                    <Field label={lang === 'ru' ? 'Квартира (если есть)' : 'Apartment (if any)'} value={formData.apartment}
+                      onChange={(v) => setFormData(prev => ({
+                        ...prev,
+                        apartment: v,
+                        ...(!v.trim() ? { entrance: '', floor: '', intercom: '' } : {}),
+                      }))} />
                   </div>
-
-                  {deliveryMode === 'courier' ? (
+                  {formData.apartment.trim() && (
                     <>
-                      <AddressSuggestField
-                        kind="region"
-                        label={lang === 'ru' ? 'Область / Регион (по желанию)' : 'Oblast / Region (optional)'}
-                        value={formData.oblast}
-                        onChange={(value) => setFormData(prev => ({ ...prev, oblast: value, city: '', street: '', house: '' }))}
-                      />
-                      <AddressSuggestField
-                        kind="city"
-                        label={lang === 'ru' ? 'Город' : 'City'}
-                        value={formData.city}
-                        region={formData.oblast}
-                        error={errors.city}
-                        onChange={(value) => setFormData(prev => ({ ...prev, city: value, street: '', house: '' }))}
-                        onSelect={(item) => setFormData(prev => ({ ...prev, city: item.value, oblast: item.region || prev.oblast, street: '', house: '' }))}
-                      />
-                      <AddressSuggestField
-                        kind="street"
-                        label={lang === 'ru' ? 'Улица' : 'Street'}
-                        value={formData.street}
-                        region={formData.oblast}
-                        city={formData.city}
-                        error={errors.street}
-                        onChange={(value) => setFormData(prev => ({ ...prev, street: value, house: '' }))}
-                      />
-                      <Field label={lang === 'ru' ? 'Дом' : 'House'} value={formData.house} error={errors.house}
-                        onChange={(v) => setFormData({ ...formData, house: v })} />
-                      <div>
-                        <Field label={lang === 'ru' ? 'Квартира (если есть)' : 'Apartment (if any)'} value={formData.apartment}
-                          onChange={(v) => setFormData(prev => ({
-                            ...prev,
-                            apartment: v,
-                            ...(!v.trim() ? { entrance: '', floor: '', intercom: '' } : {}),
-                          }))} />
-                      </div>
-                      {formData.apartment.trim() && (
-                        <>
-                          <Field label={lang === 'ru' ? 'Подъезд (если есть)' : 'Entrance (if any)'} value={formData.entrance}
-                            onChange={(v) => setFormData(prev => ({ ...prev, entrance: v }))} />
-                          <Field label={lang === 'ru' ? 'Этаж (если есть)' : 'Floor (if any)'} value={formData.floor}
-                            onChange={(v) => setFormData(prev => ({ ...prev, floor: v }))} />
-                          <Field label={lang === 'ru' ? 'Домофон (если есть)' : 'Intercom (if any)'} value={formData.intercom}
-                            onChange={(v) => setFormData(prev => ({ ...prev, intercom: v }))} />
-                        </>
-                      )}
+                      <Field label={lang === 'ru' ? 'Подъезд (если есть)' : 'Entrance (if any)'} value={formData.entrance}
+                        onChange={(v) => setFormData(prev => ({ ...prev, entrance: v }))} />
+                      <Field label={lang === 'ru' ? 'Этаж (если есть)' : 'Floor (if any)'} value={formData.floor}
+                        onChange={(v) => setFormData(prev => ({ ...prev, floor: v }))} />
+                      <Field label={lang === 'ru' ? 'Домофон (если есть)' : 'Intercom (if any)'} value={formData.intercom}
+                        onChange={(v) => setFormData(prev => ({ ...prev, intercom: v }))} />
                     </>
-                  ) : (
-                    <div className="full-width">
-                      <CdekPickupMap
-                        selectedPoint={selectedPickupPoint}
-                        onSelect={handlePickupSelect}
-                        onLocationChange={handlePickupLocationChange}
-                        lang={lang}
-                      />
-                    </div>
                   )}
-                  {errors.delivery && <p className="full-width" style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '-0.25rem' }}>{errors.delivery}</p>}
                 </>
               )}
             </div>
@@ -706,16 +506,8 @@ export default function CartPage() {
                 ))}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.4rem' }}>
                   <span>{lang === 'ru' ? 'Доставка' : 'Delivery'}</span>
-                  <span style={{ color: deliveryError ? '#ef4444' : undefined }}>
-                    {deliveryLoading
-                      ? (lang === 'ru' ? 'Рассчитываем…' : 'Calculating…')
-                      : deliveryQuote
-                        ? (deliveryQuote.amount === 0
-                          ? (lang === 'ru' ? 'Бесплатно' : 'Free')
-                          : formatPrice(shippingCost))
-                        : deliveryError || (lang === 'ru'
-                          ? (deliveryMode === 'pickup' ? 'Выберите пункт выдачи' : 'Введите адрес')
-                          : (deliveryMode === 'pickup' ? 'Choose a pickup point' : 'Enter an address'))}
+                  <span>
+                    {shippingCost === 0 ? (lang === 'ru' ? 'Бесплатно' : 'Free') : formatPrice(shippingCost)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -731,36 +523,34 @@ export default function CartPage() {
                     ))}
                   </div>
                 )}
+                {orderDeliveryFootnote.trim() && (
+                  <div style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border)', color: '#8a8a8a', fontSize: '0.82rem', lineHeight: 1.8 }}>
+                    {orderDeliveryFootnote}
+                  </div>
+                )}
               </div>
             )}
           </div>}
 
-          {/* Non-Russia: show only foreign form prompt, hide everything else */}
+          {/* Non-Russia: SBP only notice */}
           {!isRussia && (
             <div style={{ marginTop: '1rem', padding: '1.25rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px' }}>
-              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}>
                   <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
                   <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
                 </svg>
                 <div>
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-primary)', margin: '0 0 4px' }}><strong>
-                    {lang === 'ru' ? 'Онлайн-оплата доступна только через СБП.' : 'Online payment is available through the Faster Payments System only.'}
+                    {lang === 'ru' ? 'Оплата доступна только через СБП.' : 'Payment is available via SBP only.'}
                   </strong></p>
                   <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
                     {lang === 'ru'
-                      ? 'Если вам нужна доставка за рубеж — оставьте заявку.'
-                      : 'If you need international delivery, send us a request.'}
+                      ? 'Для заказа из-за рубежа свяжитесь с нами напрямую.'
+                      : 'For international orders please contact us directly.'}
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowForeignCard(true)}
-                style={{ width: '100%', background: 'var(--orange)', border: 'none', color: '#fff', borderRadius: '7px', padding: '0.65rem 1rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s' }}
-              >
-                {lang === 'ru' ? 'Оставить заявку' : 'Send a request'}
-              </button>
             </div>
           )}
           {/* Consent checkboxes — only for Russia */}
@@ -821,21 +611,10 @@ export default function CartPage() {
 
         </form>
       )}
-      {showForeignCard && (
-        <ForeignCardModal
-          onClose={() => { setShowForeignCard(false); setForeignDone(false); }}
-          foreignForm={foreignForm}
-          setForeignForm={setForeignForm}
-          submitting={foreignSubmitting}
-          done={foreignDone}
-          onSubmit={handleForeignSubmit}
-          lang={lang}
-        />
-      )}
     </main>
   );
 }
-function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, done, onSubmit, lang }: {
+function _ForeignCardModal_unused({ onClose, foreignForm, setForeignForm, submitting, done, onSubmit, lang }: {
   onClose: () => void;
   foreignForm: { name: string; phone: string; email: string; contact: string; consent: boolean };
   setForeignForm: (f: { name: string; phone: string; email: string; contact: string; consent: boolean }) => void;
@@ -844,6 +623,7 @@ function ForeignCardModal({ onClose, foreignForm, setForeignForm, submitting, do
   onSubmit: (e: React.FormEvent) => void;
   lang: 'ru' | 'en';
 }) {
+  void onClose; void foreignForm; void setForeignForm; void submitting; void done; void onSubmit; void lang;
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}

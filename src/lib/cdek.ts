@@ -182,8 +182,10 @@ function positiveNumber(value: string | undefined, fallback?: number): number {
 }
 
 function getConfig(): CdekConfig {
-  const clientId = process.env.CDEK_CLIENT_ID?.trim() || '';
-  const clientSecret = process.env.CDEK_CLIENT_SECRET?.trim() || '';
+  // The current CDEK cabinet provides account credentials as ACC_ID/SEC_PASS.
+  // Keep the CLIENT_* names as a fallback for older deployments.
+  const clientId = process.env.CDEK_ACC_ID?.trim() || process.env.CDEK_CLIENT_ID?.trim() || '';
+  const clientSecret = process.env.CDEK_SEC_PASS?.trim() || process.env.CDEK_CLIENT_SECRET?.trim() || '';
   const fromCityCode = positiveInteger(process.env.CDEK_FROM_CITY_CODE, DEFAULT_FROM_CITY_CODE);
   const shipmentPoint = process.env.CDEK_SHIPMENT_POINT?.trim() || DEFAULT_SHIPMENT_POINT;
   const unitWeight = positiveInteger(process.env.CDEK_UNIT_WEIGHT_GRAMS, 500);
@@ -279,11 +281,12 @@ function joinApiErrors(errors: CdekApiError[] | undefined, fallback: string): st
 }
 
 function packageData(config: CdekConfig, itemCount: number) {
+  const height = Math.max(config.unitHeight, 1);
   return {
     weight: config.unitWeight * itemCount,
-    length: config.unitLength,
-    width: config.unitWidth,
-    height: config.unitHeight * itemCount,
+    length: Math.ceil(Math.max(config.unitLength, 1)),
+    width: Math.ceil(Math.max(config.unitWidth, 1)),
+    height: Math.ceil(height * Math.max(itemCount, 1)),
   };
 }
 

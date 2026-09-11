@@ -31,8 +31,7 @@ export const ORDER_STATUSES: Record<string, { label: string; color: string }> = 
 };
 
 export const SHIPPING_METHODS_RU = [
-  { key: 'cdek_courier', label: 'СДЭК — курьером' },
-  { key: 'cdek_pvz', label: 'СДЭК — пункт выдачи' },
+  { key: 'manual_delivery', label: 'Доставка по адресу' },
 ];
 
 export const SHIPPING_METHODS_INT = [

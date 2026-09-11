@@ -13,6 +13,7 @@ export interface TochkaPaymentOrder {
 export interface TochkaPaymentResult {
   operationId: string;
   paymentLink: string;
+  paymentLinkId: string;
   status?: string;
   raw: unknown;
 }
@@ -75,6 +76,13 @@ function extractTochkaData(response: unknown): Record<string, unknown> {
   return data && typeof data === 'object' ? data as Record<string, unknown> : objectResponse;
 }
 
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
 export async function createTochkaPayment(order: TochkaPaymentOrder): Promise<TochkaPaymentResult | null> {
   const config = getTochkaConfig();
   if (!config) return null;
@@ -111,21 +119,33 @@ export async function createTochkaPayment(order: TochkaPaymentOrder): Promise<To
 
     if (!response.ok) {
       console.error('Tochka payment error:', response.status, text);
-      return { operationId: '', paymentLink: '', raw: { __error: `Tochka ${response.status}: ${text}` } };
+      return { operationId: '', paymentLink: '', paymentLinkId: order.orderNumber, raw: { __error: `Tochka ${response.status}: ${text}` } };
     }
 
     const resultData = extractTochkaData(parsed);
-    const operationId = String(resultData.operationId || '');
-    const paymentLink = String(resultData.paymentLink || '');
+    const nestedPayment = resultData.Payment && typeof resultData.Payment === 'object'
+      ? resultData.Payment as Record<string, unknown>
+      : {};
+    const paymentLinkId = firstString(resultData.paymentLinkId, nestedPayment.paymentLinkId, order.orderNumber);
+    const operationId = firstString(resultData.operationId, nestedPayment.operationId);
+    const paymentLink = firstString(
+      resultData.paymentLink,
+      resultData.paymentUrl,
+      resultData.link,
+      nestedPayment.paymentLink,
+      nestedPayment.paymentUrl,
+      nestedPayment.link
+    );
 
-    if (!operationId || !paymentLink) {
-      console.error('Tochka payment response missing operationId/paymentLink:', parsed);
-      return { operationId, paymentLink, raw: parsed };
+    if (!paymentLink) {
+      console.error('Tochka payment response missing paymentLink:', parsed);
+      return { operationId, paymentLink, paymentLinkId, raw: parsed };
     }
 
     return {
       operationId,
       paymentLink,
+      paymentLinkId,
       status: resultData.status ? String(resultData.status) : undefined,
       raw: parsed,
     };

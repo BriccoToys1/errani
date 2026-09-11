@@ -29,6 +29,7 @@ export interface OrderEmailData {
 const SHIPPING_LABELS: Record<string, string> = {
   ozon: 'OZON',
   yandex: 'Яндекс Маркет',
+  manual_delivery: 'Доставка по адресу',
   cdek: 'СДЭК',
   cdek_courier: 'СДЭК — курьером',
   cdek_pvz: 'СДЭК — пункт выдачи',
