@@ -637,6 +637,261 @@ function IntegrationsTab({ notify, getToken }: { notify: (msg: string) => void; 
   );
 }
 
+function NotificationsTab({ getToken, notify }: { getToken: () => string | null; notify: (msg: string) => void }) {
+  const [enabled, setEnabled] = useState(true);
+  const [soundUrl, setSoundUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    fetch("/api/admin/settings?key=notificationsEnabled", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setEnabled(d.value !== "false"))
+      .catch(() => {});
+    fetch("/api/admin/settings?key=notificationSoundUrl", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (d.value) setSoundUrl(d.value); })
+      .catch(() => {});
+  }, [getToken]);
+
+  const saveSetting = async (key: string, value: string) => {
+    const token = getToken();
+    await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ key, value }),
+    });
+  };
+
+  const toggleEnabled = async (v: boolean) => {
+    setEnabled(v);
+    await saveSetting("notificationsEnabled", v ? "true" : "false");
+  };
+
+  const handleUpload = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith(".mp3") && file.type !== "audio/mpeg") {
+      notify("Разрешён только формат MP3");
+      return;
+    }
+    setUploading(true);
+    const token = getToken();
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch("/api/admin/notification-sound", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSoundUrl(data.url);
+        await saveSetting("notificationSoundUrl", data.url);
+        notify("Звук уведомлений обновлён");
+      } else {
+        notify(data.error || "Ошибка загрузки");
+      }
+    } catch {
+      notify("Ошибка сети");
+    }
+    setUploading(false);
+  };
+
+  const preview = () => {
+    if (soundUrl) new Audio(soundUrl).play().catch(() => {});
+  };
+
+  return (
+    <SettingSection title="Уведомления">
+      <Toggle
+        checked={enabled}
+        onChange={toggleEnabled}
+        label="Звуковые уведомления"
+        description="Проигрывать звук в браузере при новом заказе, письме или заявке, пока открыта админка"
+      />
+      <div style={{ marginTop: "14px" }}>
+        <label className="cms-label" style={{ display: "block" }}>
+          Файл звука (MP3, до 3MB)
+          <input
+            type="file"
+            accept="audio/mpeg,.mp3"
+            className="cms-input"
+            style={{ marginTop: "5px" }}
+            disabled={uploading}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }}
+          />
+        </label>
+        {uploading && <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "6px" }}>Загрузка...</div>}
+        {soundUrl && !uploading && (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px" }}>
+            <button className="cms-btn cms-btn-sm" onClick={preview}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: 4 }}><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Прослушать
+            </button>
+            <span style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>Звук загружен</span>
+          </div>
+        )}
+      </div>
+    </SettingSection>
+  );
+}
+
+interface PageSeo {
+  title: string;
+  description: string;
+  keywords: string;
+  ogTitle: string;
+  ogDescription: string;
+  ogImage: string;
+}
+
+const SEO_PAGE_CONFIGS = [
+  { key: "seo_global", label: "Главная страница", url: "/" },
+  { key: "seo_catalog", label: "Каталог", url: "/catalog" },
+  { key: "seo_oferta", label: "Публичная оферта", url: "/oferta" },
+  { key: "seo_privacy", label: "Политика конфиденциальности", url: "/privacy" },
+];
+
+const EMPTY_PAGE_SEO: PageSeo = { title: "", description: "", keywords: "", ogTitle: "", ogDescription: "", ogImage: "" };
+
+function SeoPagesEditor({ getToken, notify }: { getToken: () => string | null; notify: (msg: string) => void }) {
+  const [settings, setSettings] = useState<Record<string, PageSeo>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    const loadSettings = async () => {
+      const loaded: Record<string, PageSeo> = {};
+      await Promise.all(
+        SEO_PAGE_CONFIGS.map(async ({ key }) => {
+          try {
+            const res = await fetch(`/api/admin/settings?key=${encodeURIComponent(key)}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.value) {
+                const seo = JSON.parse(data.value) as Partial<{ title: string; description: string; keywords: string[]; ogTitle: string; ogDescription: string; ogImage: string }>;
+                loaded[key] = {
+                  title: seo.title || "",
+                  description: seo.description || "",
+                  keywords: Array.isArray(seo.keywords) ? seo.keywords.join(", ") : "",
+                  ogTitle: seo.ogTitle || "",
+                  ogDescription: seo.ogDescription || "",
+                  ogImage: seo.ogImage || "",
+                };
+              } else {
+                loaded[key] = { ...EMPTY_PAGE_SEO };
+              }
+            }
+          } catch {
+            loaded[key] = { ...EMPTY_PAGE_SEO };
+          }
+        })
+      );
+      setSettings(loaded);
+    };
+    loadSettings();
+  }, [getToken]);
+
+  const updateField = (key: string, field: keyof PageSeo, value: string) => {
+    setSettings(prev => ({ ...prev, [key]: { ...(prev[key] ?? EMPTY_PAGE_SEO), [field]: value } }));
+  };
+
+  const handleSave = async (key: string) => {
+    const token = getToken();
+    if (!token) return;
+    setSaving(prev => ({ ...prev, [key]: true }));
+    const seo = settings[key] ?? EMPTY_PAGE_SEO;
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          key,
+          value: JSON.stringify({
+            title: seo.title.trim(),
+            description: seo.description.trim(),
+            keywords: seo.keywords.split(",").map(k => k.trim()).filter(Boolean),
+            ogTitle: seo.ogTitle.trim(),
+            ogDescription: seo.ogDescription.trim(),
+            ogImage: seo.ogImage.trim(),
+          }),
+        }),
+      });
+      notify(res.ok ? "SEO сохранено" : "Ошибка при сохранении");
+    } catch {
+      notify("Ошибка сети");
+    }
+    setSaving(prev => ({ ...prev, [key]: false }));
+  };
+
+  return (
+    <div style={{ display: "grid", gap: "16px" }}>
+      {SEO_PAGE_CONFIGS.map(({ key, label, url }) => {
+        const seo = settings[key] ?? EMPTY_PAGE_SEO;
+        const charTitle = seo.title.length;
+        const charDesc = seo.description.length;
+        return (
+          <div key={key} className="cms-table-wrap" style={{ padding: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px", paddingBottom: "14px", borderBottom: "1px solid var(--cms-border)" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "15px", color: "var(--cms-text-heading)" }}>{label}</div>
+                <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "2px", display: "inline-block", textDecoration: "none" }}>
+                  errani.ru{url} ↗
+                </a>
+              </div>
+              <button onClick={() => handleSave(key)} disabled={saving[key]} className="cms-btn cms-btn-primary" style={{ minWidth: "100px" }}>
+                {saving[key] ? "Сохраняем…" : "Сохранить"}
+              </button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="cms-label" style={{ display: "block" }}>
+                  Title — заголовок страницы
+                  <input className="cms-input" value={seo.title} onChange={e => updateField(key, "title", e.target.value)} placeholder="Заголовок в браузере и поисковике" style={{ marginTop: "5px" }} />
+                </label>
+                <div style={{ fontSize: "11px", color: charTitle > 60 ? "var(--cms-danger)" : "var(--cms-text-muted)", marginTop: "4px" }}>
+                  {charTitle}/60 символов · рекомендуется 50–60
+                </div>
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="cms-label" style={{ display: "block" }}>
+                  Description — описание
+                  <textarea className="cms-input" value={seo.description} onChange={e => updateField(key, "description", e.target.value)} placeholder="Описание страницы для поисковика" rows={2} style={{ marginTop: "5px", resize: "vertical" }} />
+                </label>
+                <div style={{ fontSize: "11px", color: charDesc > 160 ? "var(--cms-danger)" : "var(--cms-text-muted)", marginTop: "4px" }}>
+                  {charDesc}/160 символов · рекомендуется 120–160
+                </div>
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="cms-label" style={{ display: "block" }}>
+                  Keywords — ключевые слова
+                  <input className="cms-input" value={seo.keywords} onChange={e => updateField(key, "keywords", e.target.value)} placeholder="таро, колода, errani" style={{ marginTop: "5px" }} />
+                </label>
+              </div>
+              <label className="cms-label" style={{ display: "block" }}>
+                OG Title
+                <input className="cms-input" value={seo.ogTitle} onChange={e => updateField(key, "ogTitle", e.target.value)} placeholder="Заголовок для соцсетей" style={{ marginTop: "5px" }} />
+              </label>
+              <label className="cms-label" style={{ display: "block" }}>
+                OG Image URL
+                <input className="cms-input" value={seo.ogImage} onChange={e => updateField(key, "ogImage", e.target.value)} placeholder="/media/preview.jpg" style={{ marginTop: "5px" }} />
+              </label>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label className="cms-label" style={{ display: "block" }}>
+                  OG Description
+                  <textarea className="cms-input" value={seo.ogDescription} onChange={e => updateField(key, "ogDescription", e.target.value)} placeholder="Описание для соцсетей" rows={2} style={{ marginTop: "5px", resize: "vertical" }} />
+                </label>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function AdminSettingsPage() {
   const router = useRouter();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -654,6 +909,12 @@ export default function AdminSettingsPage() {
   const [robotsText, setRobotsText] = useState("User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api\n\nSitemap: https://errani.ru/sitemap.xml");
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab) setActiveTab(tab);
+  }, []);
 
   useEffect(() => {
     const token = getToken();
@@ -833,6 +1094,7 @@ export default function AdminSettingsPage() {
   const TABS = [
     { id: "general", label: "Основное" },
     { id: "integrations", label: "Интеграции" },
+    { id: "notifications", label: "Уведомления" },
     { id: "sessions", label: "Сессии" },
     { id: "seo", label: "SEO" },
   ];
@@ -1077,8 +1339,14 @@ export default function AdminSettingsPage() {
             </div>
           )}
 
+          {activeTab === "notifications" && (
+            <NotificationsTab getToken={getToken} notify={notify} />
+          )}
+
           {activeTab === "seo" && (
             <div style={{ display: "grid", gap: "16px" }}>
+              <SeoPagesEditor getToken={getToken} notify={notify} />
+
               <SettingSection title="Глобальные настройки сайта">
                 <div style={{ display: "grid", gap: "12px" }}>
                   <label className="cms-label">

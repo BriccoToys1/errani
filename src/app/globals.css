@@ -2681,9 +2681,11 @@ select.form-field {
   }
   .home-hero-full-actions {
     width: 100%;
+    justify-content: center;
   }
   .home-hero-full-actions .preorder-btn-primary {
-    flex: 1 1 auto;
+    flex: 0 0 auto;
+    width: fit-content;
     justify-content: center;
   }
 }

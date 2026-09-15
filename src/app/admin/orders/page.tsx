@@ -635,7 +635,7 @@ export default function AdminOrdersPage() {
         <div className="cms-header">
           <h1 className="cms-header-title">
             Заказы
-            {newCount > 0 && <span className="cms-badge cms-badge-blue" style={{ marginLeft: "10px", fontSize: "12px" }}>{newCount}</span>}
+            {newCount > 0 && <span className="cms-badge cms-badge-notify" style={{ marginLeft: "10px", fontSize: "12px" }}>{newCount}</span>}
           </h1>
           <div className="cms-header-actions">
             <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={() => setShowNewOrder(true)} title="Добавить">

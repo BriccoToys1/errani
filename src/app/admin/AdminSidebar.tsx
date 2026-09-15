@@ -31,7 +31,6 @@ const NAV_ITEMS = [
   { href: '/admin/users', icon: 'users', label: 'Клиенты' },
   { href: '/admin/reviews', icon: 'reviews', label: 'Отзывы', countKey: 'newReviews' },
   { section: '' },
-  { href: '/admin/seo', icon: 'seo', label: 'SEO' },
   { href: '/admin/settings', icon: 'settings', label: 'Настройки' },
 ];
 
@@ -76,6 +75,22 @@ export function AdminSidebar() {
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevTotalRef = useRef<number | null>(null);
+  const notifySettingsRef = useRef<{ enabled: boolean; url: string }>({ enabled: false, url: '' });
+
+  useEffect(() => {
+    const token = localStorage.getItem('admin_token');
+    if (!token) return;
+    Promise.all([
+      fetch('/api/admin/settings?key=notificationsEnabled', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
+      fetch('/api/admin/settings?key=notificationSoundUrl', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
+    ]).then(([enabledRes, urlRes]) => {
+      notifySettingsRef.current = {
+        enabled: enabledRes?.value !== 'false',
+        url: urlRes?.value || '',
+      };
+    });
+  }, []);
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -91,6 +106,12 @@ export function AdminSidebar() {
           newEmails: data.newEmails || 0,
           newReviews: data.newReviews || 0,
         });
+        const total = (data.newOrders || 0) + (data.newInquiries || 0) + (data.newWaitlist || 0) + (data.newEmails || 0) + (data.newReviews || 0);
+        const { enabled, url } = notifySettingsRef.current;
+        if (prevTotalRef.current !== null && total > prevTotalRef.current && enabled && url) {
+          new Audio(url).play().catch(() => {});
+        }
+        prevTotalRef.current = total;
       }
     } catch { /* ignore */ }
   }, []);

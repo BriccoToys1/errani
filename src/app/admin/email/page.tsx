@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AdminSidebar } from "../AdminSidebar";
 
@@ -49,7 +49,7 @@ export default function AdminEmailPage() {
   const router = useRouter();
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
-  const [folder, setFolder] = useState("all");
+  const [folder, setFolder] = useState("inbox");
   const [search, setSearch] = useState("");
   const [activeContact, setActiveContact] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
@@ -58,7 +58,29 @@ export default function AdminEmailPage() {
   const [composing, setComposing] = useState(false);
   const [replyTo, setReplyTo] = useState<Email | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [spamCount, setSpamCount] = useState(0);
+  const [mailboxOpen, setMailboxOpen] = useState(false);
+  const mailboxRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!mailboxOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (mailboxRef.current && !mailboxRef.current.contains(e.target as Node)) setMailboxOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [mailboxOpen]);
+
+  // Auto-grow the reply composer up to ~7 lines, then scroll.
+  useEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    const maxHeight = 152; // roughly 7 lines
+    el.style.height = "auto";
+    const next = Math.min(el.scrollHeight, maxHeight);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [replyDraft]);
 
   // Compose state
   const [compTo, setCompTo] = useState("");
@@ -93,7 +115,6 @@ export default function AdminEmailPage() {
         const data = await res.json();
         setEmails(data.emails || []);
         setUnreadCount(data.unreadCount || 0);
-        setSpamCount(data.spamCount || 0);
       }
     } catch { /* ignore */ }
     setLoading(false);
@@ -338,9 +359,26 @@ export default function AdminEmailPage() {
       <AdminSidebar />
       <main className="cms-main">
         <div className="cms-header">
-          <h1 className="cms-header-title">
+          <h1 className="cms-header-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             Почта
-            {unreadCount > 0 && <span className="cms-badge cms-badge-blue" style={{ marginLeft: "10px", fontSize: "12px" }}>{unreadCount}</span>}
+            {unreadCount > 0 && <span className="cms-badge cms-badge-notify" style={{ fontSize: "12px" }}>{unreadCount}</span>}
+            <div className="mail-mailbox-select" ref={mailboxRef}>
+              <button
+                type="button"
+                className="mail-mailbox-btn"
+                onClick={() => setMailboxOpen(o => !o)}
+              >
+                mail@errani.ru
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: mailboxOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+              {mailboxOpen && (
+                <div className="mail-mailbox-dropdown">
+                  <button type="button" className="mail-mailbox-option active">mail@errani.ru</button>
+                </div>
+              )}
+            </div>
           </h1>
           <div className="cms-header-actions">
             <button className="cms-btn cms-btn-sm" onClick={openNewsletter} title="Рассылка">
@@ -358,11 +396,16 @@ export default function AdminEmailPage() {
             <button className="cms-btn cms-btn-sm" onClick={markAllRead} title="Отметить все как прочитанные">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
-            <button className="cms-btn cms-btn-sm" onClick={() => { setSyncing(true); syncEmails(true).then(() => { setLoading(true); fetchEmails(); }); }} title="Синхронизировать с Resend" disabled={syncing}>
-              {syncing ? <span style={{ fontSize: 11 }}>...</span> : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>}
-            </button>
-            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchEmails(); }} title="Обновить">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            <button
+              className="cms-btn cms-btn-sm"
+              onClick={() => { setSyncing(true); syncEmails(true).then(() => { setLoading(true); fetchEmails(); }); }}
+              title="Обновить и синхронизировать с Resend"
+              disabled={syncing}
+            >
+              {syncing
+                ? <span style={{ fontSize: 11 }}>...</span>
+                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              }
             </button>
           </div>
         </div>
@@ -373,54 +416,31 @@ export default function AdminEmailPage() {
               {syncResult}
             </div>
           )}
-          {/* Toolbar */}
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" }}>
-            <div style={{ display: "flex", gap: "4px" }}>
-              {[
-                { key: "all", label: "Все" },
-                { key: "inbox", label: "Входящие", count: unreadCount },
-                { key: "sent", label: "Отправленные" },
-                { key: "spam", label: "Спам", count: spamCount },
-              ].map(f => (
-                <button
-                  key={f.key}
-                  className={`cms-btn cms-btn-sm ${folder === f.key ? "cms-btn-primary" : ""}`}
-                  onClick={() => setFolder(f.key)}
-                  style={{ fontSize: 12, position: 'relative', display: 'flex', alignItems: 'center', gap: 5 }}
-                >
-                  {f.label}
-                  {(f.count ?? 0) > 0 && (
-                    <span style={{
-                      background: f.key === 'spam' ? '#ef4444' : 'var(--cms-accent)',
-                      color: '#fff',
-                      borderRadius: '50%',
-                      minWidth: 16,
-                      height: 16,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '0 4px',
-                    }}>
-                      {(f.count ?? 0) > 99 ? '99+' : f.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <input
-              className="cms-input cms-input-sm"
-              placeholder="Поиск..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "180px", marginLeft: "auto" }}
-            />
-          </div>
 
           {/* Conversations */}
           <div className="messenger-layout">
             <div className="messenger-list">
+              <div className="mail-list-header">
+                <div className="mail-segment">
+                  <div className="mail-segment-indicator" style={{ transform: folder === "sent" ? "translateX(100%)" : "translateX(0)" }} />
+                  {[{ key: "inbox", label: "Входящие" }, { key: "sent", label: "Отправленные" }].map(f => (
+                    <button
+                      key={f.key}
+                      className={`mail-segment-btn${folder === f.key ? " active" : ""}`}
+                      onClick={() => setFolder(f.key)}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  className="cms-input cms-input-sm mail-list-search"
+                  placeholder="Поиск..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div className="mail-list-scroll">
               {conversations.map(conv => (
                 <div
                   key={conv.contact}
@@ -444,6 +464,7 @@ export default function AdminEmailPage() {
               {conversations.length === 0 && (
                 <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--cms-text-muted)", fontSize: 13 }}>Нет писем</div>
               )}
+              </div>
             </div>
 
             <div className="messenger-thread">
@@ -478,8 +499,9 @@ export default function AdminEmailPage() {
                   </div>
                   <div className="messenger-composer">
                     <textarea
-                      className="cms-textarea"
-                      rows={2}
+                      ref={composerRef}
+                      className="messenger-composer-textarea"
+                      rows={1}
                       placeholder="Написать сообщение..."
                       value={replyDraft}
                       onChange={e => setReplyDraft(e.target.value)}
@@ -490,8 +512,8 @@ export default function AdminEmailPage() {
                         }
                       }}
                     />
-                    <button className="cms-btn cms-btn-primary" onClick={handleInlineSend} disabled={replySending || !replyDraft.trim()}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    <button className="cms-btn cms-btn-primary messenger-send-btn" onClick={handleInlineSend} disabled={replySending || !replyDraft.trim()}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                     </button>
                   </div>
                 </>

@@ -161,7 +161,7 @@ export default function AdminInquiriesPage() {
         <div className="cms-header">
           <h1 className="cms-header-title">
             Заявки
-            {newCount > 0 && <span className="cms-badge cms-badge-blue" style={{ marginLeft: "10px", fontSize: "12px" }}>{newCount} новых</span>}
+            {newCount > 0 && <span className="cms-badge cms-badge-notify" style={{ marginLeft: "10px", fontSize: "12px" }}>{newCount} новых</span>}
           </h1>
           <div className="cms-header-actions">
             <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>{inquiries.length} всего</span>
