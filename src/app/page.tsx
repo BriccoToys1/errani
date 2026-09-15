@@ -22,47 +22,46 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Pink Gothic Vibe Tarot Hero */}
-      <main className="preorder-hero">
-        <div className="preorder-content">
-          <div className="preorder-text">
-            <h1 className="preorder-title anim-fade-up anim-fade-up-d2">
-              <em><span style={{ color: '#ff6eb4' }}>Gothic</span></em><br />
-              <span style={{ color: '#ff6eb4' }}>Vibe</span>
-            </h1>
+      {/* Full-bleed welcome hero */}
+      <main className="home-hero-full">
+        <div className="home-hero-full-bg">
+          <Image
+            src="/api/media/438ddc5a-a49c-4039-8c2a-efd52a8b64c1"
+            alt="Errani"
+            fill
+            priority
+            sizes="100vw"
+            quality={85}
+            className="home-hero-full-img"
+          />
+          <div className="home-hero-full-overlay" />
+        </div>
 
-            <p className="preorder-desc anim-fade-up anim-fade-up-d3">
-              {lang === 'ru'
-                ? 'Тёмная романтика и нежная эстетика в одной колоде. Погрузись в мир готической нежности.'
-                : 'Dark romance and tender aesthetics in one deck. Immerse yourself in the world of gothic tenderness.'}
-            </p>
+        <div className="home-hero-full-content anim-fade-up anim-fade-up-d2">
+          <h1 className="preorder-title">
+            <em><span style={{ color: '#ff6eb4' }}>Gothic</span></em><br />
+            <span style={{ color: '#ff6eb4' }}>Vibe</span>
+          </h1>
 
-            {pgvtPrice !== null && (
-              <div className="preorder-price anim-fade-up anim-fade-up-d3">
-                {formatPrice(pgvtPrice)}
-              </div>
-            )}
+          <p className="preorder-desc">
+            {lang === 'ru'
+              ? 'Тёмная романтика и нежная эстетика в одной колоде. Погрузись в мир готической нежности.'
+              : 'Dark romance and tender aesthetics in one deck. Immerse yourself in the world of gothic tenderness.'}
+          </p>
 
-            <div className="preorder-actions anim-fade-up anim-fade-up-d4">
-              <Link href="/gothic-vibe-tarot" className="preorder-btn-primary preorder-btn-pink">
-                {lang === 'ru' ? 'Предзаказ' : 'Pre-order'}
-              </Link>
+          {pgvtPrice !== null && (
+            <div className="preorder-price">
+              {formatPrice(pgvtPrice)}
             </div>
-          </div>
+          )}
 
-          <div className="preorder-visual anim-fade-up anim-fade-up-d2">
-            <div className="preorder-img-wrap">
-              <Image
-                src="/media/PRIESTESS.jpg"
-                alt="Pink Gothic Vibe Tarot"
-                fill
-                className="preorder-img"
-                priority
-                sizes="(max-width: 768px) 80vw, 42vw"
-                quality={85}
-              />
-              <div className="preorder-img-overlay" />
-            </div>
+          <div className="home-hero-full-actions">
+            <Link href="/gothic-vibe-tarot" className="preorder-btn-primary preorder-btn-pink">
+              {lang === 'ru' ? 'Предзаказ' : 'Pre-order'}
+            </Link>
+            <Link href="/catalog" className="preorder-btn-primary home-hero-shop-btn">
+              {lang === 'ru' ? 'В каталог' : 'Shop'}
+            </Link>
           </div>
         </div>
       </main>

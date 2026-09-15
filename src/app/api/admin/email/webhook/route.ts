@@ -10,6 +10,20 @@ import { withPrismaRetry } from '@/lib/prisma-retry';
 // Also needs MX record: errani.ru MX 10 inbound-smtp.resend.com
 // And Resend Inbound domain: errani.ru
 
+async function getApiKey(): Promise<string> {
+  try {
+    const s = await withPrismaRetry(
+      () => prisma.siteSettings.findUnique({ where: { key: 'resend_api_key' } }),
+      2, 80
+    );
+    const dbKey = s?.value?.trim();
+    if (dbKey) return dbKey;
+  } catch {
+    // Fall back to the server environment when the database is unavailable.
+  }
+  return process.env.RESEND_API_KEY?.trim() || '';
+}
+
 // GET: health check / webhook verification
 export async function GET() {
   return NextResponse.json({ status: 'ok', webhook: 'email' });
@@ -30,7 +44,8 @@ export async function POST(req: NextRequest) {
         80
       ).then((setting) => setting?.value || '').catch(() => ''));
 
-    const resend = new Resend(process.env.RESEND_API_KEY || 'resend-webhook');
+    const apiKey = await getApiKey();
+    const resend = new Resend(apiKey || 'resend-webhook');
     const signatureHeaders = {
       id: req.headers.get('svix-id') || req.headers.get('x-svix-id') || '',
       timestamp: req.headers.get('svix-timestamp') || req.headers.get('x-svix-timestamp') || '',
@@ -96,9 +111,8 @@ export async function POST(req: NextRequest) {
       }
 
       const subject = String(emailData.subject || '(без темы)').slice(0, 500);
-      const html = String(emailData.html || emailData.body || '').slice(0, 1_000_000);
-      const text = String(emailData.text || emailData.text_body || '').slice(0, 1_000_000);
-      const messageId = String(emailData.message_id || emailData.email_id || emailData.id || '').trim();
+      const emailId = String(emailData.email_id || emailData.id || '').trim();
+      const messageId = String(emailData.message_id || emailId || '').trim();
       const inReplyTo = String(emailData.in_reply_to || emailData.reply_to || '').trim();
 
       if (messageId) {
@@ -108,6 +122,22 @@ export async function POST(req: NextRequest) {
         });
         if (existing) {
           return NextResponse.json({ received: true, duplicate: true });
+        }
+      }
+
+      // The webhook payload only carries metadata; fetch the full body separately.
+      let html = String(emailData.html || emailData.body || '').slice(0, 1_000_000);
+      let text = String(emailData.text || emailData.text_body || '').slice(0, 1_000_000);
+      if (!html && !text && emailId && apiKey) {
+        try {
+          const { data: fullData, error: fullError } = await resend.emails.receiving.get(emailId);
+          if (!fullError && fullData) {
+            const full = fullData as unknown as Record<string, unknown>;
+            html = String(full.html || full.body || '').slice(0, 1_000_000);
+            text = String(full.text || full.text_body || '').slice(0, 1_000_000);
+          }
+        } catch {
+          // fall through to placeholder body below
         }
       }
 

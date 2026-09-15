@@ -2589,6 +2589,89 @@ select.form-field {
    PREORDER HERO — Main Page
    ============================================================ */
 
+/* Full-bleed welcome hero (photo covers the entire section) */
+.home-hero-full {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  background: #000;
+}
+
+.home-hero-full-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.home-hero-full-img {
+  object-fit: cover;
+  object-position: center;
+}
+
+.home-hero-full-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.85) 0%,
+    rgba(0, 0, 0, 0.35) 45%,
+    rgba(0, 0, 0, 0.1) 100%
+  );
+  pointer-events: none;
+}
+
+.home-hero-full-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 clamp(1.5rem, 5vw, 5rem) clamp(3.5rem, 8vw, 5.5rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.home-hero-full-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.home-hero-shop-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: none;
+}
+.home-hero-shop-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #fff;
+  transform: translateY(-2px);
+  box-shadow: none;
+}
+
+@media (max-width: 720px) {
+  .home-hero-full {
+    min-height: 78svh;
+    align-items: flex-end;
+  }
+  .home-hero-full-content {
+    padding-bottom: 2.5rem;
+    gap: 0.9rem;
+  }
+  .home-hero-full-actions {
+    width: 100%;
+  }
+  .home-hero-full-actions .preorder-btn-primary {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
 .preorder-hero {
   position: relative;
   min-height: 100svh;
