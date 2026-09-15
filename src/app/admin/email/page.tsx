@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { AdminSidebar } from "../AdminSidebar";
 
@@ -34,13 +34,26 @@ function buildSafeEmailDocument(html: string, text: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src 'self'"><style>@font-face{font-family:Montserrat;src:url('/fonts/Montserrat.woff2') format('woff2');font-weight:100 900;font-style:normal;font-display:swap}html{color-scheme:dark}body{margin:0;padding:16px;background:#111116;color:#e8e8ed;font:14px/1.65 Montserrat,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow-wrap:anywhere}a{color:#ff9a62}img{max-width:100%;height:auto}pre{white-space:pre-wrap;font:inherit}</style></head><body>${html || `<pre>${fallback || "(без текста)"}</pre>`}</body></html>`;
 }
 
+// Conversations are grouped by the other party's email address (first address if several).
+function normalizeAddr(raw: string): string {
+  const first = (raw || "").split(",")[0].trim();
+  const match = first.match(/[^\s<>]+@[^\s<>]+/);
+  return (match ? match[0] : first).toLowerCase();
+}
+
+function contactKey(email: Email): string {
+  return normalizeAddr(email.direction === "inbound" ? email.fromAddr : email.toAddr);
+}
+
 export default function AdminEmailPage() {
   const router = useRouter();
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [folder, setFolder] = useState("all");
   const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<Email | null>(null);
+  const [activeContact, setActiveContact] = useState<string | null>(null);
+  const [replyDraft, setReplyDraft] = useState("");
+  const [replySending, setReplySending] = useState(false);
   const [notification, setNotification] = useState("");
   const [composing, setComposing] = useState(false);
   const [replyTo, setReplyTo] = useState<Email | null>(null);
@@ -114,27 +127,69 @@ export default function AdminEmailPage() {
 
   const notify = (msg: string) => { setNotification(msg); setTimeout(() => setNotification(""), 3000); };
 
-  const openEmail = async (email: Email) => {
-    setSelected(email);
-    if (!email.isRead && email.direction === "inbound") {
-      const token = getToken();
-      await fetch("/api/admin/email", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ids: [email.id] }),
-      });
-      setEmails(prev => prev.map(e => e.id === email.id ? { ...e, isRead: true } : e));
-      setUnreadCount(prev => Math.max(0, prev - 1));
+  // Group all emails into per-contact conversations, newest thread first.
+  const conversations = useMemo(() => {
+    const map = new Map<string, Email[]>();
+    for (const e of emails) {
+      const key = contactKey(e);
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(e);
     }
+    return Array.from(map.entries())
+      .map(([contact, msgs]) => {
+        const messages = [...msgs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        const last = messages[messages.length - 1];
+        const unread = messages.filter(m => m.direction === "inbound" && !m.isRead).length;
+        return { contact, messages, last, unread };
+      })
+      .sort((a, b) => new Date(b.last.createdAt).getTime() - new Date(a.last.createdAt).getTime());
+  }, [emails]);
+
+  const activeConversation = conversations.find(c => c.contact === activeContact) || null;
+
+  const openConversation = async (contact: string) => {
+    setActiveContact(contact);
+    const conv = conversations.find(c => c.contact === contact);
+    const unreadIds = conv?.messages.filter(m => m.direction === "inbound" && !m.isRead).map(m => m.id) || [];
+    if (unreadIds.length === 0) return;
+    const token = getToken();
+    await fetch("/api/admin/email", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ids: unreadIds }),
+    });
+    setEmails(prev => prev.map(e => unreadIds.includes(e.id) ? { ...e, isRead: true } : e));
+    setUnreadCount(prev => Math.max(0, prev - unreadIds.length));
   };
 
-  const handleReply = (email: Email) => {
-    setReplyTo(email);
-    setComposing(true);
-    setCompTo(email.direction === "inbound" ? email.fromAddr : email.toAddr);
-    setCompSubject(email.subject.startsWith("Re: ") ? email.subject : `Re: ${email.subject}`);
-    setCompBody("");
-    setSelected(null);
+  const handleInlineSend = async () => {
+    if (!activeConversation || !replyDraft.trim()) return;
+    setReplySending(true);
+    const token = getToken();
+    const last = activeConversation.messages[activeConversation.messages.length - 1];
+    try {
+      const res = await fetch("/api/admin/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          to: activeContact,
+          subject: last.subject?.startsWith("Re: ") ? last.subject : `Re: ${last.subject || "(без темы)"}`,
+          body: replyDraft.replace(/\n/g, "<br>"),
+          replyTo: last.id,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setReplyDraft("");
+        fetchEmails();
+      } else {
+        notify(data.error || "Ошибка отправки");
+      }
+    } catch {
+      notify("Ошибка сети");
+    }
+    setReplySending(false);
   };
 
   const handleCompose = () => {
@@ -143,7 +198,6 @@ export default function AdminEmailPage() {
     setCompTo("");
     setCompSubject("");
     setCompBody("");
-    setSelected(null);
   };
 
   const handleSend = async () => {
@@ -264,7 +318,6 @@ export default function AdminEmailPage() {
         body: JSON.stringify({ ids }),
       });
       setEmails(prev => prev.filter(e => !ids.includes(e.id)));
-      if (selected && ids.includes(selected.id)) setSelected(null);
       notify("Удалено");
     } catch { /* ignore */ }
   };
@@ -365,63 +418,87 @@ export default function AdminEmailPage() {
             />
           </div>
 
-          {/* Email List */}
-          <div className="cms-table-wrap">
-            <table className="cms-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 24 }}></th>
-                  <th style={{ width: 180 }}>От / Кому</th>
-                  <th>Тема</th>
-                  <th style={{ width: 80 }}>Дата</th>
-                  <th style={{ width: 60 }}>Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {emails.map(email => (
-                  <tr
-                    key={email.id}
-                    style={{
-                      cursor: "pointer",
-                      fontWeight: !email.isRead && email.direction === "inbound" ? 600 : 400,
-                      background: selected?.id === email.id ? "var(--cms-surface-hover)" : undefined,
-                    }}
-                    onClick={() => openEmail(email)}
-                  >
-                    <td>
-                      {email.direction === "inbound" ? (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cms-accent)" strokeWidth="2"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--cms-text-muted)" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                      )}
-                    </td>
-                    <td style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180 }}>
-                      {email.direction === "inbound" ? email.fromAddr : email.toAddr}
-                    </td>
-                    <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {email.subject || "(без темы)"}
-                      <span style={{ color: "var(--cms-text-muted)", fontWeight: 400, marginLeft: 8, fontSize: 11 }}>
-                        {email.textBody.substring(0, 60)}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>
-                      {formatDate(email.createdAt)}
-                    </td>
-                    <td onClick={e => e.stopPropagation()}>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => handleReply(email)} title="Ответить">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 00-4-4H4"/></svg>
-                      </button>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => deleteEmail([email.id])} title="Удалить" style={{ color: "var(--cms-danger)" }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {emails.length === 0 && (
-                  <tr><td colSpan={5} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Нет писем</td></tr>
-                )}
-              </tbody>
-            </table>
+          {/* Conversations */}
+          <div className="messenger-layout">
+            <div className="messenger-list">
+              {conversations.map(conv => (
+                <div
+                  key={conv.contact}
+                  className={`messenger-list-item${activeContact === conv.contact ? " active" : ""}`}
+                  onClick={() => openConversation(conv.contact)}
+                >
+                  <div className="messenger-avatar">{conv.contact.charAt(0).toUpperCase()}</div>
+                  <div className="messenger-list-meta">
+                    <div className="messenger-list-top">
+                      <span className="messenger-list-name">{conv.contact}</span>
+                      <span className="messenger-list-time">{formatDate(conv.last.createdAt)}</span>
+                    </div>
+                    <div className="messenger-list-preview">
+                      {conv.last.direction === "outbound" ? "Вы: " : ""}
+                      {conv.last.subject || conv.last.textBody.substring(0, 60) || "(без темы)"}
+                    </div>
+                  </div>
+                  {conv.unread > 0 && <span className="messenger-list-badge">{conv.unread}</span>}
+                </div>
+              ))}
+              {conversations.length === 0 && (
+                <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--cms-text-muted)", fontSize: 13 }}>Нет писем</div>
+              )}
+            </div>
+
+            <div className="messenger-thread">
+              {activeConversation ? (
+                <>
+                  <div className="messenger-thread-header">
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{activeConversation.contact}</span>
+                    <button
+                      className="cms-btn cms-btn-xs cms-btn-ghost"
+                      onClick={() => deleteEmail(activeConversation.messages.map(m => m.id))}
+                      title="Удалить переписку"
+                      style={{ color: "var(--cms-danger)" }}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                    </button>
+                  </div>
+                  <div className="messenger-messages">
+                    {activeConversation.messages.map(m => (
+                      <div key={m.id} className={`messenger-bubble-row ${m.direction === "outbound" ? "out" : "in"}`}>
+                        <div className={`messenger-bubble ${m.direction === "outbound" ? "out" : "in"}`}>
+                          <div className="messenger-bubble-subject">{m.subject || "(без темы)"}</div>
+                          <iframe
+                            title={`Письмо: ${m.subject || "без темы"}`}
+                            sandbox=""
+                            srcDoc={buildSafeEmailDocument(m.body, m.textBody)}
+                            className="messenger-bubble-frame"
+                          />
+                          <div className="messenger-bubble-time">{new Date(m.createdAt).toLocaleString("ru-RU")}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="messenger-composer">
+                    <textarea
+                      className="cms-textarea"
+                      rows={2}
+                      placeholder="Написать сообщение..."
+                      value={replyDraft}
+                      onChange={e => setReplyDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleInlineSend();
+                        }
+                      }}
+                    />
+                    <button className="cms-btn cms-btn-primary" onClick={handleInlineSend} disabled={replySending || !replyDraft.trim()}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="messenger-empty">Выберите переписку слева</div>
+              )}
+            </div>
           </div>
 
           <div style={{ marginTop: 12, fontSize: 11, color: "var(--cms-text-muted)" }}>
@@ -429,47 +506,6 @@ export default function AdminEmailPage() {
           </div>
         </div>
       </main>
-
-      {/* Email View Modal */}
-      {selected && !composing && (
-        <div className="cms-modal-overlay" onClick={() => setSelected(null)}>
-          <div className="cms-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 640 }}>
-            <div className="cms-modal-header">
-              <h3 style={{ fontSize: 14, fontWeight: 600 }}>{selected.subject || "(без темы)"}</h3>
-              <button className="cms-modal-close" onClick={() => setSelected(null)}>&times;</button>
-            </div>
-            <div className="cms-modal-body">
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, fontSize: 12 }}>
-                <div>
-                  <strong>{selected.direction === "inbound" ? "От:" : "Кому:"}</strong>{" "}
-                  <span style={{ color: "var(--cms-accent)" }}>
-                    {selected.direction === "inbound" ? selected.fromAddr : selected.toAddr}
-                  </span>
-                </div>
-                <div style={{ color: "var(--cms-text-muted)" }}>
-                  {new Date(selected.createdAt).toLocaleString("ru-RU")}
-                </div>
-              </div>
-              <iframe
-                title={`Письмо: ${selected.subject || "без темы"}`}
-                sandbox=""
-                srcDoc={buildSafeEmailDocument(selected.body, selected.textBody)}
-                className="cms-email-preview"
-              />
-            </div>
-            <div className="cms-modal-actions" style={{ display: "flex", gap: 8 }}>
-              <button className="cms-btn cms-btn-primary" onClick={() => handleReply(selected)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}>
-                  <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 00-4-4H4"/>
-                </svg>
-                Ответить
-              </button>
-              <button className="cms-btn cms-btn-danger" onClick={() => deleteEmail([selected.id])}>Удалить</button>
-              <button className="cms-btn" onClick={() => setSelected(null)}>Закрыть</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Compose Modal */}
       {composing && (
