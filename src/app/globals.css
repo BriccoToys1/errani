@@ -2659,12 +2659,11 @@ select.form-field {
 
 .home-hero-shop-btn {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: none;
   box-shadow: none;
 }
 .home-hero-shop-btn:hover {
   background: rgba(255, 255, 255, 0.1);
-  border-color: #fff;
   transform: translateY(-2px);
   box-shadow: none;
 }
@@ -2919,7 +2918,7 @@ select.form-field {
   width: 36px;
   height: 36px;
   flex: 0 0 36px;
-  color: #ff6db4;
+  color: var(--orange);
 }
 
 .home-feature-icon svg {
