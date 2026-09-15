@@ -2631,7 +2631,19 @@ select.form-field {
   padding: 0 clamp(1.5rem, 5vw, 5rem) clamp(3.5rem, 8vw, 5.5rem);
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 1.2rem;
+  text-align: center;
+}
+
+.home-hero-full-title {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3.6rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: #fff;
+  max-width: 780px;
 }
 
 .home-hero-full-actions {
@@ -2639,6 +2651,7 @@ select.form-field {
   gap: 1rem;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center;
   margin-top: 0.5rem;
 }
 

@@ -3,22 +3,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useEffect, useState } from 'react';
 export default function HomePage() {
   const { lang } = useLanguage();
-  const [pgvtPrice, setPgvtPrice] = useState<number | null>(null);
-
-  useEffect(() => {
-    fetch('/api/products')
-      .then(r => r.json())
-      .then((list: Array<{ slug: string; price: number }>) => {
-        const pgvt = list.find(p => p.slug === 'gothic-vibe-tarot' || p.slug === 'pgvt');
-        if (pgvt) setPgvtPrice(pgvt.price);
-      })
-      .catch(() => {});
-  }, []);
-
-  const formatPrice = (p: number) => `${p.toLocaleString('ru-RU')} ₽`;
 
   return (
     <>
@@ -38,27 +24,11 @@ export default function HomePage() {
         </div>
 
         <div className="home-hero-full-content anim-fade-up anim-fade-up-d2">
-          <h1 className="preorder-title">
-            <em><span style={{ color: '#ff6eb4' }}>Gothic</span></em><br />
-            <span style={{ color: '#ff6eb4' }}>Vibe</span>
+          <h1 className="home-hero-full-title">
+            {lang === 'ru' ? 'Сделай шаг навстречу иному миру' : 'Step Into Another World'}
           </h1>
 
-          <p className="preorder-desc">
-            {lang === 'ru'
-              ? 'Тёмная романтика и нежная эстетика в одной колоде. Погрузись в мир готической нежности.'
-              : 'Dark romance and tender aesthetics in one deck. Immerse yourself in the world of gothic tenderness.'}
-          </p>
-
-          {pgvtPrice !== null && (
-            <div className="preorder-price">
-              {formatPrice(pgvtPrice)}
-            </div>
-          )}
-
           <div className="home-hero-full-actions">
-            <Link href="/gothic-vibe-tarot" className="preorder-btn-primary preorder-btn-pink">
-              {lang === 'ru' ? 'Предзаказ' : 'Pre-order'}
-            </Link>
             <Link href="/catalog" className="preorder-btn-primary home-hero-shop-btn">
               {lang === 'ru' ? 'В каталог' : 'Shop'}
             </Link>
