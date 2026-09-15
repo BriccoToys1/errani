@@ -523,9 +523,6 @@ export default function AdminEmailPage() {
             </div>
           </div>
 
-          <div style={{ marginTop: 12, fontSize: 11, color: "var(--cms-text-muted)" }}>
-            mail@errani.ru · {emails.length} писем
-          </div>
         </div>
       </main>
 

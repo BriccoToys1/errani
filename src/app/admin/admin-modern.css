@@ -188,6 +188,24 @@ body:has(.cms-login-wrap) {
 .cms-btn:disabled { opacity: 0.42; cursor: not-allowed; transform: none; }
 .cms-btn-sm { min-height: 36px; }
 .cms-btn-xs { min-height: 32px; padding: 5px 9px; }
+
+.cms-header-actions .cms-btn,
+.cms-header-actions .cms-btn-sm,
+.cms-header-actions .cms-btn-xs,
+.mail-mailbox-btn {
+  border-radius: 999px;
+}
+.cms-header-actions .cms-btn,
+.cms-header-actions .cms-btn-sm,
+.cms-header-actions .cms-btn-xs {
+  min-width: 36px;
+  justify-content: center;
+}
+.cms-header-actions .cms-btn svg,
+.cms-header-actions .cms-btn-sm svg,
+.cms-header-actions .cms-btn-xs svg {
+  flex-shrink: 0;
+}
 .cms-btn-primary {
   color: #16110d;
   border-color: transparent;
@@ -397,16 +415,23 @@ body:has(.cms-login-wrap) {
 .messenger-bubble-row { display: flex; }
 .messenger-bubble-row.out { justify-content: flex-end; }
 .messenger-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   max-width: 72%;
-  border-radius: 16px;
-  padding: 10px 14px 8px;
+  border-radius: 18px;
+  padding: 10px 12px 8px;
   background: var(--cms-surface-elevated);
   border: 1px solid var(--cms-border);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
 }
-.messenger-bubble.out { border-color: rgba(255, 122, 47, 0.4); box-shadow: inset 3px 0 0 var(--cms-accent); }
-.messenger-bubble-subject { font-size: 11px; font-weight: 700; color: var(--cms-text-muted); margin-bottom: 4px; }
-.messenger-bubble-frame { width: 100%; border: 1px solid var(--cms-border); background: #111116; max-height: 360px; min-height: 60px; border-radius: 10px; }
-.messenger-bubble-time { font-size: 10px; color: var(--cms-text-muted); text-align: right; margin-top: 4px; }
+.messenger-bubble.out {
+  border-color: rgba(255, 122, 47, 0.4);
+  box-shadow: inset 3px 0 0 var(--cms-accent), 0 10px 22px rgba(255, 122, 47, 0.08);
+}
+.messenger-bubble-subject { font-size: 11px; font-weight: 700; color: var(--cms-text-muted); }
+.messenger-bubble-frame { width: 100%; border: 1px solid var(--cms-border); background: #111116; max-height: 360px; min-height: 60px; border-radius: 12px; }
+.messenger-bubble-time { font-size: 10px; color: var(--cms-text-muted); text-align: right; margin-top: 2px; }
 .messenger-composer {
   display: flex;
   gap: 8px;

@@ -25,7 +25,7 @@ export default function HomePage() {
 
         <div className="home-hero-full-content anim-fade-up anim-fade-up-d2">
           <h1 className="home-hero-full-title">
-            {lang === 'ru' ? 'Сделай шаг навстречу иному миру' : 'Step Into Another World'}
+            {lang === 'ru' ? 'Здесь начинается путешествие' : 'Here begins the journey'}
           </h1>
 
           <div className="home-hero-full-actions">
