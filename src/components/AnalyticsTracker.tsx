@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 
 const ENDPOINT = '/api/analytics/track';
 const SESSION_DURATION = 30 * 60 * 1000;
-const HEARTBEAT_INTERVAL = 15_000;
+const HEARTBEAT_INTERVAL = 30_000;
+const HEARTBEAT_DEDUP_WINDOW = 2_000;
 const CONSENT_KEY = 'errani_consent';
 
 interface Acquisition {
@@ -132,12 +133,16 @@ export function AnalyticsTracker() {
     let activeMs = 0;
     let activeSince = Date.now();
     let maxScroll = scrollDepth();
+    let lastHeartbeatAt = 0;
 
     const collectActiveTime = () => {
       if (document.visibilityState === 'visible') activeMs += Date.now() - activeSince;
       activeSince = Date.now();
     };
     const heartbeat = () => {
+      const now = Date.now();
+      if (now - lastHeartbeatAt < HEARTBEAT_DEDUP_WINDOW) return;
+      lastHeartbeatAt = now;
       collectActiveTime();
       send({
         type: 'heartbeat',

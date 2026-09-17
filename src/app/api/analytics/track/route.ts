@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 
 const ANALYTICS_DB_ENABLED = process.env.ANALYTICS_DB_ENABLED !== 'false';
 const BOT_PATTERN = /bot|crawler|spider|crawling|headless|preview|facebookexternalhit|telegrambot|whatsapp/i;
+const activeHeartbeats = new Set<string>();
 
 function text(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -68,14 +69,23 @@ export async function POST(req: NextRequest) {
     const duration = integer(body.duration, 0, 86_400);
     const maxScroll = integer(body.maxScroll, 0, 100);
     if (type === 'heartbeat') {
-      await prisma.$executeRaw`
-        UPDATE "PageView"
-        SET "duration" = GREATEST("duration", ${duration}),
-            "maxScroll" = GREATEST("maxScroll", ${maxScroll}),
-            "lastActiveAt" = NOW()
-        WHERE "viewId" = ${viewId} AND "sessionId" = ${sessionId}
-      `;
-      return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
+      const heartbeatKey = `${sessionId}:${viewId}`;
+      if (activeHeartbeats.has(heartbeatKey)) {
+        return NextResponse.json({ ok: true, skipped: true }, { headers: { 'Cache-Control': 'no-store' } });
+      }
+      activeHeartbeats.add(heartbeatKey);
+      try {
+        await prisma.$executeRaw`
+          UPDATE "PageView"
+          SET "duration" = GREATEST("duration", ${duration}),
+              "maxScroll" = GREATEST("maxScroll", ${maxScroll}),
+              "lastActiveAt" = NOW()
+          WHERE "viewId" = ${viewId} AND "sessionId" = ${sessionId}
+        `;
+        return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
+      } finally {
+        activeHeartbeats.delete(heartbeatKey);
+      }
     }
 
     const userAgent = text(req.headers.get('user-agent'), 1000);
@@ -142,7 +152,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    console.error('Analytics track error:', error);
-    return NextResponse.json({ error: 'Analytics event was not saved' }, { status: 500 });
+    console.warn('Analytics event skipped:', error);
+    return NextResponse.json({ ok: true, skipped: true }, { status: 202, headers: { 'Cache-Control': 'no-store' } });
   }
 }
