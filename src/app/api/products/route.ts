@@ -5,6 +5,7 @@ import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 import { normalizeProductMediaList } from '@/lib/product-media';
+import { hasUsableProductImage, normalizeStockFlags, type StockLike } from '@/lib/product-stock';
 import { DEFAULT_LIMITED_EDITION_TEXT_EN, DEFAULT_LIMITED_EDITION_TEXT_RU } from '@/lib/product-defaults';
 
 const PRODUCTS_STALE_TTL_MS = 60 * 60 * 1000;
@@ -147,7 +148,10 @@ export async function GET(req: NextRequest) {
   );
   const cached = productsStaleCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < PRODUCTS_FRESH_TTL_MS) {
-    return NextResponse.json(cached.data, { headers: { 'X-Products-Cache': 'fresh' } });
+    const fresh = Array.isArray(cached.data)
+      ? cached.data.map((product: StockLike) => normalizeStockFlags(product))
+      : cached.data;
+    return NextResponse.json(fresh, { headers: { 'X-Products-Cache': 'fresh' } });
   }
   try {
     const filter = searchParams.get('filter'); // author, discount, preorder, all
@@ -194,7 +198,8 @@ export async function GET(req: NextRequest) {
       ),
     ]);
 
-    const normalizedProducts = await normalizeProductMediaList(products);
+    const mediaNormalized = await normalizeProductMediaList(products);
+    const normalizedProducts = mediaNormalized.map((product) => normalizeStockFlags(product));
     productsStaleCache.set(cacheKey, { ts: Date.now(), data: normalizedProducts });
     await saveDiskCache(cacheKey, normalizedProducts);
 
@@ -203,7 +208,12 @@ export async function GET(req: NextRequest) {
     console.error('Error fetching products:', error);
     if (isAdminDataRequest && hasAdminCredentials) {
       return NextResponse.json(
-        { success: false, message: 'Не удалось загрузить товары из базы данных' },
+        {
+          success: false,
+          message: 'Не удалось загрузить товары из базы данных',
+          code: typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined,
+          detail: (error instanceof Error ? error.message : String(error)).replace(/postgres(ql)?:\/\/\S+/gi, '[db-url]').slice(0, 300),
+        },
         { status: 500, headers: { 'X-Products-Cache': 'admin-db-error' } }
       );
     }
@@ -244,8 +254,21 @@ export async function POST(req: NextRequest) {
     const name = String(body.name || '').trim();
     const descriptionRu = String(body.descriptionRu || '').trim();
     const description = String(body.description || '').trim();
-    const stock = Number(body.stock ?? 0);
-    const inStock = Boolean(body.inStock ?? true);
+    const image = String(body.image || '').trim();
+    const images = normalizeJsonArrayString(body.images);
+    if (Boolean(body.isActive ?? true) && !hasUsableProductImage(image)) {
+      return NextResponse.json(
+        { error: 'Для публикации товара нужна валидная картинка (/media/… или /api/media/…)' },
+        { status: 400 }
+      );
+    }
+    const stockFlags = normalizeStockFlags({
+      stock: Number(body.stock ?? 0),
+      inStock: body.inStock,
+      isSoldOut: body.isSoldOut,
+      isSaleDisabled: body.isSaleDisabled ?? false,
+      isAvailable: body.isAvailable ?? true,
+    });
     const slugInput = String(body.slug || '').trim() || nameRu || name;
     const baseSlug = normalizeSlug(slugInput) || `product-${Date.now()}`;
     const slug = await getUniqueSlug(baseSlug);
@@ -266,10 +289,10 @@ export async function POST(req: NextRequest) {
           : null,
         discount: Number(body.discount) || 0,
         currency: String(body.currency || 'RUB'),
-        image: String(body.image || ''),
-        images: normalizeJsonArrayString(body.images),
-        stock,
-        inStock,
+        image,
+        images,
+        stock: stockFlags.stock ?? 0,
+        inStock: Boolean(stockFlags.inStock),
         isPreorder: body.isPreorder ?? false,
         preorderClosed: body.preorderClosed ?? false,
         preorderAvailableDate: body.preorderAvailableDate ? new Date(body.preorderAvailableDate) : null,
@@ -282,9 +305,9 @@ export async function POST(req: NextRequest) {
         characteristics: normalizeJsonArrayString(body.characteristics),
         colors: normalizeJsonArrayString(body.colors),
         isActive: body.isActive ?? true,
-        isAvailable: body.isAvailable ?? true,
-        isSaleDisabled: body.isSaleDisabled ?? false,
-        isSoldOut: body.isSoldOut ?? false,
+        isAvailable: Boolean(stockFlags.isAvailable),
+        isSaleDisabled: Boolean(stockFlags.isSaleDisabled),
+        isSoldOut: Boolean(stockFlags.isSoldOut),
         sortOrder: Number(body.sortOrder) || 0,
         },
       })

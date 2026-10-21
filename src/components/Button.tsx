@@ -22,9 +22,9 @@ export function Button({
   const base = 'inline-flex items-center justify-center font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variants = {
-    primary: 'bg-[#E8722A] text-white hover:bg-[#C45A1A]',
+    primary: 'bg-[#f58bdc] text-white hover:bg-[#e06cc4]',
     secondary: 'border hover:opacity-80',
-    outline: 'border bg-transparent hover:bg-[#E8722A] hover:border-[#E8722A] hover:text-white',
+    outline: 'border bg-transparent hover:bg-[#f58bdc] hover:border-[#f58bdc] hover:text-white',
   };
 
   const variantStyles: Record<string, React.CSSProperties> = {

@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { generateOrderNumber } from '@/lib/utils';
+import { allocateOrderNumber } from '@/lib/utils';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 import { withFreshPrisma } from '@/lib/fresh-prisma';
 import { createTochkaPayment, getTochkaConfig } from '@/lib/tochka';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { refreshPaidOrderStatus } from '@/lib/payment-status';
+import { ensureAdminSchema } from '@/lib/ensure-schema';
+import { flash, parseLang } from '@/lib/flash';
 
 interface OrderItemInput {
   productId: string;
@@ -165,16 +167,20 @@ export async function GET(req: NextRequest) {
 
 // POST create order
 export async function POST(req: NextRequest) {
+  let lang = parseLang(req.headers.get('accept-language'), 'ru');
   try {
     const rate = consumeRateLimit(req, { key: 'create-order', limit: 20, windowMs: 10 * 60_000 });
     if (!rate.allowed) {
       return NextResponse.json(
-        { error: 'Too many checkout attempts. Please try again later.' },
+        { error: flash(lang, 'order.rate_limit') },
         { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } }
       );
     }
 
+    await ensureAdminSchema(prisma);
+
     const body = await req.json();
+    lang = parseLang(body.language ?? body.lang, lang);
     const { name, email, phone, country, oblast, city, zipCode, street, house, building, corpus, apartment, entrance, floor, intercom, shippingMethod, items } = body as {
       name: string;
       email: string;
@@ -197,7 +203,7 @@ export async function POST(req: NextRequest) {
 
     // Validate
     if (!name || !email || !phone || !city || !Array.isArray(items) || !items.length) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'order.missing_fields') }, { status: 400 });
     }
     if (
       items.length > 30
@@ -212,17 +218,17 @@ export async function POST(req: NextRequest) {
       || String(intercom || '').trim().length > 80
       || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())
     ) {
-      return NextResponse.json({ error: 'Invalid order data' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'order.invalid_data') }, { status: 400 });
     }
     if (country !== 'RU') {
-      return NextResponse.json({ error: 'Онлайн-заказ доступен только для доставки по России.' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'order.ru_only') }, { status: 400 });
     }
 
     if (shippingMethod && shippingMethod !== 'manual_delivery') {
-      return NextResponse.json({ error: 'Этот способ доставки больше недоступен. Обновите страницу и оформите заказ с ручным адресом.' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'order.shipping_unavailable') }, { status: 400 });
     }
     if ((!street || !house) || (zipCode && !/^\d{6}$/.test(zipCode))) {
-      return NextResponse.json({ error: 'Укажите адрес доставки.' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'order.address_required') }, { status: 400 });
     }
 
     // Check if user is blocked
@@ -232,7 +238,7 @@ export async function POST(req: NextRequest) {
       try {
         const meta = JSON.parse(metaSetting.value) as Record<string, { badges?: string[] }>;
         if (meta[normalizedEmail]?.badges?.includes('__blocked__')) {
-          return NextResponse.json({ error: 'Проверка по идентичности ФИО и номера телефона' }, { status: 403 });
+          return NextResponse.json({ error: flash(lang, 'order.blocked') }, { status: 403 });
         }
       } catch { /* ignore */ }
     }
@@ -251,7 +257,7 @@ export async function POST(req: NextRequest) {
       ));
 
     if (normalizedItems.length !== items.length) {
-      return NextResponse.json({ error: 'Invalid cart items' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'order.invalid_cart') }, { status: 400 });
     }
 
     const quantityByProductId = new Map<string, number>();
@@ -266,14 +272,14 @@ export async function POST(req: NextRequest) {
     });
 
     if (products.length !== productIds.length) {
-      return NextResponse.json({ error: 'Some products not found' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'order.products_missing') }, { status: 400 });
     }
 
     const unavailable = products.filter((p) => !p.isActive || !p.inStock || p.isSaleDisabled || p.stock <= 0);
     if (unavailable.length > 0) {
-      const names = unavailable.map(p => p.nameRu || p.name).join(', ');
+      const names = unavailable.map(p => (lang === 'en' ? p.name : (p.nameRu || p.name))).join(', ');
       return NextResponse.json(
-        { error: `These products are currently unavailable: ${names}` },
+        { error: flash(lang, 'order.products_unavailable', { names }) },
         { status: 409 }
       );
     }
@@ -283,9 +289,12 @@ export async function POST(req: NextRequest) {
       return requestedQty > product.stock;
     });
     if (insufficient.length > 0) {
-      const names = insufficient.map((p) => `${p.nameRu || p.name} (доступно: ${p.stock})`).join(', ');
+      const names = insufficient.map((p) => {
+        const label = lang === 'en' ? p.name : (p.nameRu || p.name);
+        return lang === 'en' ? `${label} (available: ${p.stock})` : `${label} (доступно: ${p.stock})`;
+      }).join(', ');
       return NextResponse.json(
-        { error: `Not enough stock for: ${names}` },
+        { error: flash(lang, 'order.not_enough_stock', { names }) },
         { status: 409 }
       );
     }
@@ -300,7 +309,13 @@ export async function POST(req: NextRequest) {
         if (colorEntry && typeof colorEntry.stock === 'number') {
           if (item.quantity > colorEntry.stock) {
             return NextResponse.json(
-              { error: `Недостаточно остатков цвета «${item.selectedColor}» для товара «${product.nameRu || product.name}» (доступно: ${colorEntry.stock})` },
+              {
+                error: flash(lang, 'order.color_stock', {
+                  color: item.selectedColor,
+                  product: lang === 'en' ? product.name : (product.nameRu || product.name),
+                  stock: colorEntry.stock,
+                }),
+              },
               { status: 409 }
             );
           }
@@ -344,10 +359,12 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join('\n');
 
-    // Create order
+    // Create order — ER-01-0XXXX keyed off primary (first) product ordinal
+    const primaryProductId = orderItems[0]?.productId || products[0]?.id || null;
+    const orderNumber = await allocateOrderNumber(prisma, primaryProductId);
     const order = await prisma.order.create({
       data: {
-        orderNumber: generateOrderNumber(),
+        orderNumber,
         userId: null,
         customerName: name,
         customerEmail: email,
@@ -404,7 +421,7 @@ export async function POST(req: NextRequest) {
         const detail = (tochkaResponse?.raw as { __error?: string } | undefined)?.__error || 'no response';
         console.error('Payment link creation failed:', detail);
         return NextResponse.json(
-          { error: 'Не удалось создать платёж. Попробуйте ещё раз или свяжитесь с нами.' },
+          { error: flash(lang, 'order.payment_failed') },
           { status: 502 }
         );
       }
@@ -423,7 +440,10 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Error creating order:', error);
-    return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
+    const detail = (error instanceof Error ? error.message : String(error))
+      .replace(/postgres(ql)?:\/\/\S+/gi, '[db-url]')
+      .slice(0, 280);
+    return NextResponse.json({ error: flash(lang, 'order.create_failed'), detail }, { status: 500 });
   }
 }
 

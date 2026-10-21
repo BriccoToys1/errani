@@ -42,15 +42,15 @@ export function ContactModal({ onClose }: ContactModalProps) {
       const res = await fetch('/api/inquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, language: lang }),
       });
       if (res.ok) {
         setSent(true);
       } else {
-        alert('Error sending message');
+        alert(lang === 'ru' ? 'Не удалось отправить сообщение' : 'Could not send the message');
       }
     } catch {
-      alert('Error sending message');
+      alert(lang === 'ru' ? 'Не удалось отправить сообщение' : 'Could not send the message');
     }
     setSending(false);
   };
@@ -68,7 +68,7 @@ export function ContactModal({ onClose }: ContactModalProps) {
           <div className="text-center" style={{ padding: '2rem 0' }}>
             <div style={{
               width: '64px', height: '64px', borderRadius: '50%',
-              background: 'var(--orange)',
+              background: 'var(--primary)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               margin: '0 auto 1.5rem',
             }}>

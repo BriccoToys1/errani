@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     const { email, password } = await req.json();
 
     if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
-      return NextResponse.json({ error: 'Email и пароль обязательны' }, { status: 400 });
+      return NextResponse.json({ error: 'Логин и пароль обязательны' }, { status: 400 });
     }
     if (email.length > 254 || password.length > 256) {
       return NextResponse.json({ error: 'Некорректные данные входа' }, { status: 400 });
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
     const valid = admin ? await compareAdminPassword(password, admin.password) : false;
 
     if (!admin || !valid) {
-      return NextResponse.json({ error: 'Неверный email или пароль' }, { status: 401 });
+      return NextResponse.json({ error: 'Неверный логин или пароль' }, { status: 401 });
     }
 
     await recordAdminSession(req, admin.email, admin.name);

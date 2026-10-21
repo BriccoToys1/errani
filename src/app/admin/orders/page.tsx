@@ -1,8 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { AdminSidebar } from "../AdminSidebar";
+import { AdminPage } from "../AdminPage";
+import {
+  HeaderActions,
+  ContactSheet,
+  IconButton,
+  SearchField,
+  SegmentedControl,
+  Toolbar,
+  DataList,
+  Button,
+  Modal,
+  PageLoading,
+} from "@/components/admin";
+import { adminToastClass, refreshAdminCounts } from "@/lib/admin-client";
 
 interface OrderItem {
   id: string;
@@ -70,7 +83,7 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   unpaid:     { label: "Не оплачен",  cls: "cms-badge-red" },
   paid:       { label: "Оплачен",     cls: "cms-badge-green" },
   assembling: { label: "Сборка",      cls: "cms-badge-yellow" },
-  shipped:    { label: "Отправлен",   cls: "cms-badge-green" },
+  shipped:    { label: "Отправлен",   cls: "cms-badge-pink" },
   in_transit: { label: "В пути",      cls: "cms-badge-blue" },
   delivered:  { label: "Доставлен",   cls: "cms-badge-green" },
   cancelled:  { label: "Отменён",     cls: "cms-badge-red" },
@@ -78,11 +91,11 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 };
 
 const STATUS_BORDER: Record<string, string> = {
-  pending:    '#f59e0b',
+  pending:    '#fbbf24',
   unpaid:     '#ef4444',
   paid:       '#22c55e',
-  assembling: '#f59e0b',
-  shipped:    '#22c55e',
+  assembling: '#fbbf24',
+  shipped:    '#f58bdc',
   in_transit: '#3b82f6',
   delivered:  '#22c55e',
   cancelled:  '#ef4444',
@@ -158,6 +171,10 @@ export default function AdminOrdersPage() {
   const [orderSortMode, setOrderSortMode] = useState<OrderSortMode>("newest");
   const [showFilterDrop, setShowFilterDrop] = useState(false);
   const [showSortDrop, setShowSortDrop] = useState(false);
+  const [showProductFilterDrop, setShowProductFilterDrop] = useState(false);
+  const [productFilter, setProductFilter] = useState("all");
+  const [ordersViewedAt, setOrdersViewedAt] = useState<Date>(() => new Date(0));
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [manualForm, setManualForm] = useState<typeof emptyManualForm>(emptyManualForm);
   const [creatingManual, setCreatingManual] = useState(false);
   const viewMode: 'list' = 'list';
@@ -167,6 +184,12 @@ export default function AdminOrdersPage() {
   const [draggingOrderId, setDraggingOrderId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [showContact, setShowContact] = useState<{ orderId: string; type: 'phone' | 'email'; value: string } | null>(null);
+  const [shipDraft, setShipDraft] = useState<{ order: Order; trackNumber: string; deliveryService: string } | null>(null);
+  const [confirmShipSend, setConfirmShipSend] = useState(false);
+  const [savingShip, setSavingShip] = useState(false);
+  const filterClickRef = useRef(0);
+  const sortClickRef = useRef(0);
+
   const kanbanRef = useRef<HTMLDivElement>(null);
   const scrollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -224,10 +247,25 @@ export default function AdminOrdersPage() {
     try {
       const res = await fetch("/api/orders?includeArchived=1", { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) { localStorage.removeItem("admin_token"); router.push("/admin/login"); return; }
+      if (!res.ok) {
+        setNotification("Не удалось загрузить заказы — показаны последние данные");
+        setTimeout(() => setNotification(""), 3000);
+        return;
+      }
       const data = await res.json();
-      setOrders(Array.isArray(data) ? data : []);
-    } catch { /* ignore */ }
-    setLoading(false);
+      // Never replace a loaded list with [] on a malformed/error payload.
+      if (Array.isArray(data)) {
+        setOrders(data);
+      } else {
+        setNotification("Не удалось загрузить заказы — показаны последние данные");
+        setTimeout(() => setNotification(""), 3000);
+      }
+    } catch {
+      setNotification("Не удалось загрузить заказы — показаны последние данные");
+      setTimeout(() => setNotification(""), 3000);
+    } finally {
+      setLoading(false);
+    }
   }, [getToken, router]);
 
   const fetchProducts = useCallback(async () => {
@@ -239,6 +277,17 @@ export default function AdminOrdersPage() {
   }, []);
 
   useEffect(() => { fetchOrders(); fetchProducts(); }, [fetchOrders, fetchProducts]);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    fetch("/api/admin/settings?key=ordersViewedAt", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.value) setOrdersViewedAt(new Date(d.value));
+      })
+      .catch(() => undefined);
+  }, [getToken]);
 
   useEffect(() => {
     const token = getToken();
@@ -367,20 +416,47 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const updateOrderStatus = async (order: Order, nextStatus: string) => {
+  const updateOrderStatus = async (order: Order, nextStatus: string, extra?: Record<string, unknown>) => {
+    if (nextStatus === "shipped" && !extra?.trackNumber) {
+      setShipDraft({ order, trackNumber: "", deliveryService: "" });
+      setConfirmShipSend(false);
+      return;
+    }
     const token = getToken();
     if (!token) return;
     const res = await fetch(`/api/orders/${order.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status: nextStatus }),
+      body: JSON.stringify({ status: nextStatus, ...extra }),
     });
     if (res.ok) {
-      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, status: nextStatus } : o)));
+      const updated = await res.json();
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? { ...o, ...updated, items: o.items } : o)));
       notify(`Статус ${order.orderNumber} обновлён`);
     } else {
       notify("Не удалось обновить статус");
     }
+  };
+
+  const submitShipDraft = async () => {
+    if (!shipDraft) return;
+    if (!shipDraft.trackNumber.trim() || !shipDraft.deliveryService.trim()) {
+      notify("Укажите службу доставки и трек-номер");
+      return;
+    }
+    if (!confirmShipSend) {
+      setConfirmShipSend(true);
+      return;
+    }
+    setSavingShip(true);
+    await updateOrderStatus(shipDraft.order, "shipped", {
+      trackNumber: shipDraft.trackNumber.trim(),
+      deliveryService: shipDraft.deliveryService.trim(),
+      notifyShipped: true,
+    });
+    setSavingShip(false);
+    setShipDraft(null);
+    setConfirmShipSend(false);
   };
 
   const notify = (msg: string) => {
@@ -482,7 +558,11 @@ export default function AdminOrdersPage() {
   const markAllRead = async () => {
     const token = getToken();
     try {
-      await fetch("/api/orders/viewed", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch("/api/orders/viewed", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json().catch(() => ({}));
+      const when = data?.value ? new Date(data.value) : new Date();
+      setOrdersViewedAt(when);
+      refreshAdminCounts();
       notify("Все заказы отмечены как просмотренные");
     } catch { /* ignore */ }
   };
@@ -571,17 +651,21 @@ export default function AdminOrdersPage() {
     return (
       o.orderNumber.toLowerCase().includes(q) ||
       o.customerName.toLowerCase().includes(q) ||
-      (o.customerEmail || "").toLowerCase().includes(q)
+      (o.customerEmail || "").toLowerCase().includes(q) ||
+      o.items.some((item) => (item.product?.name || "").toLowerCase().includes(q))
     );
   });
 
   const filtered = scopedOrders.filter((o) => {
-    if (regionFilter === "ru") return o.country === "RU" || o.country === "Россия";
-    if (regionFilter === "foreign") return o.country !== "RU" && o.country !== "Россия";
+    if (regionFilter === "ru" && !(o.country === "RU" || o.country === "Россия")) return false;
+    if (regionFilter === "foreign" && (o.country === "RU" || o.country === "Россия")) return false;
+    if (productFilter !== "all") return o.items.some((item) => item.productId === productFilter);
     return true;
   });
 
-  const newCount = filtered.filter((o) => o.status === "paid" || o.status === "assembling").length;
+  const newCount = filtered.filter(
+    (o) => (o.status === "paid" || o.status === "assembling") && new Date(o.createdAt) > ordersViewedAt
+  ).length;
 
   const sorted = [...filtered].sort((a, b) => {
     if (a.isManual && !b.isManual) return -1;
@@ -612,77 +696,126 @@ export default function AdminOrdersPage() {
     let prevBucket: "3" | "7" | "14" | "30" | "rest" | null = null;
     for (const order of sorted) {
       const bucket = getOrderAgeBucket(order);
-      if (bucket !== prevBucket) {
+      // Dividers only BETWEEN groups — never lead or trail the list.
+      if (prevBucket !== null && bucket !== prevBucket) {
         rowsWithDividers.push({ type: "divider", bucket });
-        prevBucket = bucket;
       }
+      prevBucket = bucket;
       rowsWithDividers.push({ type: "order", order });
     }
   }
+
+  const formatOrderDate = (order: Order) => {
+    const d = new Date(order.createdAt);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yy = String(d.getFullYear()).slice(-2);
+    return `от ${dd}.${mm}.${yy}`;
+  };
+
+  const statusSelectStyle = (status: string): CSSProperties => {
+    const bg = STATUS_BORDER[status] || "#6b7280";
+    const lightFg = status === "unpaid" || status === "cancelled";
+    return {
+      background: bg,
+      color: lightFg ? "#fff" : "#111",
+    };
+  };
 
   const totalItems = filtered.reduce((sum, o) => sum + o.items.reduce((s, i) => s + i.quantity, 0), 0);
   const totalSum = filtered.reduce((sum, o) => sum + o.totalAmount, 0);
   const hasUnpaid = scopedOrders.some((o) => o.status === "pending" || o.status === "unpaid");
   const ruCount = scopedOrders.filter((o) => o.country === "RU" || o.country === "Россия").length;
   const foreignCount = scopedOrders.length - ruCount;
+  const productFilterOptions = [...products]
+    .filter((product) => scopedOrders.some((order) => order.items.some((item) => item.productId === product.id)))
+    .sort((a, b) => (a.nameRu || a.name).localeCompare(b.nameRu || b.name, "ru"));
+  const visibleOrderIds = sorted.map((order) => order.id);
+  const allVisibleSelected = visibleOrderIds.length > 0 && visibleOrderIds.every((id) => selectedOrderIds.has(id));
+  const selectedOrders = orders.filter((order) => selectedOrderIds.has(order.id));
+  const selectedRecipients = Array.from(
+    new Map(
+      selectedOrders
+        .filter((order) => order.customerEmail?.trim())
+        .map((order) => [
+          order.customerEmail.trim().toLowerCase(),
+          { email: order.customerEmail.trim().toLowerCase(), name: order.customerName || "" },
+        ])
+    ).values()
+  );
 
-  if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
+  const toggleOrderSelection = (orderId: string) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      next.has(orderId) ? next.delete(orderId) : next.add(orderId);
+      return next;
+    });
+  };
+
+  const toggleAllVisible = () => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) visibleOrderIds.forEach((id) => next.delete(id));
+      else visibleOrderIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
+  const goToNewsletter = () => {
+    if (selectedRecipients.length === 0) {
+      notify("У выбранных заказов нет email");
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set("recipients", selectedRecipients.map((recipient) => recipient.email).join(","));
+    params.set("names", selectedRecipients.map((recipient) => `${encodeURIComponent(recipient.email)}:${encodeURIComponent(recipient.name)}`).join("|"));
+    router.push(`/admin/email?${params.toString()}`);
+  };
+
+  if (loading) return <PageLoading />;
 
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
-        <div className="cms-header">
-          <h1 className="cms-header-title">
-            Заказы
-            {newCount > 0 && <span className="cms-badge cms-badge-notify" style={{ marginLeft: "10px", fontSize: "12px" }}>{newCount}</span>}
-          </h1>
-          <div className="cms-header-actions">
-            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={() => setShowNewOrder(true)} title="Добавить">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </button>
-            {hasUnpaid && (
-              <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={deleteUnpaid} disabled={deleting} title="Архивировать неоплаченные">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-              </button>
-            )}
-            <button className="cms-btn cms-btn-sm" onClick={() => downloadOrdersExport("csv")} title="Экспорт CSV">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            </button>
-            <button className="cms-btn cms-btn-sm" onClick={() => downloadOrdersExport("xls")} title="Импорт/Экспорт XLS">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M16 3h3a2 2 0 012 2v3"/><path d="M8 21H5a2 2 0 01-2-2v-3"/><path d="M16 21h3a2 2 0 002-2v-3"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
-            </button>
-            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchOrders(); }} title="Обновить">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-            </button>
-            <button className="cms-btn cms-btn-sm" onClick={markAllRead} title="Отметить просмотренными">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-        </div>
+    <AdminPage
+      title="Заказы"
+      notifyCount={newCount > 0 ? newCount : undefined}
+      fill
+      actions={
+        <HeaderActions>
+          <IconButton icon="add" label="Добавить" shape="plain" onClick={() => setShowNewOrder(true)} />
+          <IconButton icon="export" label="Скачать" shape="plain" onClick={() => downloadOrdersExport("xls")} />
+          <IconButton icon="refresh" label="Обновить" shape="plain" onClick={() => { setLoading(true); fetchOrders(); }} />
+          {newCount > 0 && (
+            <IconButton icon="view" label="Просмотреть" shape="plain" onClick={markAllRead} />
+          )}
+          {hasUnpaid && (
+            <IconButton icon="delete" label="Архивировать неоплаченные" shape="plain" tone="danger" onClick={deleteUnpaid} disabled={deleting} />
+          )}
+        </HeaderActions>
+      }
+    >
+          <Toolbar>
+            <SearchField value={search} onChange={setSearch} style={{ width: 240 }} />
 
-        <div className="cms-content">
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
-            <input
-              className="cms-input cms-input-sm"
-              placeholder="Поиск по номеру, имени, email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "240px" }}
-            />
-
-            {/* Filter icon + dropdown */}
-            <div style={{ position: "relative" }}>
-              <button
-                className={`cms-btn cms-btn-sm${showFilterDrop ? " cms-btn-primary" : ""}${(periodDays !== 0 || customRange.from || regionFilter !== "all") ? " cms-btn-primary" : ""}`}
-                title="Фильтр"
-                onClick={() => { setShowFilterDrop(v => !v); setShowSortDrop(false); }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-              </button>
+            <div className="cms-popover-anchor">
+              <IconButton
+                icon="filter"
+                label="Фильтр"
+                shape="square"
+                active={showFilterDrop || periodDays !== 0 || Boolean(customRange.from) || regionFilter !== "all"}
+                onClick={() => {
+                  const now = Date.now();
+                  if (now - filterClickRef.current < 350) {
+                    setPeriodDays(0); setCustomRange({ from: "", to: "" }); setRegionFilter("all"); setShowFilterDrop(false);
+                    filterClickRef.current = 0;
+                    return;
+                  }
+                  filterClickRef.current = now;
+                  setShowFilterDrop(v => !v); setShowSortDrop(false); setShowProductFilterDrop(false);
+                }}
+              />
               {showFilterDrop && (
-                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 40, background: "var(--cms-surface, #1a1d27)", border: "1px solid var(--cms-border)", borderRadius: 8, padding: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)", minWidth: 240 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Период</div>
+                <div className="cms-dropdown-panel cms-popover-start" style={{ minWidth: 240, padding: 12 }}>
+                  <div className="cms-menu-title">Период</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
                     {PERIOD_OPTIONS.map((d) => (
                       <button key={d} type="button"
@@ -692,88 +825,118 @@ export default function AdminOrdersPage() {
                       </button>
                     ))}
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Диапазон дат</div>
+                  <div className="cms-menu-title">Диапазон дат</div>
                   <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
                     <input className="cms-input cms-input-sm" type="date" value={customRange.from} onChange={(e) => setCustomRange((prev) => ({ ...prev, from: e.target.value }))} style={{ flex: 1 }} />
                     <input className="cms-input cms-input-sm" type="date" value={customRange.to} onChange={(e) => setCustomRange((prev) => ({ ...prev, to: e.target.value }))} style={{ flex: 1 }} />
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Регион</div>
+                  <div className="cms-menu-title">Регион</div>
                   <div style={{ display: "flex", gap: 6, marginBottom: 4 }}>
                     <button type="button" className={`cms-btn cms-btn-xs${regionFilter === "all" ? " cms-btn-primary" : ""}`} onClick={() => setRegionFilter("all")}>Все ({scopedOrders.length})</button>
                     <button type="button" className={`cms-btn cms-btn-xs${regionFilter === "ru" ? " cms-btn-primary" : ""}`} onClick={() => setRegionFilter("ru")}>Россия ({ruCount})</button>
                     <button type="button" className={`cms-btn cms-btn-xs${regionFilter === "foreign" ? " cms-btn-primary" : ""}`} onClick={() => setRegionFilter("foreign")}>Зарубеж ({foreignCount})</button>
                   </div>
-                  {(periodDays !== 0 || customRange.from || regionFilter !== "all") && (
-                    <button type="button" className="cms-btn cms-btn-xs" style={{ marginTop: 8 }}
-                      onClick={() => { setPeriodDays(0); setCustomRange({ from: "", to: "" }); setRegionFilter("all"); }}>
-                      Сбросить фильтры
-                    </button>
-                  )}
                 </div>
               )}
             </div>
 
-            {/* Sort icon + dropdown */}
-            <div style={{ position: "relative" }}>
-              <button
-                className={`cms-btn cms-btn-sm${showSortDrop ? " cms-btn-primary" : ""}${orderSortMode !== "newest" ? " cms-btn-primary" : ""}`}
-                title="Сортировка"
-                onClick={() => { setShowSortDrop(v => !v); setShowFilterDrop(false); }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/></svg>
-              </button>
+            <div className="cms-popover-anchor">
+              <IconButton
+                icon="sort"
+                label="Сортировка"
+                shape="square"
+                active={showSortDrop || orderSortMode !== "newest"}
+                onClick={() => {
+                  const now = Date.now();
+                  if (now - sortClickRef.current < 350) {
+                    setOrderSortMode("newest"); setShowSortDrop(false); sortClickRef.current = 0; return;
+                  }
+                  sortClickRef.current = now;
+                  setShowSortDrop(v => !v); setShowFilterDrop(false); setShowProductFilterDrop(false);
+                }}
+              />
               {showSortDrop && (
-                <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 40, background: "var(--cms-surface, #1a1d27)", border: "1px solid var(--cms-border)", borderRadius: 8, padding: "8px", boxShadow: "0 8px 24px rgba(0,0,0,0.5)", minWidth: 180 }}>
+                <div className="cms-dropdown-panel cms-popover-start cms-menu" style={{ minWidth: 180 }}>
                   {ORDER_SORT_OPTIONS.map((opt) => (
                     <button key={opt.value} type="button"
-                      onClick={() => { setOrderSortMode(opt.value); setShowSortDrop(false); }}
-                      style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px", background: orderSortMode === opt.value ? "rgba(155,135,245,0.15)" : "none", border: "none", borderRadius: 4, color: orderSortMode === opt.value ? "var(--cms-accent, #9b87f5)" : "var(--cms-text)", fontSize: 13, cursor: "pointer" }}>
-                      {opt.label}
+                      className={`cms-menu-item${orderSortMode === opt.value ? " active" : ""}`}
+                      onClick={() => { setOrderSortMode(opt.value); setShowSortDrop(false); }}>
+                      <span className="cms-menu-label">{opt.label}</span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3 }}>
-              <button className={`cms-btn cms-btn-sm${orderView === 'active' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('active')} style={{ fontSize: 12 }}>Действующие</button>
-              <button className={`cms-btn cms-btn-sm${orderView === 'done' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('done')} style={{ fontSize: 12 }}>Завершенные</button>
-              <button className={`cms-btn cms-btn-sm${orderView === 'archive' ? " cms-btn-primary" : ""}`} onClick={() => setOrderView('archive')} style={{ fontSize: 12 }}>Архив</button>
+            <div className="cms-popover-anchor">
+              <IconButton
+                icon="filter2"
+                label="Фильтр по товару"
+                shape="square"
+                active={showProductFilterDrop || productFilter !== "all"}
+                onClick={() => {
+                  setShowProductFilterDrop((v) => !v);
+                  setShowFilterDrop(false);
+                  setShowSortDrop(false);
+                }}
+              />
+              {showProductFilterDrop && (
+                <div className="cms-dropdown-panel cms-popover-start cms-menu" style={{ minWidth: 260, maxHeight: 320, overflowY: "auto" }}>
+                  <button type="button" className={`cms-menu-item${productFilter === "all" ? " active" : ""}`} onClick={() => { setProductFilter("all"); setShowProductFilterDrop(false); }}>
+                    <span className="cms-menu-label">Все товары</span>
+                  </button>
+                  {productFilterOptions.map((product) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      className={`cms-menu-item${productFilter === product.id ? " active" : ""}`}
+                      onClick={() => { setProductFilter(product.id); setShowProductFilterDrop(false); }}
+                    >
+                      <span className="cms-menu-label">{product.nameRu || product.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <span style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginLeft: "auto" }}>
-              {periodLabel} · {filtered.length} заказов
-            </span>
+            <SegmentedControl
+              options={[
+                { value: "active", label: "Действующие" },
+                { value: "done", label: "Завершенные" },
+                { value: "archive", label: "Архив" },
+              ]}
+              value={orderView}
+              onChange={(v) => setOrderView(v as OrderView)}
+            />
+          </Toolbar>
 
-            {sorted.some((o) => o.isManual) && (
-              <span style={{ fontSize: "11px", display: "flex", alignItems: "center", gap: 5, color: "var(--cms-text-muted)" }}>
-                <span style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#a78bfa", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>РУЧНОЙ</span>
-                — закреплён наверху
-              </span>
-            )}
-          </div>
-
-
-          <div className="cms-table-wrap">
+          <DataList className="cms-orders-desktop-table">
             <table className="cms-table">
               <thead>
                 <tr>
-                  <th>Order #</th>
-                  <th>Клиент ({filtered.length})</th>
-                  <th>Товары ({totalItems})</th>
-                  <th>Сумма ({formatPrice(totalSum)})</th>
-                  <th>Статус</th>
-                  <th>Доставка</th>
-                  <th>Дата</th>
-                  <th style={{ width: 80 }}>Действия</th>
+                  <th className="cms-col-check">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleAllVisible}
+                      title="Выбрать все видимые заказы"
+                      style={{ cursor: "pointer" }}
+                    />
+                  </th>
+                  <th className="cms-col-stamp">№</th>
+                  <th className="cms-col-client">Клиент ({filtered.length})</th>
+                  <th className="cms-col-items">Товары ({totalItems})</th>
+                  <th className="cms-col-sum">Сумма ({formatPrice(totalSum)})</th>
+                  <th className="cms-col-status">Статус</th>
+                  <th className="cms-col-actions" />
                 </tr>
               </thead>
               <tbody>
                 {(rowsWithDividers.length > 0 ? rowsWithDividers : sorted.map((order) => ({ type: "order" as const, order }))).map((row, idx) => {
                   if (row.type === "divider") {
                     return (
-                      <tr key={`divider-${row.bucket}-${idx}`}>
-                        <td colSpan={8} style={{ padding: "10px 8px 6px" }}>
+                      <tr key={`divider-${row.bucket}-${idx}`} className="cms-orders-divider-row">
+                        <td colSpan={7} style={{ padding: "10px 8px 6px" }}>
                           <div style={{ borderTop: "1px solid var(--cms-border-light)", paddingTop: 6, fontSize: 11, color: "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                             {BUCKET_LABEL[row.bucket]}
                           </div>
@@ -785,90 +948,163 @@ export default function AdminOrdersPage() {
                   return (
                   <tr
                     key={order.id}
+                    className={selectedOrderIds.has(order.id) ? "cms-row-selected" : undefined}
                     style={order.isManual ? { background: "rgba(139,92,246,0.06)", borderLeft: "3px solid rgba(139,92,246,0.5)" } : undefined}
                   >
-                    <td className="cms-td-mono">
-                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <td className="cms-col-check">
+                      <input
+                        type="checkbox"
+                        checked={selectedOrderIds.has(order.id)}
+                        onChange={() => toggleOrderSelection(order.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        title="Выбрать для рассылки"
+                        style={{ cursor: "pointer" }}
+                      />
+                    </td>
+                    <td className="cms-col-stamp">
+                      <div className="cms-list-stamp cms-list-clamp-24">
                         {order.isManual && (
-                          <span style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#a78bfa", borderRadius: 3, padding: "0 5px", fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", flexShrink: 0 }}>
+                          <span style={{ color: "#a78bfa", fontSize: 10, fontWeight: 700, letterSpacing: "0.04em" }}>
                             РУЧНОЙ
                           </span>
                         )}
-                        {order.orderNumber}
+                        <span className="cms-list-stamp-num">{order.orderNumber}</span>
+                        <span className="cms-list-stamp-date">{formatOrderDate(order)}</span>
                       </div>
                     </td>
-                    <td className="cms-td-bold">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                        <span>{order.customerName}</span>
-                        <div style={{ display: 'flex', gap: 2 }}>
+                    <td className="cms-col-client">
+                      <div className="cms-list-client">
+                        <span className="cms-list-client-actions">
                           {order.customerPhone && (
-                            <button
-                              className="cms-btn cms-btn-xs cms-btn-ghost"
-                              title={order.customerPhone}
-                              onClick={() => setShowContact({ orderId: order.id, type: 'phone', value: order.customerPhone })}
-                              style={{ padding: '2px 4px' }}
-                            >
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.07 2.18 2 2 0 012.07 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
-                            </button>
+                            <IconButton icon="phone" label={order.customerPhone} shape="square" size="sm" onClick={() => setShowContact({ orderId: order.id, type: 'phone', value: order.customerPhone })} />
                           )}
                           {order.customerEmail && (
-                            <button
-                              className="cms-btn cms-btn-xs cms-btn-ghost"
-                              title={order.customerEmail}
-                              onClick={() => setShowContact({ orderId: order.id, type: 'email', value: order.customerEmail })}
-                              style={{ padding: '2px 4px' }}
-                            >
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                            </button>
+                            <IconButton icon="mail" label={order.customerEmail} shape="square" size="sm" onClick={() => setShowContact({ orderId: order.id, type: 'email', value: order.customerEmail })} />
                           )}
-                        </div>
+                        </span>
+                        <span className="cms-list-client-name">{order.customerName}</span>
                       </div>
                     </td>
-                    <td>
-                      {order.items.length > 0 ? order.items.map((item) => (
-                        <div key={item.id} style={{ fontSize: "12px" }}>{item.product?.name || "Товар удалён"} ×{item.quantity}</div>
-                      )) : <span style={{ color: "var(--cms-text-muted)", fontSize: 12 }}>—</span>}
+                    <td className="cms-col-items">
+                      <div className="cms-list-items">
+                        {order.items.length > 0 ? order.items.map((item) => (
+                          <div key={item.id} className="cms-list-item-line cms-list-clamp-35">
+                            {item.product?.name || "Товар удалён"} ×{item.quantity}
+                          </div>
+                        )) : <span style={{ color: "var(--cms-text-muted)" }}>—</span>}
+                      </div>
                     </td>
-                    <td style={{ fontWeight: 600 }}>{formatPrice(order.totalAmount)}</td>
-                    <td>
+                    <td className="cms-col-sum cms-list-sum">{formatPrice(order.totalAmount)}</td>
+                    <td className="cms-col-status">
                       <select
-                        className="cms-select"
+                        className="cms-status-select"
                         value={order.status}
                         onChange={(e) => updateOrderStatus(order, e.target.value)}
-                        style={{ borderLeft: `3px solid ${STATUS_BORDER[order.status] || 'transparent'}`, appearance: 'none', WebkitAppearance: 'none', paddingRight: '6px', fontSize: '11px' }}
+                        style={statusSelectStyle(order.status)}
                       >
                         {ALL_STATUSES.map((s) => (
                           <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>
                         ))}
                       </select>
                     </td>
-                    <td>{order.shippingMethod || "—"}</td>
-                    <td>{new Date(order.createdAt).toLocaleDateString("ru-RU")}</td>
-                    <td>
-                      <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                        <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openOrder(order)} title="Изменить">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                        </button>
-                        <button className="cms-btn cms-btn-xs cms-btn-ghost" title="Чек" onClick={() => openReceipt(order.id)}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                        </button>
+                    <td className="cms-col-actions">
+                      <div className="cms-row-actions">
+                        <IconButton icon="receipt" label="Чек" shape="square" onClick={() => openReceipt(order.id)} />
+                        <IconButton icon="edit" label="Изменить" shape="square" onClick={() => openOrder(order)} />
                         {(order.isManual || order.status === "pending" || order.status === "cancelled" || order.status === "unpaid") && (
-                          <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => deleteOrder(order)} title="В архив">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                          </button>
+                          <IconButton icon="archive" label="В архив" shape="square" tone="danger" onClick={() => deleteOrder(order)} />
                         )}
                       </div>
                     </td>
                   </tr>
                 )})}
                 {sorted.length === 0 && (
-                  <tr><td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Заказы не найдены</td></tr>
+                  <tr><td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--cms-text-muted)" }}>Заказы не найдены</td></tr>
                 )}
               </tbody>
             </table>
+          </DataList>
+
+          <div className="cms-orders-mobile-list">
+            {sorted.map((order) => (
+              <div
+                key={order.id}
+                className={`cms-orders-mobile-card${selectedOrderIds.has(order.id) ? " selected" : ""}`}
+                style={order.isManual ? { borderLeft: "3px solid rgba(139,92,246,0.55)" } : undefined}
+              >
+                <div className="cms-orders-mobile-top">
+                  <label className="cms-orders-mobile-check">
+                    <input
+                      type="checkbox"
+                      checked={selectedOrderIds.has(order.id)}
+                      onChange={() => toggleOrderSelection(order.id)}
+                    />
+                    <span className="cms-list-stamp cms-list-clamp-24">
+                      <span className="cms-list-stamp-num">{order.orderNumber}</span>
+                      <span className="cms-list-stamp-date">{formatOrderDate(order)}</span>
+                    </span>
+                    {order.isManual && <span className="cms-badge" style={{ fontSize: 9 }}>РУЧНОЙ</span>}
+                  </label>
+                </div>
+                <div className="cms-orders-mobile-client">
+                  <div className="cms-list-client" style={{ flex: 1, minWidth: 0 }}>
+                    <span className="cms-list-client-actions">
+                      {order.customerPhone && (
+                        <IconButton icon="phone" label={order.customerPhone} shape="square" size="sm" onClick={() => setShowContact({ orderId: order.id, type: "phone", value: order.customerPhone })} />
+                      )}
+                      {order.customerEmail && (
+                        <IconButton icon="mail" label={order.customerEmail} shape="square" size="sm" onClick={() => setShowContact({ orderId: order.id, type: "email", value: order.customerEmail })} />
+                      )}
+                    </span>
+                    <strong className="cms-list-client-name">{order.customerName}</strong>
+                  </div>
+                  <span className="cms-list-sum">{formatPrice(order.totalAmount)}</span>
+                </div>
+                <div className="cms-orders-mobile-items">
+                  {order.items.length > 0
+                    ? order.items.map((item) => (
+                        <span key={item.id} className="cms-list-clamp-35">{item.product?.name || "Товар"} ×{item.quantity}</span>
+                      ))
+                    : "—"}
+                </div>
+                <div className="cms-orders-mobile-meta">
+                  <select
+                    className="cms-status-select"
+                    value={order.status}
+                    onChange={(e) => updateOrderStatus(order, e.target.value)}
+                    style={{ ...statusSelectStyle(order.status), flex: 1, minWidth: 0, height: 20, minHeight: 20 }}
+                  >
+                    {ALL_STATUSES.map((s) => (
+                      <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="cms-orders-mobile-actions cms-row-actions">
+                  <IconButton icon="receipt" label="Чек" shape="square" onClick={() => openReceipt(order.id)} />
+                  <IconButton icon="edit" label="Изменить" shape="square" onClick={() => openOrder(order)} />
+                  {(order.isManual || order.status === "pending" || order.status === "cancelled" || order.status === "unpaid") && (
+                    <IconButton icon="archive" label="В архив" shape="square" tone="danger" onClick={() => deleteOrder(order)} />
+                  )}
+                </div>
+              </div>
+            ))}
+            {sorted.length === 0 && <div className="cms-products-mobile-empty">Заказы не найдены</div>}
           </div>
-        </div>
-      </main>
+
+          {selectedOrderIds.size > 0 && (
+            <div style={{ position: "sticky", bottom: 16, zIndex: 30, margin: "14px auto 0", maxWidth: 520, display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", border: "1px solid var(--cms-border)", borderRadius: 12, background: "var(--cms-surface-elevated)", boxShadow: "0 12px 34px rgba(0,0,0,0.35)" }}>
+              <span style={{ fontSize: 12, color: "var(--cms-text-muted)", marginRight: "auto" }}>
+                Выбрано заказов: <strong style={{ color: "var(--cms-text)" }}>{selectedOrderIds.size}</strong>
+                {" "}· контактов: <strong style={{ color: "var(--cms-text)" }}>{selectedRecipients.length}</strong>
+              </span>
+              <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={goToNewsletter}>
+                Рассылка
+              </button>
+              <button className="cms-btn cms-btn-sm cms-btn-ghost" onClick={() => setSelectedOrderIds(new Set())}>
+                Снять
+              </button>
+            </div>
+          )}
 
       {/* Order Edit Modal */}
       {selected && (
@@ -1130,34 +1366,38 @@ export default function AdminOrdersPage() {
         </div>
       )}
 
-      {notification && <div className="cms-toast">{notification}</div>}
+      {notification && <div className={adminToastClass(notification)}>{notification}</div>}
 
-      {showContact && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 100 }}
-          onClick={() => setShowContact(null)}
-        >
-          <div
-            style={{ position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)', background: 'var(--cms-surface, #1a1d27)', border: '1px solid var(--cms-border)', borderRadius: 10, padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,0.6)', zIndex: 101, minWidth: 240, display: 'flex', alignItems: 'center', gap: 10 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--cms-text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                {showContact.type === 'phone' ? 'Телефон' : 'Email'}
+      <ContactSheet
+        contact={showContact ? { type: showContact.type, value: showContact.value } : null}
+        onClose={() => setShowContact(null)}
+        onCopied={() => notify("Скопировано")}
+      />
+
+      <Modal open={Boolean(shipDraft)} onClose={() => { setShipDraft(null); setConfirmShipSend(false); }} title="Отправка заказа" width={420}>
+        {shipDraft && (
+          <div className="cms-section-stack" style={{ gap: 12 }}>
+            <label className="cms-label">Служба доставки
+              <input className="cms-input" value={shipDraft.deliveryService} onChange={(e) => { setShipDraft({ ...shipDraft, deliveryService: e.target.value }); setConfirmShipSend(false); }} placeholder="СДЭК, Почта России…" />
+            </label>
+            <label className="cms-label">Трек-номер
+              <input className="cms-input" value={shipDraft.trackNumber} onChange={(e) => { setShipDraft({ ...shipDraft, trackNumber: e.target.value }); setConfirmShipSend(false); }} placeholder="Введите track-номер" />
+            </label>
+            {confirmShipSend && (
+              <div style={{ fontSize: 12, color: 'var(--cms-text-muted)', padding: '8px 10px', borderRadius: 10, background: 'rgba(245,139,220,0.12)', border: '1px solid rgba(245,139,220,0.35)' }}>
+                Отправить клиенту письмо «Сведения о заказе» с трек-номером?
               </div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--cms-text)', wordBreak: 'break-all' }}>{showContact.value}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <Button variant="ghost" onClick={() => { setShipDraft(null); setConfirmShipSend(false); }}>Отмена</Button>
+              <Button variant="primary" icon="send" onClick={submitShipDraft} disabled={savingShip}>
+                {confirmShipSend ? 'Подтвердить и отправить' : 'Далее'}
+              </Button>
             </div>
-            <button
-              className="cms-btn cms-btn-xs"
-              onClick={() => { navigator.clipboard.writeText(showContact.value).then(() => notify('Скопировано')).catch(() => {}); setShowContact(null); }}
-              title="Скопировать"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            </button>
-            <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setShowContact(null)}>✕</button>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
+
 
       {/* Stage Manager Modal */}
       {showStageManager && (
@@ -1227,6 +1467,6 @@ export default function AdminOrdersPage() {
           </div>
         </div>
       )}
-    </div>
+    </AdminPage>
   );
 }

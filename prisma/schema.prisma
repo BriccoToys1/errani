@@ -122,6 +122,9 @@ model Order {
   totalAmount     Float
   currency        String      @default("RUB")
   notes           String      @default("")
+  trackNumber     String      @default("") // set when stage changes to "shipped"
+  deliveryService String      @default("") // carrier name entered with the track number
+  shippedNotifiedAt DateTime? // when the "order shipped" email was sent
   isManual        Boolean     @default(false) // created manually by admin
   items           OrderItem[]
   createdAt       DateTime    @default(now())
@@ -363,7 +366,15 @@ model AdminEmail {
   status    String   @default("sent") // sent, delivered, failed, received
   isRead    Boolean  @default(false)
   resendId  String   @default("") // Resend message ID
-  inReplyTo String   @default("") // Parent email ID for threading
+  inReplyTo String   @default("") // AdminEmail.id of the message this one replies to
   inquiryId String   @default("") // linked inquiry, if any
+  kind      String   @default("dialog") // dialog, newsletter
+  threadId  String   @default("") // conversation key: normalized counterpart email (dialogs) / campaign id (newsletters)
+  contactEmail String @default("") // normalized counterpart email
+  messageId String   @default("") // RFC 5322 Message-ID (for In-Reply-To matching)
   createdAt DateTime @default(now())
+
+  @@index([threadId, createdAt])
+  @@index([kind, createdAt])
+  @@index([messageId])
 }

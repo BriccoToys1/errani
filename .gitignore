@@ -10,3 +10,7 @@ Montserrat/
 .vercel
 .env*.local
 
+.env*
+.env.neon.staging
+.neon-claimable.json
+.env.vercel.staging

@@ -3,6 +3,8 @@ import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { Resend } from 'resend';
 import { withPrismaRetry } from '@/lib/prisma-retry';
+import { inboundThreadFields, readInReplyToHeader } from '@/lib/mail-thread';
+import { ensureAdminSchema } from '@/lib/ensure-schema';
 
 async function getApiKey(): Promise<string | null> {
   try {
@@ -80,6 +82,12 @@ export async function POST(req: NextRequest) {
   const denied = adminGuard(req);
   if (denied) return denied;
 
+  try {
+    await ensureAdminSchema(prisma);
+  } catch (error) {
+    console.error('ensureAdminSchema failed', error);
+  }
+
   const apiKey = await getApiKey();
   if (!apiKey) {
     return NextResponse.json({ error: 'RESEND_API_KEY не настроен', synced: 0 });
@@ -149,19 +157,30 @@ export async function POST(req: NextRequest) {
         bodyData = pickBody(email);
       }
 
+      const fromAddr = extractAddr(email.from) || 'unknown';
+      const subject = String(email.subject || '(без темы)');
+      const receivedAt = email.created_at ? new Date(String(email.created_at)) : new Date();
+      const thread = await inboundThreadFields(prisma, {
+        fromAddr,
+        subject,
+        inReplyToHeader: readInReplyToHeader(email),
+        messageId,
+        receivedAt,
+      });
+
       await withPrismaRetry(() => prisma.adminEmail.create({
         data: {
           direction: 'inbound',
-          fromAddr: extractAddr(email.from) || 'unknown',
+          fromAddr,
           toAddr: extractAddr(email.to) || extractAddr(email.received_for) || 'mail@errani.ru',
-          subject: String(email.subject || '(без темы)'),
+          subject,
           body: bodyData.body,
           textBody: bodyData.textBody,
           status: isSpam ? 'spam' : 'received',
           isRead: false,
           resendId: resendId || messageId,
-          inReplyTo: String(email.in_reply_to || email.reply_to || ''),
-          createdAt: email.created_at ? new Date(String(email.created_at)) : new Date(),
+          ...thread,
+          createdAt: receivedAt,
         },
       }), 2, 80);
       synced++;

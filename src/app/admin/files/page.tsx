@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AdminSidebar } from "../AdminSidebar";
+import { AdminPage } from "../AdminPage";
+import { PageLoading } from "@/components/admin";
+import { adminToastClass } from "@/lib/admin-client";
 
 interface FileItem {
   name: string;
@@ -173,28 +175,29 @@ export default function AdminFilesPage() {
   const breadcrumbs = currentPath ? currentPath.split("/").filter(Boolean) : [];
 
   if (loading && items.length === 0) {
-    return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
+    return (
+      <AdminPage title="Файловый менеджер">
+        <PageLoading />
+      </AdminPage>
+    );
   }
 
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
-        <div className="cms-header">
-          <h1 className="cms-header-title">Файловый менеджер</h1>
-          <div className="cms-header-actions">
-            <button className="cms-btn cms-btn-sm" onClick={() => setNewItemModal("file")}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/></svg>
-              Новый файл
-            </button>
-            <button className="cms-btn cms-btn-sm" onClick={() => setNewItemModal("folder")}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-              Новая папка
-            </button>
-          </div>
+    <AdminPage
+      title="Файловый менеджер"
+      actions={
+        <div className="cms-header-actions">
+          <button className="cms-btn cms-btn-sm" onClick={() => setNewItemModal("file")}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/></svg>
+            Новый файл
+          </button>
+          <button className="cms-btn cms-btn-sm" onClick={() => setNewItemModal("folder")}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+            Новая папка
+          </button>
         </div>
-
-        <div className="cms-content">
+      }
+    >
           {/* Breadcrumbs */}
           <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px", fontSize: "13px" }}>
             <button 
@@ -255,7 +258,7 @@ export default function AdminFilesPage() {
                       padding: "10px 16px", 
                       borderBottom: "1px solid var(--cms-border)", 
                       cursor: "pointer",
-                      background: selected?.path === item.path ? "rgba(232, 114, 42, 0.1)" : "transparent"
+                      background: selected?.path === item.path ? "rgba(245, 139, 220, 0.1)" : "transparent"
                     }}
                     className="cms-file-row"
                   >
@@ -328,7 +331,6 @@ export default function AdminFilesPage() {
               </div>
             )}
           </div>
-        </div>
 
         {/* New Item Modal */}
         {newItemModal && (
@@ -383,15 +385,15 @@ export default function AdminFilesPage() {
 
         {/* Notification */}
         {notification && (
-          <div className="cms-notification">{notification}</div>
+          <div className={adminToastClass(notification)}>{notification}</div>
         )}
-      </main>
 
       <style jsx>{`
         .cms-file-row:hover {
-          background: var(--cms-surface-hover) !important;
+          background: #ffe3f1 !important;
+          color: #111;
         }
       `}</style>
-    </div>
+    </AdminPage>
   );
 }

@@ -19,7 +19,7 @@ function SuccessContent() {
     let attempts = 0;
     const check = async () => {
       try {
-        const res = await fetch(`/api/orders/status?number=${orderNumber}`);
+        const res = await fetch(`/api/orders/status?number=${encodeURIComponent(orderNumber)}&lang=${lang}`);
         if (!res.ok) { setStatus('error'); return; }
         const data = await res.json();
         if (data.status && data.status !== 'pending') {
@@ -37,7 +37,7 @@ function SuccessContent() {
       }
     };
     check();
-  }, [orderNumber]);
+  }, [orderNumber, lang]);
 
   const sendReceipt = async () => {
     if (!orderNumber || emailStatus === 'sending') return;
@@ -47,10 +47,10 @@ function SuccessContent() {
       const response = await fetch('/api/orders/receipt/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderNumber }),
+        body: JSON.stringify({ orderNumber, language: lang }),
       });
 
-      if (!response.ok) throw new Error('Failed to send receipt');
+      if (!response.ok) throw new Error(lang === 'ru' ? 'Не удалось отправить чек' : 'Failed to send receipt');
       setEmailStatus('sent');
     } catch {
       setEmailStatus('error');
@@ -123,7 +123,7 @@ function SuccessContent() {
           width: '64px',
           height: '64px',
           borderRadius: '50%',
-          background: 'var(--orange)',
+          background: 'var(--primary)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

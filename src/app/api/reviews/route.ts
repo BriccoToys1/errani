@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 import { hashReviewToken, isValidRating, normalizeEmail } from '@/lib/review-links';
+import { flash, langFromRequest, parseLang } from '@/lib/flash';
 
 function parseMedia(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
@@ -39,16 +40,17 @@ async function getInviteByToken(token: string) {
 }
 
 export async function GET(req: NextRequest) {
+  const lang = langFromRequest(req);
   try {
     const { searchParams } = new URL(req.url);
     const token = String(searchParams.get('token') || '').trim();
     if (!token) {
-      return NextResponse.json({ success: false, message: 'Токен не указан' }, { status: 400 });
+      return NextResponse.json({ success: false, message: flash(lang, 'review.token_missing') }, { status: 400 });
     }
 
     const invite = await getInviteByToken(token);
     if (!invite) {
-      return NextResponse.json({ success: false, message: 'Ссылка не найдена' }, { status: 404 });
+      return NextResponse.json({ success: false, message: flash(lang, 'review.link_not_found') }, { status: 404 });
     }
 
     const expired = invite.expiresAt ? invite.expiresAt.getTime() <= Date.now() : false;
@@ -68,44 +70,46 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error('Review token validation error:', error);
-    return NextResponse.json({ success: false, message: 'Ошибка проверки ссылки' }, { status: 500 });
+    return NextResponse.json({ success: false, message: flash(lang, 'review.check_failed') }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
+  let lang = parseLang(req.headers.get('accept-language'), 'ru');
   try {
     const body = await req.json();
+    lang = parseLang(body.language ?? body.lang, lang);
     const token = String(body?.token || '').trim();
     const rating = Number(body?.rating);
     const text = String(body?.text || '').trim();
     const media = parseMedia(body?.media);
 
     if (!token) {
-      return NextResponse.json({ success: false, message: 'Токен не указан' }, { status: 400 });
+      return NextResponse.json({ success: false, message: flash(lang, 'review.token_missing') }, { status: 400 });
     }
 
     if (!isValidRating(rating)) {
-      return NextResponse.json({ success: false, message: 'Оценка должна быть от 1 до 5' }, { status: 400 });
+      return NextResponse.json({ success: false, message: flash(lang, 'review.rating_range') }, { status: 400 });
     }
 
     if (text.length === 0 && media.length === 0) {
-      return NextResponse.json({ success: false, message: 'Добавьте текст или медиа' }, { status: 400 });
+      return NextResponse.json({ success: false, message: flash(lang, 'review.need_content') }, { status: 400 });
     }
 
     const invite = await getInviteByToken(token);
     if (!invite) {
-      return NextResponse.json({ success: false, message: 'Ссылка не найдена' }, { status: 404 });
+      return NextResponse.json({ success: false, message: flash(lang, 'review.link_not_found') }, { status: 404 });
     }
 
     if (invite.expiresAt && invite.expiresAt.getTime() <= Date.now()) {
       await withPrismaRetry(() =>
         prisma.reviewInvite.update({ where: { id: invite.id }, data: { status: 'expired' } })
       );
-      return NextResponse.json({ success: false, message: 'Срок действия ссылки истёк' }, { status: 410 });
+      return NextResponse.json({ success: false, message: flash(lang, 'review.link_expired') }, { status: 410 });
     }
 
     if (invite.usedAt || invite.status !== 'sent') {
-      return NextResponse.json({ success: false, message: 'Ссылка уже использована' }, { status: 409 });
+      return NextResponse.json({ success: false, message: flash(lang, 'review.link_used') }, { status: 409 });
     }
 
     const result = await withPrismaRetry(() =>
@@ -145,10 +149,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, reviewId: result.id });
   } catch (error) {
     if (error instanceof Error && error.message === 'INVITE_ALREADY_USED') {
-      return NextResponse.json({ success: false, message: 'Ссылка уже использована' }, { status: 409 });
+      return NextResponse.json({ success: false, message: flash(lang, 'review.link_used') }, { status: 409 });
     }
 
     console.error('Review submit error:', error);
-    return NextResponse.json({ success: false, message: 'Ошибка отправки отзыва' }, { status: 500 });
+    return NextResponse.json({ success: false, message: flash(lang, 'review.submit_failed') }, { status: 500 });
   }
 }

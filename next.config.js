@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const scriptPolicy = isDevelopment
-  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api-maps.yandex.ru https://yastatic.net"
-  : "script-src 'self' 'unsafe-inline' https://api-maps.yandex.ru https://yastatic.net";
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://api-maps.yandex.ru https://yastatic.net"
+  : "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://api-maps.yandex.ru https://yastatic.net";
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -15,7 +15,7 @@ const contentSecurityPolicy = [
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob:",
   "frame-src 'self' https://yandex.ru https://yandex.com https://api-maps.yandex.ru",
-  "connect-src 'self' https://nominatim.openstreetmap.org https://api-maps.yandex.ru https://*.maps.yandex.net https://*.yandex.ru https://yastatic.net",
+  "connect-src 'self' blob: https://nominatim.openstreetmap.org https://api-maps.yandex.ru https://*.maps.yandex.net https://*.yandex.ru https://yastatic.net",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",
 ].join('; ');

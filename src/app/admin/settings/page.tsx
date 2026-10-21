@@ -1,8 +1,27 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { AdminSidebar } from "../AdminSidebar";
+import { AdminPage } from "../AdminPage";
+import { HeaderActions, Button, Icon, SearchField, SegmentedControl, Slider, Toggle as AdminToggle } from "@/components/admin";
+import {
+  applyAppearance,
+  cacheAppearance,
+  parseAppearance,
+  DEFAULT_APPEARANCE,
+  APPEARANCE_SETTING_KEY,
+  type AdminAppearance,
+  type AdminTheme,
+} from "@/components/admin/appearance";
+import { adminFetch, adminToastClass } from "@/lib/admin-client";
+import { isPhotoMedia } from "@/lib/media-kind";
+import {
+  DEFAULT_MOBILE_NAV_SLOTS,
+  MOBILE_NAV_CATALOG,
+  MOBILE_NAV_SETTING_KEY,
+  parseMobileNavSlots,
+  type MobileNavSlotId,
+} from "@/lib/mobile-nav";
 
 interface Settings {
   siteEnabled: boolean;
@@ -41,12 +60,18 @@ interface SeoSettings {
   title: string;
   description: string;
   keywords: string;
+  titleEn: string;
+  descriptionEn: string;
+  keywordsEn: string;
 }
 
 const DEFAULT_SEO_SETTINGS: SeoSettings = {
   title: "errani — Авторские Колоды Таро",
   description: "Авторские колоды Таро от Екатерины Эррани.",
   keywords: "таро, колода таро, errani",
+  titleEn: "errani — Author Tarot Decks",
+  descriptionEn: "Author tarot decks by Ekaterina Errani.",
+  keywordsEn: "tarot, tarot deck, errani",
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -85,11 +110,213 @@ const PAYMENT = [
   { id: "tochka", label: "СБП" },
 ];
 
-function SettingSection({ title, children }: { title: string; children: React.ReactNode }) {
+function SettingSection({
+  title,
+  hint,
+  divider = true,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  divider?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="cms-table-wrap" style={{ padding: "20px" }}>
-      <div style={{ fontWeight: 700, fontSize: "15px", marginBottom: "16px", paddingBottom: "10px", borderBottom: "1px solid var(--cms-border)" }}>{title}</div>
+    <div className="cms-table-wrap cms-settings-section">
+      <div className={`cms-settings-section-head${divider ? " has-divider" : ""}`}>
+        <span className="cms-settings-section-title">{title}</span>
+        {hint && <span className="cms-settings-section-hint">{hint}</span>}
+      </div>
       {children}
+    </div>
+  );
+}
+
+function WallpaperPicker({
+  currentUrl,
+  onPick,
+  onClear,
+  getToken,
+}: {
+  currentUrl: string;
+  onPick: (url: string) => void;
+  onClear: () => void;
+  getToken: () => string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<{ url: string; filename: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadGallery = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+    setLoading(true);
+    setError("");
+    try {
+      const r = await fetch("/api/admin/upload/images", { headers: { Authorization: `Bearer ${token}` } });
+      const d = await r.json().catch(() => ({}));
+      const list = Array.isArray(d?.items) ? d.items : [];
+      setItems(
+        list
+          .map((item: Record<string, unknown>) => ({
+            url: String(item.url || ""),
+            filename: String(item.filename || ""),
+            mimeType: String(item.mimeType || ""),
+          }))
+          .filter((i: { url: string; filename: string; mimeType: string }) => i.url && isPhotoMedia(i))
+          .map((i: { url: string; filename: string }) => ({ url: i.url, filename: i.filename }))
+      );
+    } catch {
+      setItems([]);
+      setError("Не удалось загрузить галерею");
+    } finally {
+      setLoading(false);
+    }
+  }, [getToken]);
+
+  useEffect(() => {
+    if (!open) return;
+    void loadGallery();
+  }, [open, loadGallery]);
+
+  const uploadFiles = async (files: FileList | File[]) => {
+    const token = getToken();
+    if (!token) return;
+    const list = Array.from(files).filter((f) => isPhotoMedia({ mimeType: f.type, filename: f.name }));
+    if (list.length === 0) {
+      setError("Можно загружать только фото (JPG, PNG, WEBP)");
+      return;
+    }
+    setUploading(true);
+    setError("");
+    let lastUrl = "";
+    try {
+      for (const file of list.slice(0, 10)) {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/api/admin/media/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.url) lastUrl = String(data.url);
+      }
+      await loadGallery();
+      if (lastUrl) {
+        onPick(lastUrl);
+        setOpen(false);
+      }
+    } catch {
+      setError("Ошибка загрузки");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="cms-wallpaper-dd">
+      <div className="cms-wallpaper-dd-row">
+        <div className={`cms-wallpaper-dd-preview${currentUrl ? " has-image" : ""}`} aria-hidden>
+          {currentUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={currentUrl} alt="" />
+          ) : null}
+        </div>
+        <Button icon="wallpaper" onClick={() => setOpen(true)}>
+          Выбрать
+        </Button>
+        {currentUrl ? (
+          <Button variant="ghost" icon="hide" onClick={onClear}>
+            Убрать
+          </Button>
+        ) : null}
+      </div>
+
+      {open && (
+        <div className="cms-modal-overlay" onClick={() => setOpen(false)}>
+          <div
+            className="cms-modal cms-wallpaper-gallery-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 720, width: "94vw" }}
+          >
+            <div className="cms-modal-header">
+              <h3>Галерея</h3>
+              <button type="button" className="cms-modal-close" onClick={() => setOpen(false)} aria-label="Закрыть">
+                &times;
+              </button>
+            </div>
+            <div className="cms-modal-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div
+                className={`cms-uploader-zone${dragging ? " dragging" : ""}`}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  void uploadFiles(e.dataTransfer.files);
+                }}
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onClick={() => !uploading && fileInputRef.current?.click()}
+              >
+                <div className="cms-uploader-zone-label">
+                  <Icon name="attach" size={16} />
+                  <span>{uploading ? "Загрузка…" : "Перетащите фото сюда или нажмите для выбора"}</span>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    e.target.value = "";
+                    if (files?.length) void uploadFiles(files);
+                  }}
+                />
+              </div>
+
+              {error ? <div style={{ fontSize: 12, color: "var(--cms-danger)" }}>{error}</div> : null}
+
+              {loading ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: 40, color: "var(--cms-text-muted)", fontSize: 13 }}>
+                  <span className="cms-spinner" /> Загрузка…
+                </div>
+              ) : (
+                <div className="cms-wallpaper-picker-grid">
+                  {items.map((item) => (
+                    <button
+                      key={item.url}
+                      type="button"
+                      className={`cms-wallpaper-picker-tile${item.url === currentUrl ? " active" : ""}`}
+                      title={item.filename}
+                      onClick={() => {
+                        onPick(item.url);
+                        setOpen(false);
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={item.url} alt={item.filename} />
+                    </button>
+                  ))}
+                  {items.length === 0 && (
+                    <div style={{ gridColumn: "1 / -1", textAlign: "center", color: "var(--cms-text-muted)", padding: 28, fontSize: 13 }}>
+                      Нет фото в галерее — загрузите выше
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="cms-modal-actions">
+              <Button variant="ghost" onClick={() => setOpen(false)}>Закрыть</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -240,123 +467,21 @@ function MemoryManagement({ getToken, notify }: { getToken: () => string | null;
   );
 }
 
-const EXPORT_PERIODS = [
-  { label: "1 день", value: 1 },
-  { label: "3 дня", value: 3 },
-  { label: "7 дней", value: 7 },
-  { label: "14 дней", value: 14 },
-  { label: "30 дней", value: 30 },
-  { label: "90 дней", value: 90 },
-  { label: "120 дней", value: 120 },
-  { label: "366 дней", value: 366 },
-];
-
-const EXPORT_TYPES = [
-  { id: "orders", label: "Заказы", description: "Полная информация по заказам: клиент, товары, суммы, адреса, статусы" },
-  { id: "products", label: "Товары", description: "Каталог товаров: названия, цены, наличие, slug" },
-  { id: "inquiries", label: "Заявки", description: "Все заявки: имя, контакты, сообщение, статус, источник" },
-];
-
-function ExportSection({ getToken, notify }: { getToken: () => string | null; notify: (msg: string) => void }) {
-  const [period, setPeriod] = useState(30);
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [useCustom, setUseCustom] = useState(false);
-  const [downloading, setDownloading] = useState<string | null>(null);
-
-  const handleDownload = async (type: string) => {
-    setDownloading(type);
-    const token = getToken();
-    if (!token) return;
-
-    let url = `/api/admin/export?type=${type}&format=xls&period=${period}`;
-    if (useCustom && customFrom && customTo) {
-      url = `/api/admin/export?type=${type}&format=xls&from=${customFrom}&to=${customTo}`;
-    }
-
-    try {
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = `${type}_report.xls`;
-        a.click();
-        URL.revokeObjectURL(blobUrl);
-        notify(`Отчёт "${EXPORT_TYPES.find(t => t.id === type)?.label}" скачан`);
-      } else {
-        notify("Ошибка экспорта");
-      }
-    } catch {
-      notify("Ошибка скачивания");
-    }
-    setDownloading(null);
-  };
-
-  return (
-    <SettingSection title="Экспорт отчётности (XLS)">
-      <div style={{ marginBottom: "16px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px" }}>Период</div>
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "10px" }}>
-          {EXPORT_PERIODS.map(p => (
-            <button
-              key={p.value}
-              className={`cms-btn cms-btn-xs ${!useCustom && period === p.value ? "cms-btn-primary" : ""}`}
-              onClick={() => { setPeriod(p.value); setUseCustom(false); }}
-            >
-              {p.label}
-            </button>
-          ))}
-          <button
-            className={`cms-btn cms-btn-xs ${useCustom ? "cms-btn-primary" : ""}`}
-            onClick={() => setUseCustom(true)}
-          >
-            Свой период
-          </button>
-        </div>
-        {useCustom && (
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <input type="date" className="cms-input" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={{ width: "auto" }} />
-            <span style={{ color: "var(--cms-text-muted)" }}>—</span>
-            <input type="date" className="cms-input" value={customTo} onChange={e => setCustomTo(e.target.value)} style={{ width: "auto" }} />
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: "grid", gap: "10px" }}>
-        {EXPORT_TYPES.map(t => (
-          <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: "var(--cms-bg)", borderRadius: "8px" }}>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: "13px" }}>{t.label}</div>
-              <div style={{ fontSize: "11px", color: "var(--cms-text-muted)" }}>{t.description}</div>
-            </div>
-            <button
-              className="cms-btn cms-btn-sm cms-btn-primary"
-              onClick={() => handleDownload(t.id)}
-              disabled={downloading !== null}
-              style={{ whiteSpace: "nowrap" }}
-            >
-              {downloading === t.id ? "Скачивание..." : "Скачать XLS"}
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--cms-text-muted)" }}>
-        Отчёты формируются в формате XLS с максимальной детализацией. Все данные за выбранный период.
-      </div>
-    </SettingSection>
-  );
-}
-
 function ResendSettings({ notify, getToken }: { notify: (msg: string) => void; getToken: () => string | null }) {
   const [apiKey, setApiKey] = useState('');
   const [masked, setMasked] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingBoxes, setSavingBoxes] = useState(false);
   const [testing, setTesting] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [testTo, setTestTo] = useState('');
+  const [testFrom, setTestFrom] = useState('mail@errani.ru');
+  const [mailboxEnabled, setMailboxEnabled] = useState<Record<string, boolean>>({
+    'mail@errani.ru': true,
+    'sales@errani.ru': true,
+    'info@errani.ru': true,
+    'katy@errani.ru': true,
+  });
 
   useEffect(() => {
     const token = getToken();
@@ -368,6 +493,24 @@ function ResendSettings({ notify, getToken }: { notify: (msg: string) => void; g
         else setConfigured(false);
       })
       .catch(() => setConfigured(false));
+    fetch('/api/admin/settings?key=mailboxes_v1', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.value) return;
+        try {
+          const parsed = JSON.parse(d.value) as Record<string, { enabled?: boolean } | boolean>;
+          setMailboxEnabled((prev) => {
+            const next = { ...prev };
+            for (const addr of Object.keys(next)) {
+              const entry = parsed[addr];
+              if (typeof entry === 'boolean') next[addr] = entry;
+              else if (entry && typeof entry === 'object') next[addr] = entry.enabled !== false;
+            }
+            return next;
+          });
+        } catch { /* ignore */ }
+      })
+      .catch(() => undefined);
   }, [getToken]);
 
   const save = async () => {
@@ -385,6 +528,22 @@ function ResendSettings({ notify, getToken }: { notify: (msg: string) => void; g
     setSaving(false);
   };
 
+  const saveMailboxes = async () => {
+    setSavingBoxes(true);
+    const token = getToken();
+    const value = Object.fromEntries(
+      Object.entries(mailboxEnabled).map(([addr, enabled]) => [addr, { enabled }])
+    );
+    const res = await fetch('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ key: 'mailboxes_v1', value: JSON.stringify(value) }),
+    });
+    if (res.ok) notify('Ящики сохранены');
+    else notify('Ошибка сохранения ящиков');
+    setSavingBoxes(false);
+  };
+
   const sendTest = async () => {
     if (!testTo.trim()) { notify('Укажите email для теста'); return; }
     setTesting(true);
@@ -394,8 +553,9 @@ function ResendSettings({ notify, getToken }: { notify: (msg: string) => void; g
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         to: testTo.trim(),
+        from: testFrom,
         subject: 'Тест почты errani',
-        body: '<p>Это тестовое письмо с сайта errani. Если вы его получили — почта работает!</p>',
+        body: `<p>Это тестовое письмо с адреса ${testFrom}. Если вы его получили — почта работает!</p>`,
       }),
     });
     const data = await res.json();
@@ -405,7 +565,7 @@ function ResendSettings({ notify, getToken }: { notify: (msg: string) => void; g
   };
 
   return (
-    <SettingSection title="Resend (отправка email)">
+    <SettingSection title="Resend">
       <div style={{ marginBottom: '14px', padding: '12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', background: configured === true ? 'rgba(34,197,94,0.1)' : configured === false ? 'rgba(239,68,68,0.1)' : 'var(--cms-surface)' }}>
         {configured === true
           ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -418,7 +578,7 @@ function ResendSettings({ notify, getToken }: { notify: (msg: string) => void; g
             {configured === true ? 'API Key настроен — почта работает' : configured === false ? 'API Key не задан — письма не отправляются' : 'Проверка...'}
           </div>
           <div style={{ fontSize: '12px', color: 'var(--cms-text-muted)' }}>
-            Отправка от имени mail@errani.ru через Resend
+            Отправка через Resend с выбранных ящиков errani.ru
           </div>
         </div>
       </div>
@@ -445,9 +605,36 @@ function ResendSettings({ notify, getToken }: { notify: (msg: string) => void; g
         </div>
 
         <div>
+          <label className="cms-label">Ящики (интеграция)</label>
+          <div style={{ display: 'grid', gap: 8, marginTop: 6 }}>
+            {Object.keys(mailboxEnabled).map((addr) => (
+              <label key={addr} className="cms-toggle-row" style={{ justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13 }}>{addr}</span>
+                <input
+                  type="checkbox"
+                  checked={mailboxEnabled[addr]}
+                  onChange={(e) => setMailboxEnabled((prev) => ({ ...prev, [addr]: e.target.checked }))}
+                />
+              </label>
+            ))}
+          </div>
+          <button className="cms-btn cms-btn-sm cms-btn-primary" style={{ marginTop: 10 }} onClick={saveMailboxes} disabled={savingBoxes}>
+            {savingBoxes ? 'Сохранение...' : 'Сохранить ящики'}
+          </button>
+          <div style={{ fontSize: 11, color: 'var(--cms-text-muted)', marginTop: 8, lineHeight: 1.5 }}>
+            Включите адреса, которые настроены в Resend (Domains → Inbound). В шапке «Почта» можно переключать ящик — список писем фильтруется по отправителю/получателю.
+          </div>
+        </div>
+
+        <div>
           <label className="cms-label">Тестовое письмо</label>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <input className="cms-input" type="email" value={testTo} onChange={e => setTestTo(e.target.value)} placeholder="your@email.com" style={{ flex: 1 }} />
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <select className="cms-select" value={testFrom} onChange={(e) => setTestFrom(e.target.value)} style={{ minWidth: 180 }}>
+              {Object.keys(mailboxEnabled).filter((a) => mailboxEnabled[a]).map((addr) => (
+                <option key={addr} value={addr}>{addr}</option>
+              ))}
+            </select>
+            <input className="cms-input" type="email" value={testTo} onChange={e => setTestTo(e.target.value)} placeholder="your@email.com" style={{ flex: 1, minWidth: 160 }} />
             <button className="cms-btn cms-btn-sm" onClick={sendTest} disabled={testing}>
               {testing ? 'Отправка...' : 'Отправить тест'}
             </button>
@@ -462,6 +649,7 @@ function ResendSettings({ notify, getToken }: { notify: (msg: string) => void; g
           <li>Создайте новый ключ с правами <strong>Sending access</strong></li>
           <li>Вставьте его выше и нажмите «Сохранить»</li>
           <li>Убедитесь что домен <strong>errani.ru</strong> верифицирован в Resend → Domains</li>
+          <li>Добавьте inbound-адреса: mail@ / sales@ / info@ / katy@errani.ru</li>
         </ol>
         <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--cms-border)' }}>
           <strong>Для входящих писем</strong> (Resend → Inbound):<br/>
@@ -474,163 +662,15 @@ function ResendSettings({ notify, getToken }: { notify: (msg: string) => void; g
 }
 
 function IntegrationsTab({ notify, getToken }: { notify: (msg: string) => void; getToken: () => string | null }) {
-  const [avitoConfig, setAvitoConfig] = useState({ clientId: '', clientSecret: '', userId: '' });
-  const [avitoStatus, setAvitoStatus] = useState<{ configured: boolean; products: number; lastSync: string | null }>({ configured: false, products: 0, lastSync: null });
-  const [syncing, setSyncing] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    // Load Avito status
-    const token = getToken();
-    if (token) {
-      fetch('/api/avito/sync', { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.json())
-        .then(data => {
-          setAvitoStatus({
-            configured: data.configured,
-            products: data.products?.length || 0,
-            lastSync: data.lastSync,
-          });
-        })
-        .catch(() => {});
-
-      // Load saved config from localStorage
-      const savedConfig = localStorage.getItem('avito_config');
-      if (savedConfig) {
-        try { setAvitoConfig(JSON.parse(savedConfig)); } catch {}
-      }
-    }
-  }, [getToken]);
-
-  const saveAvitoConfig = async () => {
-    setSaving(true);
-    localStorage.setItem('avito_config', JSON.stringify(avitoConfig));
-    
-    // Save to database
-    const token = getToken();
-    await fetch('/api/admin/settings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ key: 'avito_config', value: JSON.stringify(avitoConfig) }),
-    });
-    
-    notify('Настройки Avito сохранены');
-    setSaving(false);
-  };
-
-  const syncAvito = async () => {
-    setSyncing(true);
-    const token = getToken();
-    const res = await fetch('/api/avito/sync', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    
-    if (data.success) {
-      notify(data.message);
-      setAvitoStatus(prev => ({ ...prev, products: data.total, lastSync: new Date().toISOString() }));
-    } else {
-      notify(data.error || 'Ошибка синхронизации');
-    }
-    setSyncing(false);
-  };
-
   return (
-    <div style={{ display: "grid", gap: "16px" }}>
+    <div className="cms-settings-stack">
       <ResendSettings notify={notify} getToken={getToken} />
-      <SettingSection title="Avito API">
-        <div style={{ marginBottom: "16px", padding: "12px", background: avitoStatus.configured ? "rgba(34, 197, 94, 0.1)" : "rgba(245, 158, 11, 0.1)", borderRadius: "8px", display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ display: "flex", alignItems: "center" }}>{avitoStatus.configured ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}</span>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: "14px" }}>
-              {avitoStatus.configured ? "API настроен" : "API не настроен"}
-            </div>
-            <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>
-              {avitoStatus.configured 
-                ? `${avitoStatus.products} товаров синхронизировано`
-                : "Введите данные API для синхронизации товаров"
-              }
-            </div>
-          </div>
-          {avitoStatus.configured && (
-            <div style={{ display: "flex", gap: "8px", marginLeft: "auto" }}>
-              <a 
-                href="/api/avito/export" 
-                className="cms-btn cms-btn-sm"
-                download="avito-feed.xml"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> XML фид
-              </a>
-              <button 
-                className="cms-btn cms-btn-sm cms-btn-primary" 
-                onClick={syncAvito}
-                disabled={syncing}
-              >
-                {syncing ? "Синхронизация..." : "Синхронизировать"}
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gap: "12px" }}>
-          <div>
-            <label className="cms-label">Client ID</label>
-            <input 
-              className="cms-input" 
-              value={avitoConfig.clientId}
-              onChange={(e) => setAvitoConfig(prev => ({ ...prev, clientId: e.target.value }))}
-              placeholder="Введите client_id от Avito API"
-            />
-          </div>
-          <div>
-            <label className="cms-label">Client Secret</label>
-            <input 
-              className="cms-input" 
-              type="password"
-              value={avitoConfig.clientSecret}
-              onChange={(e) => setAvitoConfig(prev => ({ ...prev, clientSecret: e.target.value }))}
-              placeholder="Введите client_secret от Avito API"
-            />
-          </div>
-          <div>
-            <label className="cms-label">User ID</label>
-            <input 
-              className="cms-input" 
-              value={avitoConfig.userId}
-              onChange={(e) => setAvitoConfig(prev => ({ ...prev, userId: e.target.value }))}
-              placeholder="ID вашего профиля на Avito"
-            />
-          </div>
-        </div>
-
-        <div style={{ marginTop: "16px", display: "flex", gap: "10px" }}>
-          <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={saveAvitoConfig} disabled={saving}>
-            {saving ? "Сохранение..." : "Сохранить настройки"}
-          </button>
-        </div>
-
-        <div style={{ marginTop: "16px", padding: "12px", background: "var(--cms-surface)", borderRadius: "8px", fontSize: "12px", color: "var(--cms-text-muted)" }}>
-          <strong>Как получить API ключи:</strong>
-          <ol style={{ margin: "8px 0 0 16px", padding: 0 }}>
-            <li>Зайдите в <a href="https://www.avito.ru/professionals/api" target="_blank" style={{ color: "var(--cms-accent)" }}>Avito для бизнеса</a></li>
-            <li>Создайте приложение и получите client_id и client_secret</li>
-            <li>User ID можно найти в URL вашего профиля</li>
-          </ol>
-        </div>
-
-        {avitoStatus.lastSync && (
-          <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--cms-text-muted)" }}>
-            Последняя синхронизация: {new Date(avitoStatus.lastSync).toLocaleString("ru-RU")}
-          </div>
-        )}
-      </SettingSection>
-
-      <SettingSection title="Другие интеграции">
-        <div style={{ padding: "20px", textAlign: "center", color: "var(--cms-text-muted)" }}>
-          <div style={{ fontSize: "32px", marginBottom: "10px" }}>🔌</div>
-          <div>Дополнительные интеграции будут добавлены в будущих обновлениях</div>
-          <div style={{ fontSize: "12px", marginTop: "8px" }}>Telegram бот, WooCommerce, 1С и другие</div>
+      <SettingSection title="Экспорт данных" hint="Выгрузка из админки в XLS">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <a className="cms-btn cms-btn-sm" href="/api/admin/export?type=orders&format=xls">Экспорт заказов</a>
+          <a className="cms-btn cms-btn-sm" href="/api/admin/export?type=inquiries&format=xls">Экспорт заявок</a>
+          <a className="cms-btn cms-btn-sm" href="/api/admin/export?type=waitlist&format=xls">Экспорт ожидания</a>
+          <a className="cms-btn cms-btn-sm" href="/api/admin/export?type=users&format=xls">Экспорт клиентов</a>
         </div>
       </SettingSection>
     </div>
@@ -703,37 +743,51 @@ function NotificationsTab({ getToken, notify }: { getToken: () => string | null;
   };
 
   return (
-    <SettingSection title="Уведомления">
-      <Toggle
-        checked={enabled}
-        onChange={toggleEnabled}
-        label="Звуковые уведомления"
-        description="Проигрывать звук в браузере при новом заказе, письме или заявке, пока открыта админка"
-      />
-      <div style={{ marginTop: "14px" }}>
-        <label className="cms-label" style={{ display: "block" }}>
-          Файл звука (MP3, до 3MB)
-          <input
-            type="file"
-            accept="audio/mpeg,.mp3"
-            className="cms-input"
-            style={{ marginTop: "5px" }}
-            disabled={uploading}
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }}
-          />
-        </label>
-        {uploading && <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "6px" }}>Загрузка...</div>}
-        {soundUrl && !uploading && (
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px" }}>
-            <button className="cms-btn cms-btn-sm" onClick={preview}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: 4 }}><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Прослушать
-            </button>
-            <span style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>Звук загружен</span>
+    <div className="cms-settings-stack">
+      <SettingSection title="Уведомления">
+        <Toggle
+          checked={enabled}
+          onChange={toggleEnabled}
+          label="Звуковые уведомления"
+          description="Проигрывать звук в браузере при новом заказе, письме или заявке, пока открыта админка"
+        />
+        {enabled && (
+          <div style={{ marginTop: "14px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+            {!soundUrl && (
+              <label className="cms-btn cms-btn-sm" style={{ cursor: uploading ? "wait" : "pointer" }}>
+                <Icon name="attach" size={14} />
+                Прикрепить
+                <input
+                  type="file"
+                  accept="audio/mpeg,.mp3"
+                  style={{ display: "none" }}
+                  disabled={uploading}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }}
+                />
+              </label>
+            )}
+            {soundUrl && (
+              <>
+                <Button icon="play" onClick={preview}>Прослушать</Button>
+                <label className="cms-btn cms-btn-sm" style={{ cursor: uploading ? "wait" : "pointer" }}>
+                  <Icon name="replace" size={14} />
+                  Заменить
+                  <input
+                    type="file"
+                    accept="audio/mpeg,.mp3"
+                    style={{ display: "none" }}
+                    disabled={uploading}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }}
+                  />
+                </label>
+                <Icon name="check" size={14} style={{ color: "#4ade80" }} />
+              </>
+            )}
+            {uploading && <span style={{ fontSize: 12, color: "var(--cms-text-muted)" }}>Загрузка...</span>}
           </div>
         )}
-      </div>
-    </SettingSection>
+      </SettingSection>
+    </div>
   );
 }
 
@@ -744,6 +798,12 @@ interface PageSeo {
   ogTitle: string;
   ogDescription: string;
   ogImage: string;
+  titleEn: string;
+  descriptionEn: string;
+  keywordsEn: string;
+  ogTitleEn: string;
+  ogDescriptionEn: string;
+  ogImageEn: string;
 }
 
 const SEO_PAGE_CONFIGS = [
@@ -753,7 +813,10 @@ const SEO_PAGE_CONFIGS = [
   { key: "seo_privacy", label: "Политика конфиденциальности", url: "/privacy" },
 ];
 
-const EMPTY_PAGE_SEO: PageSeo = { title: "", description: "", keywords: "", ogTitle: "", ogDescription: "", ogImage: "" };
+const EMPTY_PAGE_SEO: PageSeo = {
+  title: "", description: "", keywords: "", ogTitle: "", ogDescription: "", ogImage: "",
+  titleEn: "", descriptionEn: "", keywordsEn: "", ogTitleEn: "", ogDescriptionEn: "", ogImageEn: "",
+};
 
 function SeoPagesEditor({ getToken, notify }: { getToken: () => string | null; notify: (msg: string) => void }) {
   const [settings, setSettings] = useState<Record<string, PageSeo>>({});
@@ -771,14 +834,20 @@ function SeoPagesEditor({ getToken, notify }: { getToken: () => string | null; n
             if (res.ok) {
               const data = await res.json();
               if (data.value) {
-                const seo = JSON.parse(data.value) as Partial<{ title: string; description: string; keywords: string[]; ogTitle: string; ogDescription: string; ogImage: string }>;
+                const seo = JSON.parse(data.value) as Partial<PageSeo & { keywords: string[] | string; keywordsEn: string[] | string }>;
                 loaded[key] = {
                   title: seo.title || "",
                   description: seo.description || "",
-                  keywords: Array.isArray(seo.keywords) ? seo.keywords.join(", ") : "",
+                  keywords: Array.isArray(seo.keywords) ? seo.keywords.join(", ") : (seo.keywords || ""),
                   ogTitle: seo.ogTitle || "",
                   ogDescription: seo.ogDescription || "",
                   ogImage: seo.ogImage || "",
+                  titleEn: seo.titleEn || "",
+                  descriptionEn: seo.descriptionEn || "",
+                  keywordsEn: Array.isArray(seo.keywordsEn) ? seo.keywordsEn.join(", ") : (seo.keywordsEn || ""),
+                  ogTitleEn: seo.ogTitleEn || "",
+                  ogDescriptionEn: seo.ogDescriptionEn || "",
+                  ogImageEn: seo.ogImageEn || "",
                 };
               } else {
                 loaded[key] = { ...EMPTY_PAGE_SEO };
@@ -816,6 +885,12 @@ function SeoPagesEditor({ getToken, notify }: { getToken: () => string | null; n
             ogTitle: seo.ogTitle.trim(),
             ogDescription: seo.ogDescription.trim(),
             ogImage: seo.ogImage.trim(),
+            titleEn: seo.titleEn.trim(),
+            descriptionEn: seo.descriptionEn.trim(),
+            keywordsEn: seo.keywordsEn.split(",").map(k => k.trim()).filter(Boolean),
+            ogTitleEn: seo.ogTitleEn.trim(),
+            ogDescriptionEn: seo.ogDescriptionEn.trim(),
+            ogImageEn: seo.ogImageEn.trim(),
           }),
         }),
       });
@@ -827,16 +902,16 @@ function SeoPagesEditor({ getToken, notify }: { getToken: () => string | null; n
   };
 
   return (
-    <div style={{ display: "grid", gap: "16px" }}>
+    <div className="cms-settings-stack">
       {SEO_PAGE_CONFIGS.map(({ key, label, url }) => {
         const seo = settings[key] ?? EMPTY_PAGE_SEO;
         const charTitle = seo.title.length;
         const charDesc = seo.description.length;
         return (
-          <div key={key} className="cms-table-wrap" style={{ padding: "20px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px", paddingBottom: "14px", borderBottom: "1px solid var(--cms-border)" }}>
+          <div key={key} className="cms-table-wrap cms-settings-section">
+            <div className="cms-settings-section-head has-divider" style={{ justifyContent: "space-between", width: "100%" }}>
               <div>
-                <div style={{ fontWeight: 700, fontSize: "15px", color: "var(--cms-text-heading)" }}>{label}</div>
+                <div className="cms-settings-section-title">{label}</div>
                 <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "2px", display: "inline-block", textDecoration: "none" }}>
                   errani.ru{url} ↗
                 </a>
@@ -846,48 +921,113 @@ function SeoPagesEditor({ getToken, notify }: { getToken: () => string | null; n
               </button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label className="cms-label" style={{ display: "block" }}>
-                  Title — заголовок страницы
-                  <input className="cms-input" value={seo.title} onChange={e => updateField(key, "title", e.target.value)} placeholder="Заголовок в браузере и поисковике" style={{ marginTop: "5px" }} />
-                </label>
-                <div style={{ fontSize: "11px", color: charTitle > 60 ? "var(--cms-danger)" : "var(--cms-text-muted)", marginTop: "4px" }}>
-                  {charTitle}/60 символов · рекомендуется 50–60
-                </div>
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label className="cms-label" style={{ display: "block" }}>
-                  Description — описание
-                  <textarea className="cms-input" value={seo.description} onChange={e => updateField(key, "description", e.target.value)} placeholder="Описание страницы для поисковика" rows={2} style={{ marginTop: "5px", resize: "vertical" }} />
-                </label>
-                <div style={{ fontSize: "11px", color: charDesc > 160 ? "var(--cms-danger)" : "var(--cms-text-muted)", marginTop: "4px" }}>
-                  {charDesc}/160 символов · рекомендуется 120–160
-                </div>
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label className="cms-label" style={{ display: "block" }}>
-                  Keywords — ключевые слова
-                  <input className="cms-input" value={seo.keywords} onChange={e => updateField(key, "keywords", e.target.value)} placeholder="таро, колода, errani" style={{ marginTop: "5px" }} />
-                </label>
-              </div>
-              <label className="cms-label" style={{ display: "block" }}>
-                OG Title
-                <input className="cms-input" value={seo.ogTitle} onChange={e => updateField(key, "ogTitle", e.target.value)} placeholder="Заголовок для соцсетей" style={{ marginTop: "5px" }} />
+              <label className="cms-label">
+                Title (RU)
+                <input className="cms-input" value={seo.title} onChange={e => updateField(key, "title", e.target.value)} placeholder="Заголовок RU" style={{ marginTop: "5px" }} />
+                <div style={{ fontSize: "11px", color: charTitle > 60 ? "var(--cms-danger)" : "var(--cms-text-muted)", marginTop: "4px" }}>{charTitle}/60</div>
               </label>
-              <label className="cms-label" style={{ display: "block" }}>
-                OG Image URL
+              <label className="cms-label">
+                Title (EN)
+                <input className="cms-input" value={seo.titleEn} onChange={e => updateField(key, "titleEn", e.target.value)} placeholder="Title EN" style={{ marginTop: "5px" }} />
+              </label>
+              <label className="cms-label">
+                Description (RU)
+                <textarea className="cms-textarea" rows={3} value={seo.description} onChange={e => updateField(key, "description", e.target.value)} placeholder="Описание RU" style={{ marginTop: "5px" }} />
+                <div style={{ fontSize: "11px", color: charDesc > 160 ? "var(--cms-danger)" : "var(--cms-text-muted)", marginTop: "4px" }}>{charDesc}/160</div>
+              </label>
+              <label className="cms-label">
+                Description (EN)
+                <textarea className="cms-textarea" rows={3} value={seo.descriptionEn} onChange={e => updateField(key, "descriptionEn", e.target.value)} placeholder="Description EN" style={{ marginTop: "5px" }} />
+              </label>
+              <label className="cms-label">
+                Keywords (RU)
+                <input className="cms-input" value={seo.keywords} onChange={e => updateField(key, "keywords", e.target.value)} placeholder="таро, колода" style={{ marginTop: "5px" }} />
+              </label>
+              <label className="cms-label">
+                Keywords (EN)
+                <input className="cms-input" value={seo.keywordsEn} onChange={e => updateField(key, "keywordsEn", e.target.value)} placeholder="tarot, deck" style={{ marginTop: "5px" }} />
+              </label>
+              <label className="cms-label">
+                OG Title (RU)
+                <input className="cms-input" value={seo.ogTitle} onChange={e => updateField(key, "ogTitle", e.target.value)} style={{ marginTop: "5px" }} />
+              </label>
+              <label className="cms-label">
+                OG Title (EN)
+                <input className="cms-input" value={seo.ogTitleEn} onChange={e => updateField(key, "ogTitleEn", e.target.value)} style={{ marginTop: "5px" }} />
+              </label>
+              <label className="cms-label">
+                OG Image (RU)
                 <input className="cms-input" value={seo.ogImage} onChange={e => updateField(key, "ogImage", e.target.value)} placeholder="/media/preview.jpg" style={{ marginTop: "5px" }} />
               </label>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label className="cms-label" style={{ display: "block" }}>
-                  OG Description
-                  <textarea className="cms-input" value={seo.ogDescription} onChange={e => updateField(key, "ogDescription", e.target.value)} placeholder="Описание для соцсетей" rows={2} style={{ marginTop: "5px", resize: "vertical" }} />
-                </label>
-              </div>
+              <label className="cms-label">
+                OG Image (EN)
+                <input className="cms-input" value={seo.ogImageEn} onChange={e => updateField(key, "ogImageEn", e.target.value)} placeholder="/media/preview-en.jpg" style={{ marginTop: "5px" }} />
+              </label>
+              <label className="cms-label">
+                OG Description (RU)
+                <textarea className="cms-textarea" rows={3} value={seo.ogDescription} onChange={e => updateField(key, "ogDescription", e.target.value)} placeholder="Описание для соцсетей" style={{ marginTop: "5px" }} />
+              </label>
+              <label className="cms-label">
+                OG Description (EN)
+                <textarea className="cms-textarea" rows={3} value={seo.ogDescriptionEn} onChange={e => updateField(key, "ogDescriptionEn", e.target.value)} placeholder="Social description EN" style={{ marginTop: "5px" }} />
+              </label>
             </div>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function MobileNavEditor({
+  slots,
+  onChange,
+}: {
+  slots: MobileNavSlotId[];
+  onChange: (next: MobileNavSlotId[]) => void;
+}) {
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div style={{ fontSize: 12, color: "var(--cms-text-muted)", lineHeight: 1.45 }}>
+        4 быстрых раздела в нижнем меню. Поиск справа всегда на месте. Полный список разделов — через кнопку меню сверху.
+      </div>
+      {slots.map((slotId, index) => (
+        <label key={`mobile-slot-${index}`} className="cms-label">
+          Слот {index + 1}
+          <select
+            className="cms-select"
+            value={slotId}
+            onChange={(e) => {
+              const next = [...slots] as MobileNavSlotId[];
+              next[index] = e.target.value as MobileNavSlotId;
+              onChange(parseMobileNavSlots(next));
+            }}
+            style={{ marginTop: 6 }}
+          >
+            {MOBILE_NAV_CATALOG.map((opt) => (
+              <option key={opt.id} value={opt.id} disabled={slots.includes(opt.id) && opt.id !== slotId}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ))}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+        {slots.map((id) => {
+          const opt = MOBILE_NAV_CATALOG.find((o) => o.id === id);
+          if (!opt) return null;
+          return (
+            <span key={id} className="cms-badge" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Icon name={opt.icon} size={12} />
+              {opt.label}
+            </span>
+          );
+        })}
+        <span className="cms-badge" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <Icon name="search" size={12} />
+          Поиск
+        </span>
+      </div>
     </div>
   );
 }
@@ -898,10 +1038,16 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState("");
   const [activeTab, setActiveTab] = useState("general");
+  const [appearance, setAppearance] = useState<AdminAppearance>(DEFAULT_APPEARANCE);
+  const [savedAppearance, setSavedAppearance] = useState<AdminAppearance>(DEFAULT_APPEARANCE);
+  const [mobileNavSlots, setMobileNavSlots] = useState<MobileNavSlotId[]>(DEFAULT_MOBILE_NAV_SLOTS);
+  const [dirty, setDirty] = useState(false);
+
   const [settingsSearch, setSettingsSearch] = useState("");
   const [dbStats, setDbStats] = useState({ users: 0, orders: 0, products: 0, pageViews: 0 });
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [featuredProductLink, setFeaturedProductLink] = useState("/tenderly-vibe");
+  const [featuredProductLink, setFeaturedProductLink] = useState("");
+  const [productOptions, setProductOptions] = useState<Array<{ slug: string; name: string }>>([]);
   const [deliveryEstimate, setDeliveryEstimate] = useState("Ориентировочный срок доставки ~ начало Мая");
   const [orderDeliveryFootnote, setOrderDeliveryFootnote] = useState("");
   const [adminSessions, setAdminSessions] = useState<AdminSessionEntry[]>([]);
@@ -936,6 +1082,13 @@ export default function AdminSettingsPage() {
         if (saved) { try { setSettings(JSON.parse(saved)); } catch {} }
       });
 
+    adminFetch(`/api/admin/settings?key=${MOBILE_NAV_SETTING_KEY}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.value) setMobileNavSlots(parseMobileNavSlots(d.value));
+      })
+      .catch(() => undefined);
+
     // Fetch DB stats
     fetch("/api/admin/dashboard", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
@@ -945,8 +1098,28 @@ export default function AdminSettingsPage() {
     // Fetch featured product link
     fetch("/api/admin/settings?key=featuredProductLink", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
-      .then((d) => { if (d.value) setFeaturedProductLink(d.value); })
+      .then((d) => {
+        if (!d.value) return;
+        const v = String(d.value).trim();
+        setFeaturedProductLink(v.startsWith("/") ? v : `/${v}`);
+      })
       .catch(() => {});
+
+    // Products for nav star link
+    adminFetch("/api/products?summary=1")
+      .then((r) => r.json())
+      .then((d) => {
+        const list = Array.isArray(d) ? d : Array.isArray(d?.products) ? d.products : [];
+        setProductOptions(
+          list
+            .map((p: { slug?: string; name?: string; nameRu?: string }) => ({
+              slug: String(p.slug || "").trim(),
+              name: String(p.nameRu || p.name || p.slug || "").trim(),
+            }))
+            .filter((p: { slug: string }) => p.slug)
+        );
+      })
+      .catch(() => setProductOptions([]));
 
     // Fetch delivery estimate
     fetch("/api/admin/settings?key=deliveryEstimate", { headers: { Authorization: `Bearer ${token}` } })
@@ -986,6 +1159,29 @@ export default function AdminSettingsPage() {
 
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+
+  /** Persist site on/off immediately so the public gate reacts without waiting for «Сохранить». */
+  const persistSiteFlag = async <K extends "siteEnabled" | "maintenanceMode">(key: K, value: Settings[K]) => {
+    const next = { ...settings, [key]: value };
+    setSettings(next);
+    const token = getToken();
+    if (!token) return;
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ key: "general_settings", value: JSON.stringify(next) }),
+      });
+      if (!res.ok) {
+        notify("Не удалось сохранить статус сайта");
+        return;
+      }
+      notify(key === "siteEnabled" ? (value ? "Сайт включён" : "Сайт выключен") : "Режим обслуживания обновлён");
+    } catch {
+      notify("Не удалось сохранить статус сайта");
+    }
   };
 
   const updateSocial = (key: string, value: string) => {
@@ -1077,6 +1273,23 @@ export default function AdminSettingsPage() {
     input.click();
   };
 
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+    if (!token) return;
+    fetch(`/api/admin/settings?key=${APPEARANCE_SETTING_KEY}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data) return;
+        const next = parseAppearance(data.value ?? data);
+        setAppearance(next);
+        setSavedAppearance(next);
+        applyAppearance(next);
+        cacheAppearance(next);
+      })
+      .catch(() => {});
+  }, []);
+
   const notify = (msg: string) => { setNotification(msg); setTimeout(() => setNotification(""), 3000); };
 
   // Ctrl+S keyboard shortcut to save
@@ -1095,201 +1308,219 @@ export default function AdminSettingsPage() {
     { id: "general", label: "Основное" },
     { id: "integrations", label: "Интеграции" },
     { id: "notifications", label: "Уведомления" },
-    { id: "sessions", label: "Сессии" },
     { id: "seo", label: "SEO" },
-  ];
+    { id: "sessions", label: "Сессии" },
+  ] as const;
+
+  const saveAppearance = async () => {
+    const token = localStorage.getItem("admin_token");
+    if (!token) return;
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ key: APPEARANCE_SETTING_KEY, value: JSON.stringify(appearance) }),
+    });
+    if (!res.ok) {
+      notify("Не удалось сохранить оформление");
+      return;
+    }
+    setSavedAppearance(appearance);
+    applyAppearance(appearance);
+    cacheAppearance(appearance);
+  };
+
+  const patchAppearance = (patch: Partial<AdminAppearance>) => {
+    setAppearance((prev) => {
+      const next = { ...prev, ...patch, glass: 0 };
+      applyAppearance(next);
+      return next;
+    });
+    setDirty(true);
+  };
+
+  const saveMobileNav = async () => {
+    const value = JSON.stringify(mobileNavSlots);
+    const res = await adminFetch("/api/admin/settings", {
+      method: "POST",
+      body: JSON.stringify({ key: MOBILE_NAV_SETTING_KEY, value }),
+    });
+    if (!res.ok) {
+      notify("Не удалось сохранить мобильное меню");
+      return;
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("admin:mobile-nav", { detail: value }));
+    }
+  };
+
+  const saveAll = async () => {
+    await handleSave();
+    await saveAppearance();
+    await saveMobileNav();
+    setDirty(false);
+  };
 
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
-        <div className="cms-header">
-          <h1 className="cms-header-title">Настройки</h1>
-          <div className="cms-header-actions">
-            <input
-              className="cms-input cms-input-sm"
-              placeholder="Поиск по настройкам..."
-              value={settingsSearch}
-              onChange={(e) => setSettingsSearch(e.target.value)}
-              style={{ width: "220px" }}
-            />
-            <button className="cms-btn cms-btn-sm cms-btn-ghost" onClick={handleExportConfig}>Экспорт</button>
-            <button className="cms-btn cms-btn-sm cms-btn-ghost" onClick={handleImportConfig}>Импорт</button>
-            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={handleSave} disabled={saving}>
+    <AdminPage
+      title="Настройки"
+      actions={
+        <HeaderActions>
+          <SearchField value={settingsSearch} onChange={setSettingsSearch} style={{ width: 220 }} />
+          {dirty && (
+            <Button variant="primary" icon="save" onClick={saveAll} disabled={saving}>
               {saving ? "Сохранение..." : "Сохранить"}
-            </button>
-          </div>
-        </div>
-
-        <div className="cms-content">
-          {/* Tabs */}
-          <div className="cms-tabs" style={{ marginBottom: "20px" }}>
-            {TABS.map((tab) => (
-              <button key={tab.id} className={`cms-tab ${activeTab === tab.id ? "active" : ""}`} onClick={() => setActiveTab(tab.id)}>
-                {tab.label}
-              </button>
-            ))}
+            </Button>
+          )}
+        </HeaderActions>
+      }
+    >
+          <div style={{ marginBottom: 16 }}>
+            <SegmentedControl
+              options={TABS.map((t) => ({ value: t.id, label: t.label }))}
+              value={activeTab}
+              onChange={(v) => setActiveTab(v)}
+            />
           </div>
 
           {/* Site Status Banner */}
           {!settings.siteEnabled && (
             <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid var(--cms-danger)", borderRadius: "8px", padding: "12px 16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
-              <span style={{ fontSize: "18px" }}>\u26a0\ufe0f</span>
+              <span style={{ fontSize: "18px" }} aria-hidden>{"\u26A0\uFE0F"}</span>
               <div>
                 <div style={{ fontWeight: 700, fontSize: "14px", color: "var(--cms-danger)" }}>Сайт ОТКЛЮЧЁН</div>
                 <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>Посетители увидят страницу обслуживания</div>
               </div>
-              <button className="cms-btn cms-btn-sm cms-btn-primary" style={{ marginLeft: "auto" }} onClick={() => update("siteEnabled", true)}>
+              <button
+                className="cms-btn cms-btn-sm cms-btn-primary"
+                style={{ marginLeft: "auto" }}
+                onClick={() => void persistSiteFlag("siteEnabled", true)}
+              >
                 Включить
               </button>
             </div>
           )}
 
           {activeTab === "general" && (
-            <div style={{ display: "grid", gap: "16px" }}>
+            <div className="cms-settings-stack">
+              <div className="cms-mobile-only">
+                <SettingSection title="Нижнее меню">
+                  <MobileNavEditor
+                    slots={mobileNavSlots}
+                    onChange={(next) => {
+                      setMobileNavSlots(next);
+                      setDirty(true);
+                      if (typeof window !== "undefined") {
+                        window.dispatchEvent(new CustomEvent("admin:mobile-nav", { detail: JSON.stringify(next) }));
+                      }
+                    }}
+                  />
+                </SettingSection>
+              </div>
+
+              <SettingSection title="Оформление">
+                <div style={{ display: "grid", gap: 14 }}>
+                  <div>
+                    <label className="cms-label" style={{ display: "block", marginBottom: 6 }}>Обои</label>
+                    <WallpaperPicker
+                      currentUrl={appearance.wallpaperUrl}
+                      getToken={getToken}
+                      onPick={(url) => patchAppearance({ wallpaperUrl: url })}
+                      onClear={() => patchAppearance({ wallpaperUrl: "" })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="cms-label" style={{ display: "block", marginBottom: 8 }}>Тема</label>
+                    <SegmentedControl
+                      size="sm"
+                      options={[
+                        { value: "system", label: "Системная", title: "Системная" },
+                        { value: "light", label: "Светлая", title: "Светлая" },
+                        { value: "dark", label: "Тёмная", title: "Тёмная" },
+                      ]}
+                      value={appearance.theme}
+                      onChange={(v) => patchAppearance({ theme: v as AdminTheme })}
+                      ariaLabel="Тема"
+                    />
+                  </div>
+
+                  <Slider
+                    compact
+                    label="Затемнение обоя"
+                    value={appearance.wallpaperDim}
+                    onChange={(v) => patchAppearance({ wallpaperDim: v })}
+                    leading={
+                      <span className="cms-slider-leading" title={appearance.wallpaperDim > 0 ? "есть" : "нету"}>
+                        <i className={`fi ${appearance.wallpaperDim > 0 ? "fi-rr-brightness" : "fi-rr-circle"}`} style={{ fontSize: 16 }} />
+                      </span>
+                    }
+                  />
+                </div>
+              </SettingSection>
+
               <SettingSection title="Управление сайтом">
-                <Toggle checked={settings.siteEnabled} onChange={(v) => update("siteEnabled", v)} label="Сайт включён" description="Включить или выключить весь сайт. Когда выключен, посетители видят страницу обслуживания." />
-                <Toggle checked={settings.maintenanceMode} onChange={(v) => update("maintenanceMode", v)} label="Режим обслуживания" description="Показывать сообщение об обслуживании, но сайт частично доступен." />
+                <Toggle
+                  checked={settings.siteEnabled}
+                  onChange={(v) => void persistSiteFlag("siteEnabled", v)}
+                  label="Сайт включён"
+                  description="Включить или выключить весь сайт. Когда выключен, посетители видят страницу обслуживания."
+                />
+                <Toggle
+                  checked={settings.maintenanceMode}
+                  onChange={(v) => void persistSiteFlag("maintenanceMode", v)}
+                  label="Режим обслуживания"
+                  description="Показывать сообщение об обслуживании, но сайт частично доступен."
+                />
                 {settings.maintenanceMode && (
                   <label className="cms-label" style={{ marginTop: "8px" }}>
                     Сообщение об обслуживании
-                    <textarea className="cms-textarea" rows={2} value={settings.maintenanceMessage} onChange={(e) => update("maintenanceMessage", e.target.value)} style={{ width: "100%" }} />
+                    <textarea
+                      className="cms-textarea"
+                      rows={2}
+                      value={settings.maintenanceMessage}
+                      onChange={(e) => { update("maintenanceMessage", e.target.value); setDirty(true); }}
+                      style={{ width: "100%" }}
+                    />
                   </label>
                 )}
-              </SettingSection>
-
-              <SettingSection title="Информация о сайте">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <label className="cms-label">
-                    Название сайта
-                    <input className="cms-input" value={settings.siteName} onChange={(e) => update("siteName", e.target.value)} />
-                  </label>
-                  <label className="cms-label">
-                    URL сайта
-                    <input className="cms-input" value={settings.siteUrl} onChange={(e) => update("siteUrl", e.target.value)} />
-                  </label>
-                  <label className="cms-label">
-                    Email для связи
-                    <input className="cms-input" type="email" value={settings.contactEmail} onChange={(e) => update("contactEmail", e.target.value)} />
-                  </label>
-                  <label className="cms-label">
-                    Язык по умолчанию
-                    <select className="cms-select" value={settings.defaultLang} onChange={(e) => update("defaultLang", e.target.value)}>
-                      {LANGS.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
-                    </select>
-                  </label>
-                </div>
               </SettingSection>
 
               <SettingSection title="Навигация">
                 <label className="cms-label">
                   Ссылка на избранный товар (звёздочка в навбаре)
-                  <input
-                    className="cms-input"
+                  <select
+                    className="cms-select"
                     value={featuredProductLink}
-                    onChange={(e) => setFeaturedProductLink(e.target.value)}
-                    placeholder="/tenderly-vibe"
-                  />
+                    onChange={(e) => { setFeaturedProductLink(e.target.value); setDirty(true); }}
+                    style={{ width: "100%", marginTop: 6 }}
+                  >
+                    <option value="">Не выбрано</option>
+                    {productOptions.map((p) => {
+                      const href = p.slug.startsWith("/") ? p.slug : `/${p.slug}`;
+                      return (
+                        <option key={p.slug} value={href}>
+                          {p.name}
+                        </option>
+                      );
+                    })}
+                  </select>
                   <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "4px" }}>
-                    Slug товара, на который ведёт иконка ★ в навигации. Например: /tenderly-vibe
+                    Товар, на который ведёт иконка ★ в навигации
                   </div>
                 </label>
-              </SettingSection>
-            </div>
-          )}
-
-          {activeTab === "general" && (
-            <div style={{ display: "grid", gap: "16px" }}>
-              <SettingSection title="Настройки магазина">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <label className="cms-label">
-                    Валюта по умолчанию
-                    <select className="cms-select" value={settings.currency} onChange={(e) => update("currency", e.target.value)}>
-                      {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </label>
-                  <label className="cms-label">
-                    Макс. товаров в корзине
-                    <input className="cms-input" type="number" value={settings.maxCartItems} onChange={(e) => update("maxCartItems", Number(e.target.value))} />
-                  </label>
-                  <label className="cms-label">
-                    Порог бесплатной доставки
-                    <input className="cms-input" type="number" value={settings.freeShippingThreshold} onChange={(e) => update("freeShippingThreshold", Number(e.target.value))} />
-                  </label>
-                </div>
-              </SettingSection>
-
-              <SettingSection title="Функции">
-                <Toggle checked={settings.enablePreorders} onChange={(v) => update("enablePreorders", v)} label="Предзаказы" description="Разрешить предзаказ товаров" />
-                <Toggle checked={settings.enableFavorites} onChange={(v) => update("enableFavorites", v)} label="Избранное" description="Разрешить добавлять товары в избранное" />
-                <Toggle checked={settings.enableReviews} onChange={(v) => update("enableReviews", v)} label="Отзывы" description="Разрешить оставлять отзывы о товарах" />
-              </SettingSection>
-            </div>
-          )}
-
-          {activeTab === "general" && (
-            <div style={{ display: "grid", gap: "16px" }}>
-              <SettingSection title="Информация о доставке">
-                <label className="cms-label">
-                  Ориентировочный срок доставки
-                  <input
-                    className="cms-input"
-                    value={deliveryEstimate}
-                    onChange={(e) => setDeliveryEstimate(e.target.value)}
-                    placeholder="Например: Ориентировочный срок доставки ~ начало Мая"
-                  />
-                  <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "4px" }}>
-                    Отображается в плашке оформления заказа (в блоке Доставка). Оставьте пустым — не показывать.
-                  </div>
-                </label>
-                <label className="cms-label" style={{ marginTop: "12px" }}>
-                  Сноска в блоке «Ваш заказ»
-                  <textarea
-                    className="cms-textarea"
-                    rows={2}
-                    value={orderDeliveryFootnote}
-                    onChange={(e) => setOrderDeliveryFootnote(e.target.value)}
-                    placeholder="Например: Доставка оплачивается при получении."
-                    style={{ width: "100%" }}
-                  />
-                  <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: "4px" }}>
-                    Показывается под строкой доставки в checkout. Оставьте пустым — не показывать.
-                  </div>
-                </label>
-              </SettingSection>
-
-              <SettingSection title="Способы оплаты">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                  {PAYMENT.map((p) => (
-                    <label key={p.id} className="cms-checkbox-label" style={{ padding: "10px 14px", borderRadius: "8px", border: `1px solid ${settings.paymentMethods.includes(p.id) ? "var(--cms-accent)" : "var(--cms-border)"}`, background: settings.paymentMethods.includes(p.id) ? "rgba(232,114,42,0.08)" : "transparent" }}>
-                      <input type="checkbox" checked={settings.paymentMethods.includes(p.id)} onChange={() => toggleArrayItem("paymentMethods", p.id)} />
-                      {p.label}
-                    </label>
-                  ))}
-                </div>
-              </SettingSection>
-            </div>
-          )}
-
-          {activeTab === "general" && (
-            <div style={{ display: "grid", gap: "16px" }}>
-              <SettingSection title="Соцсети">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  {Object.entries(settings.socialLinks).map(([key, val]) => (
-                    <label key={key} className="cms-label">
-                      <span style={{ textTransform: "capitalize" }}>{key}</span>
-                      <input className="cms-input" value={val} onChange={(e) => updateSocial(key, e.target.value)} placeholder={`https://${key}.com/...`} />
-                    </label>
-                  ))}
-                </div>
               </SettingSection>
 
               <SettingSection title="Уведомления">
-                <Toggle checked={settings.emailNotifications} onChange={(v) => update("emailNotifications", v)} label="Email уведомления" description="Получать уведомления о новых заказах на email" />
+                <Toggle
+                  checked={settings.emailNotifications}
+                  onChange={(v) => update("emailNotifications", v)}
+                  label="На мою личную почту"
+                  description="Уведомления при новых заказах и заявках"
+                />
                 {settings.emailNotifications && (
                   <label className="cms-label" style={{ marginTop: "8px" }}>
                     Email для уведомлений
-                    <input className="cms-input" type="email" value={settings.orderNotifyEmail} onChange={(e) => update("orderNotifyEmail", e.target.value)} />
+                    <input className="cms-input" type="email" value={settings.orderNotifyEmail} onChange={(e) => update("orderNotifyEmail", e.target.value)} placeholder="you@email.com" />
                   </label>
                 )}
               </SettingSection>
@@ -1301,41 +1532,38 @@ export default function AdminSettingsPage() {
           )}
 
           {activeTab === "sessions" && (
-            <div style={{ display: "grid", gap: "16px" }}>
-              <SettingSection title="Сессии">
-                <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginBottom: "10px" }}>
-                  История входов в админку: устройство, IP, страна/город (если передаётся прокси), время входа.
-                </div>
-                <div className="cms-table-wrap" style={{ padding: 0 }}>
+            <div className="cms-settings-stack">
+              <SettingSection
+                title="Сессии"
+                hint="История входов в админку: устройство, IP, время входа."
+                divider={false}
+              >
+                <div className="cms-table-wrap" style={{ padding: 0, background: "transparent", border: 0, boxShadow: "none" }}>
                   <table className="cms-table">
                     <thead>
                       <tr>
-                        <th>Email</th>
+                        <th>Пользователь</th>
                         <th>Устройство</th>
                         <th>IP</th>
-                        <th>Гео</th>
-                        <th>Вход</th>
+                        <th>Дата</th>
                       </tr>
                     </thead>
                     <tbody>
                       {adminSessions.map((session, idx) => (
                         <tr key={`${session.at}-${session.ip}-${idx}`}>
-                          <td>{session.email}</td>
+                          <td>{session.name || session.email}</td>
                           <td style={{ maxWidth: 280, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{session.userAgent || "—"}</td>
                           <td className="cms-td-mono">{session.ip || "—"}</td>
-                          <td>{[session.country, session.city].filter(Boolean).join(", ") || "—"}</td>
                           <td>{new Date(session.at).toLocaleString("ru-RU")}</td>
                         </tr>
                       ))}
                       {adminSessions.length === 0 && (
-                        <tr><td colSpan={5} style={{ textAlign: "center", padding: "18px", color: "var(--cms-text-muted)" }}>Входов пока нет</td></tr>
+                        <tr><td colSpan={4} style={{ textAlign: "center", padding: "18px", color: "var(--cms-text-muted)" }}>Входов пока нет</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
               </SettingSection>
-
-              <ExportSection getToken={getToken} notify={notify} />
             </div>
           )}
 
@@ -1344,22 +1572,34 @@ export default function AdminSettingsPage() {
           )}
 
           {activeTab === "seo" && (
-            <div style={{ display: "grid", gap: "16px" }}>
+            <div className="cms-settings-stack">
               <SeoPagesEditor getToken={getToken} notify={notify} />
 
               <SettingSection title="Глобальные настройки сайта">
-                <div style={{ display: "grid", gap: "12px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <label className="cms-label">
-                    Meta title
+                    Meta title (RU)
                     <input className="cms-input" value={seoSettings.title} onChange={(e) => setSeoSettings((prev) => ({ ...prev, title: e.target.value }))} />
                   </label>
                   <label className="cms-label">
-                    Meta description
+                    Meta title (EN)
+                    <input className="cms-input" value={seoSettings.titleEn} onChange={(e) => setSeoSettings((prev) => ({ ...prev, titleEn: e.target.value }))} />
+                  </label>
+                  <label className="cms-label">
+                    Meta description (RU)
                     <textarea className="cms-textarea" rows={3} value={seoSettings.description} onChange={(e) => setSeoSettings((prev) => ({ ...prev, description: e.target.value }))} />
                   </label>
                   <label className="cms-label">
-                    Keywords
+                    Meta description (EN)
+                    <textarea className="cms-textarea" rows={3} value={seoSettings.descriptionEn} onChange={(e) => setSeoSettings((prev) => ({ ...prev, descriptionEn: e.target.value }))} />
+                  </label>
+                  <label className="cms-label">
+                    Keywords (RU)
                     <input className="cms-input" value={seoSettings.keywords} onChange={(e) => setSeoSettings((prev) => ({ ...prev, keywords: e.target.value }))} />
+                  </label>
+                  <label className="cms-label">
+                    Keywords (EN)
+                    <input className="cms-input" value={seoSettings.keywordsEn} onChange={(e) => setSeoSettings((prev) => ({ ...prev, keywordsEn: e.target.value }))} />
                   </label>
                 </div>
               </SettingSection>
@@ -1375,8 +1615,6 @@ export default function AdminSettingsPage() {
               </SettingSection>
             </div>
           )}
-        </div>
-      </main>
 
       {/* Reset Confirm Modal */}
       {showResetConfirm && (
@@ -1397,7 +1635,7 @@ export default function AdminSettingsPage() {
         </div>
       )}
 
-      {notification && <div className="cms-toast">{notification}</div>}
-    </div>
+      {notification && <div className={adminToastClass(notification)}>{notification}</div>}
+    </AdminPage>
   );
 }

@@ -60,7 +60,7 @@ ${imageElements}
     });
   } catch (error) {
     console.error('Avito export error:', error);
-    return NextResponse.json({ error: 'Failed to generate Avito feed' }, { status: 500 });
+    return NextResponse.json({ error: 'Не удалось сформировать фид Avito' }, { status: 500 });
   }
 }
 

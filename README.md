@@ -2,7 +2,7 @@
 
 E-commerce сайт для бренда **errani** — авторские колоды таро и аксессуары.
 
-**Стек:** Next.js 16 · React 19 · TypeScript · Prisma · PostgreSQL (Neon) · Tailwind CSS 4  
+**Стек:** Next.js 16 · React 19 · TypeScript · Prisma · PostgreSQL (SmartApe VPS) · Tailwind CSS 4  
 **Хостинг:** SmartApe VPS (188.127.251.184) · PM2 · Nginx · Let's Encrypt SSL
 **Платежи:** ЮKassa · **Email:** Resend · **Маркетплейс:** Avito API
 
@@ -29,7 +29,7 @@ npm run dev          # http://localhost:3000
 
 | Переменная | Описание |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection string (Neon) |
+| `DATABASE_URL` | PostgreSQL connection string (PostgreSQL на VPS SmartApe) |
 | `PRISMA_CONNECTION_LIMIT` | Размер пула Prisma для VPS, по умолчанию `5` |
 | `PRISMA_POOL_TIMEOUT` | Таймаут ожидания соединения с БД, по умолчанию `20` сек |
 | `JWT_SECRET` | Секрет для JWT токенов админ-панели |
@@ -105,7 +105,7 @@ errani-site/
 
 ## Схема базы данных
 
-**13 моделей** на PostgreSQL (Neon):
+**13 моделей** на PostgreSQL (SmartApe VPS):
 
 | Модель | Назначение |
 |---|---|
@@ -199,7 +199,7 @@ git add . && git commit -m "feat: описание" && git push origin main
 ### Изменение схемы БД
 
 ```bash
-# Локально (тест + prod Neon)
+# Локально (через SSH-туннель к БД на VPS)
 npx prisma db push
 
 # На VPS — только вручную, когда изменение схемы запланировано:
@@ -237,7 +237,7 @@ npm run setup        # db:push + db:seed
 | UI | React 19, Tailwind CSS 4 |
 | Язык | TypeScript 5.9 |
 | ORM | Prisma 6.19 |
-| БД | PostgreSQL (Neon) |
+| БД | PostgreSQL (SmartApe VPS) |
 | Auth | JWT (jose), bcryptjs |
 | Email | Resend |
 | Платежи | ЮKassa |
@@ -247,7 +247,7 @@ npm run setup        # db:push + db:seed
 | CI/CD | git push → ручной деплой по SSH |
 
 
-**Стек:** Next.js 16 · React 19 · TypeScript · Prisma · PostgreSQL (Neon) · Tailwind CSS 4  
+**Стек:** Next.js 16 · React 19 · TypeScript · Prisma · PostgreSQL (SmartApe VPS) · Tailwind CSS 4  
 **Хостинг:** SmartApe VPS (188.127.251.184) · PM2 · Nginx · Let's Encrypt SSL
 **Платежи:** ЮKassa · **Email:** Resend · **Маркетплейс:** Avito API
 
@@ -274,7 +274,7 @@ npm run dev          # http://localhost:3000
 
 | Переменная | Описание |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection string (Neon) |
+| `DATABASE_URL` | PostgreSQL connection string (PostgreSQL на VPS SmartApe) |
 | `JWT_SECRET` | Секрет для JWT токенов админ-панели |
 | `RESEND_API_KEY` | API ключ Resend для отправки email |
 | `YUKASSA_SHOP_ID` | Shop ID ЮKassa (1265018) |
@@ -333,7 +333,7 @@ errani-site/
 
 ## Схема базы данных
 
-**12 моделей** на PostgreSQL (Neon):
+**12 моделей** на PostgreSQL (SmartApe VPS):
 
 | Модель | Назначение |
 |---|---|
@@ -445,7 +445,7 @@ npm run setup        # db:push + db:seed
 | UI | React 19, Tailwind CSS 4 |
 | Язык | TypeScript 5.9 |
 | ORM | Prisma 6.19 |
-| БД | PostgreSQL (Neon) |
+| БД | PostgreSQL (SmartApe VPS) |
 | Auth | JWT (jose), bcryptjs |
 | Email | Resend |
 | Платежи | ЮKassa |

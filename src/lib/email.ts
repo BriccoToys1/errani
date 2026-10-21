@@ -1,5 +1,8 @@
 import { Resend } from 'resend';
 import prisma from '@/lib/db';
+import { dialogFieldsFor } from '@/lib/mail-thread';
+import { buildBrandedEmailHtml, BRAND_SOFT, escapeHtml } from '@/lib/email-template';
+import { MAILBOX_INFO, MAILBOX_SALES } from '@/lib/mailboxes';
 
 // Returns the key from admin settings first so it can be replaced without redeployment.
 async function getResendApiKey(): Promise<string | null> {
@@ -86,8 +89,8 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
         <tr>
           <td style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.09);">
 
-            <!-- Orange accent top bar -->
-            <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;background:#e8601c;font-size:0;line-height:0;">&nbsp;</td></tr></table>
+            <!-- Brand accent top bar -->
+            <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;background:#f58bdc;font-size:0;line-height:0;">&nbsp;</td></tr></table>
 
             <!-- Header row -->
             <table width="100%" cellpadding="0" cellspacing="0">
@@ -96,12 +99,12 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
                   <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                       <td style="vertical-align:top;">
-                        <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#e8601c;letter-spacing:0.14em;text-transform:uppercase;">Подтверждение заказа</p>
+                        <p style="margin:0 0 4px;font-size:10px;font-weight:700;color:#f58bdc;letter-spacing:0.14em;text-transform:uppercase;">Подтверждение заказа</p>
                         <p style="margin:0;font-size:21px;font-weight:800;color:#1a1a1a;letter-spacing:-0.02em;">Заказ оформлен!</p>
                       </td>
                       <td style="text-align:right;vertical-align:top;padding-left:12px;">
                         <p style="margin:0;font-size:10px;color:#aaa;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">Номер</p>
-                        <p style="margin:4px 0 0;font-size:20px;font-weight:900;color:#e8601c;letter-spacing:-0.02em;">#${data.orderNumber}</p>
+                        <p style="margin:4px 0 0;font-size:20px;font-weight:900;color:#f58bdc;letter-spacing:-0.02em;">#${data.orderNumber}</p>
                       </td>
                     </tr>
                   </table>
@@ -164,7 +167,7 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
                 <td style="padding:18px 28px 24px;">
                   <p style="margin:0;font-size:13px;color:#888;line-height:1.75;">
                     Мы свяжемся с вами после комплектации заказа.<br/>
-                    По вопросам: <a href="mailto:mail@errani.ru" style="color:#e8601c;font-weight:600;text-decoration:none;">mail@errani.ru</a>
+                    По вопросам: <a href="mailto:${MAILBOX_SALES}" style="color:#f58bdc;font-weight:600;text-decoration:none;">${MAILBOX_SALES}</a>
                   </p>
                 </td>
               </tr>
@@ -195,10 +198,11 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
 
   try {
     const result = await resend.emails.send({
-      from: 'errani <mail@errani.ru>',
+      from: `errani <${MAILBOX_SALES}>`,
       to: data.customerEmail,
-      subject: `Заказ #${data.orderNumber} подтверждён — errani`,
+      subject: `Заказ #${data.orderNumber} подтверждён`,
       html: emailBody,
+      replyTo: MAILBOX_SALES,
       ...(attachments.length ? { attachments } : {}),
     });
 
@@ -213,8 +217,9 @@ export async function sendOrderConfirmation(data: OrderEmailData) {
       await prisma.adminEmail.create({
         data: {
           direction: 'outbound',
-          fromAddr: 'mail@errani.ru',
+          fromAddr: MAILBOX_SALES,
           toAddr: data.customerEmail,
+          ...dialogFieldsFor(data.customerEmail),
           subject: `Заказ #${data.orderNumber} подтверждён — errani`,
           body: html,
           textBody: `Заказ #${data.orderNumber} для ${data.customerName}. Сумма: ${data.totalAmount.toLocaleString('ru-RU')} ₽`,
@@ -260,10 +265,11 @@ export async function sendReceiptEmail(data: {
 
     for (let attempt = 0; attempt < 2; attempt++) {
       const result = await resend.emails.send({
-        from: 'errani <mail@errani.ru>',
+        from: `errani <${MAILBOX_SALES}>`,
         to: data.recipientEmail,
         subject,
         html,
+        replyTo: MAILBOX_SALES,
         attachments: [{
           filename: `receipt-${data.orderNumber}.pdf`,
           content: data.receiptPdf,
@@ -285,8 +291,9 @@ export async function sendReceiptEmail(data: {
       await prisma.adminEmail.create({
         data: {
           direction: 'outbound',
-          fromAddr: 'mail@errani.ru',
+          fromAddr: MAILBOX_SALES,
           toAddr: data.recipientEmail,
+          ...dialogFieldsFor(data.recipientEmail),
           subject,
           body: html,
           textBody: `Чек по заказу #${data.orderNumber} приложен в формате PDF.`,
@@ -321,7 +328,7 @@ export async function sendStockAvailableEmail(data: {
   const resend = new Resend(apiKey);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://errani.ru';
   const productUrl = `${siteUrl.replace(/\/$/, '')}/${encodeURIComponent(data.productSlug)}`;
-  const subject = `Товар ${data.productName} снова в наличии — errani`;
+  const subject = `Товар ${data.productName} снова в наличии`;
   const html = `<!DOCTYPE html>
 <html lang="ru">
 <head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
@@ -329,22 +336,20 @@ export async function sendStockAvailableEmail(data: {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:36px 16px 48px;">
     <tr><td align="center">
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;">
-        <tr><td style="padding:0 0 18px;text-align:center;"><span style="font-size:26px;font-weight:900;color:#1a1a1a;">errani</span></td></tr>
         <tr><td style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.09);">
-          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;background:#e8601c;font-size:0;line-height:0;">&nbsp;</td></tr></table>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;background:#f58bdc;font-size:0;line-height:0;">&nbsp;</td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:26px 28px 18px;">
-            <p style="margin:0 0 6px;font-size:10px;font-weight:700;color:#e8601c;letter-spacing:0.14em;text-transform:uppercase;">errani</p>
             <h1 style="margin:0;font-size:24px;font-weight:900;color:#1a1a1a;">Товар снова в наличии</h1>
           </td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 24px;">
             <p style="margin:0 0 24px;font-size:15px;color:#555;line-height:1.75;">Привет, ${data.recipientName}. ${data.productName} уже доступен для заказа.</p>
-            <a href="${productUrl}" style="display:inline-block;padding:14px 22px;background:#e8601c;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:700;">Перейти на страницу товара</a>
+            <a href="${productUrl}" style="display:inline-block;padding:14px 22px;background:#f58bdc;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:700;">Перейти на страницу товара</a>
           </td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 28px;">
-            <p style="margin:0;font-size:13px;color:#888;line-height:1.7;">Если у вас есть вопросы, ответьте на это письмо или напишите нам на mail@errani.ru.</p>
+            <p style="margin:0;font-size:13px;color:#888;line-height:1.7;">Если у вас есть вопросы, ответьте на это письмо или напишите нам на ${MAILBOX_INFO}.</p>
           </td></tr></table>
         </td></tr>
-        <tr><td style="padding:22px 0 0;text-align:center;"><p style="margin:0;font-size:12px;color:#aaa;">© ${new Date().getFullYear()} errani.ru</p></td></tr>
+        <tr><td style="padding:22px 0 0;text-align:center;"><p style="margin:0;font-size:12px;color:#aaa;">© ${new Date().getFullYear()}</p></td></tr>
       </table>
     </td></tr>
   </table>
@@ -353,18 +358,20 @@ export async function sendStockAvailableEmail(data: {
 
   try {
     const result = await resend.emails.send({
-      from: 'errani <mail@errani.ru>',
+      from: `errani <${MAILBOX_INFO}>`,
       to: data.recipientEmail,
       subject,
       html,
+      replyTo: MAILBOX_INFO,
     });
 
     try {
       await prisma.adminEmail.create({
         data: {
           direction: 'outbound',
-          fromAddr: 'mail@errani.ru',
+          fromAddr: MAILBOX_INFO,
           toAddr: data.recipientEmail,
+          ...dialogFieldsFor(data.recipientEmail),
           subject,
           body: html,
           textBody: `Привет, ${data.recipientName}. ${data.productName} уже доступен для заказа. ${productUrl}`,
@@ -396,7 +403,7 @@ export async function sendReviewInviteEmail(data: {
   }
 
   const resend = new Resend(apiKey);
-  const subject = `Оставьте отзыв о ${data.productName} — errani`;
+  const subject = `Оставьте отзыв о ${data.productName}`;
   const safeName = data.recipientName?.trim() || 'Здравствуйте';
   const html = `<!DOCTYPE html>
 <html lang="ru">
@@ -405,22 +412,21 @@ export async function sendReviewInviteEmail(data: {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:36px 16px 48px;">
     <tr><td align="center">
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;">
-        <tr><td style="padding:0 0 18px;text-align:center;"><span style="font-size:26px;font-weight:900;color:#1a1a1a;">errani</span></td></tr>
         <tr><td style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.09);">
-          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;background:#e8601c;font-size:0;line-height:0;">&nbsp;</td></tr></table>
+          <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="height:4px;background:#f58bdc;font-size:0;line-height:0;">&nbsp;</td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:26px 28px 12px;">
             <h1 style="margin:0;font-size:24px;font-weight:900;color:#1a1a1a;">Поделитесь впечатлением</h1>
           </td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 24px;">
             <p style="margin:0 0 14px;font-size:15px;color:#555;line-height:1.7;">${safeName}, будем благодарны за отзыв о товаре <strong>${data.productName}</strong>.</p>
             <p style="margin:0 0 18px;font-size:13px;color:#777;line-height:1.7;">Ссылка персональная и одноразовая: отзыв можно оставить только один раз.</p>
-            <a href="${data.reviewUrl}" style="display:inline-block;padding:14px 22px;background:#e8601c;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:700;">Оставить отзыв</a>
+            <a href="${data.reviewUrl}" style="display:inline-block;padding:14px 22px;background:#f58bdc;color:#ffffff;text-decoration:none;border-radius:12px;font-weight:700;">Оставить отзыв</a>
             <p style="margin:18px 0 0;font-size:12px;color:#888;word-break:break-all;">Если кнопка не работает, откройте ссылку:<br/>${data.reviewUrl}</p>
           </td></tr></table>
           <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 28px 28px;">
           </td></tr></table>
         </td></tr>
-        <tr><td style="padding:22px 0 0;text-align:center;"><p style="margin:0;font-size:12px;color:#aaa;">© ${new Date().getFullYear()} errani.ru</p></td></tr>
+        <tr><td style="padding:22px 0 0;text-align:center;"><p style="margin:0;font-size:12px;color:#aaa;">© ${new Date().getFullYear()}</p></td></tr>
       </table>
     </td></tr>
   </table>
@@ -429,18 +435,20 @@ export async function sendReviewInviteEmail(data: {
 
   try {
     const result = await resend.emails.send({
-      from: 'errani <mail@errani.ru>',
+      from: `errani <${MAILBOX_SALES}>`,
       to: data.recipientEmail,
       subject,
       html,
+      replyTo: MAILBOX_SALES,
     });
 
     try {
       await prisma.adminEmail.create({
         data: {
           direction: 'outbound',
-          fromAddr: 'mail@errani.ru',
+          fromAddr: MAILBOX_SALES,
           toAddr: data.recipientEmail,
+          ...dialogFieldsFor(data.recipientEmail),
           subject,
           body: html,
           textBody: `Оставьте отзыв о ${data.productName}: ${data.reviewUrl}`,
@@ -457,5 +465,70 @@ export async function sendReviewInviteEmail(data: {
   } catch (err) {
     console.error('Failed to send review invite email:', err);
     return { ok: false as const, reason: 'send_failed' as const };
+  }
+}
+
+export async function sendOrderShippedEmail(data: {
+  recipientEmail: string;
+  customerName: string;
+  orderNumber: string;
+  deliveryService: string;
+  trackNumber: string;
+}) {
+  const apiKey = await getResendApiKey();
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY not set, skipping shipped email');
+    return false;
+  }
+
+  const subject = 'Сведения о заказе';
+  const service = escapeHtml(data.deliveryService || 'службой доставки');
+  const track = escapeHtml(data.trackNumber);
+  const orderNo = escapeHtml(data.orderNumber);
+  const inner = `
+    <p style="margin:0 0 14px;">Здравствуйте${data.customerName ? `, ${escapeHtml(data.customerName)}` : ''}!</p>
+    <p style="margin:0 0 14px;">Ваш заказ <strong>${orderNo}</strong> отправлен ${service}.</p>
+    <p style="margin:0;">Трек-номер:
+      <span style="display:inline-block;margin-left:6px;padding:4px 10px;border-radius:8px;background:${BRAND_SOFT};font-weight:700;letter-spacing:0.04em;">${track}</span>
+    </p>
+  `;
+  const html = buildBrandedEmailHtml(inner);
+  const textBody = `Здравствуйте! Ваш заказ ${data.orderNumber} отправлен ${data.deliveryService}. Трек-номер: ${data.trackNumber}`;
+
+  try {
+    const resend = new Resend(apiKey);
+    const result = await resend.emails.send({
+      from: `errani <${MAILBOX_SALES}>`,
+      to: data.recipientEmail,
+      subject,
+      html,
+      replyTo: MAILBOX_SALES,
+    });
+    if (!result.data?.id) {
+      console.error('Failed to send shipped email:', result.error);
+      return false;
+    }
+    try {
+      await prisma.adminEmail.create({
+        data: {
+          direction: 'outbound',
+          fromAddr: MAILBOX_SALES,
+          toAddr: data.recipientEmail,
+          ...dialogFieldsFor(data.recipientEmail),
+          subject,
+          body: html,
+          textBody,
+          status: 'sent',
+          isRead: true,
+          resendId: result.data.id,
+        },
+      });
+    } catch (dbErr) {
+      console.error('Failed to save shipped email to DB:', dbErr);
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to send shipped email:', err);
+    return false;
   }
 }

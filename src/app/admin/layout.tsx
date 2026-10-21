@@ -1,6 +1,9 @@
+import '@flaticon/flaticon-uicons/css/regular/rounded.css';
 import './admin.css';
 import './admin-modern.css';
+import './admin-ui.css';
 import type { Metadata, Viewport } from 'next';
+import { AdminShell } from './AdminShell';
 
 export const metadata: Metadata = {
   title: 'ERRANI Admin',
@@ -19,7 +22,7 @@ export default function AdminLayout({
 }) {
   return (
     <div style={{ minHeight: '100vh', fontFamily: 'Montserrat, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif' }}>
-      {children}
+      <AdminShell>{children}</AdminShell>
     </div>
   );
 }

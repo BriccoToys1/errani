@@ -1,3 +1,5 @@
+import { flash, flashPair, type FlashLang } from '@/lib/flash';
+
 const DEFAULT_API_URL = 'https://api.cdek.ru/v2';
 const DEFAULT_COURIER_TARIFF_CODE = 137;
 const DEFAULT_PICKUP_TARIFF_CODE = 136;
@@ -161,10 +163,23 @@ let tokenCache: { token: string; expiresAt: number } | null = null;
 let locationsCatalogCache: { locations: CdekLocation[]; expiresAt: number } | null = null;
 
 export class CdekError extends Error {
-  constructor(message: string, public readonly status = 502) {
-    super(message);
+  readonly flashKey?: string;
+
+  constructor(messageOrKey: string, public readonly status = 502, flashKey?: string) {
+    const pair = flashKey ? flashPair(flashKey) : null;
+    super(pair ? pair.ru : messageOrKey);
     this.name = 'CdekError';
+    this.flashKey = flashKey;
   }
+
+  localize(lang: FlashLang | string | null | undefined = 'ru'): string {
+    if (this.flashKey) return flash(lang, this.flashKey);
+    return this.message;
+  }
+}
+
+function cdekFail(key: string, status = 502): CdekError {
+  return new CdekError(key, status, key);
 }
 
 function positiveInteger(value: string | undefined, fallback?: number): number {
@@ -194,7 +209,7 @@ function getConfig(): CdekConfig {
   const unitHeight = positiveNumber(process.env.CDEK_UNIT_HEIGHT_CM, 11.5);
 
   if (!clientId || !clientSecret || !fromCityCode || !shipmentPoint || !unitWeight || !unitLength || !unitWidth || !unitHeight) {
-    throw new CdekError('Расчёт СДЭК ещё не настроен. Обратитесь к администратору магазина.', 503);
+    throw cdekFail('cdek.not_configured', 503);
   }
 
   return {
@@ -223,9 +238,9 @@ async function cdekFetch(url: string, init: RequestInit): Promise<Response> {
     return await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new CdekError('СДЭК не ответил вовремя. Попробуйте ещё раз.');
+      throw cdekFail('cdek.timeout');
     }
-    throw new CdekError('Не удалось связаться со СДЭК. Попробуйте ещё раз.');
+    throw cdekFail('cdek.unreachable');
   } finally {
     clearTimeout(timeout);
   }
@@ -250,7 +265,7 @@ async function getAccessToken(config: CdekConfig): Promise<string> {
 
   if (!response.ok || !data.access_token) {
     console.error('CDEK OAuth error:', response.status, data.error, data.error_description);
-    throw new CdekError('Не удалось авторизоваться в СДЭК. Обратитесь к администратору магазина.', 503);
+    throw cdekFail('cdek.auth_failed', 503);
   }
 
   const expiresIn = positiveInteger(String(data.expires_in || ''), 3600);
@@ -360,7 +375,7 @@ async function validateRussianCourierAddress(input: CdekCalculationInput): Promi
   const house = input.house?.trim() || '';
   const postalCode = input.postalCode?.trim() || '';
   if (!city || !street || !house) {
-    throw new CdekError('Укажите полный адрес: город, улицу и дом.', 400);
+    throw cdekFail('cdek.full_address', 400);
   }
 
   const params = new URLSearchParams({
@@ -385,10 +400,10 @@ async function validateRussianCourierAddress(input: CdekCalculationInput): Promi
       next: { revalidate: 86_400 },
     });
   } catch {
-    throw new CdekError('Не удалось проверить адрес. Попробуйте ещё раз.', 503);
+    throw cdekFail('cdek.address_check_failed', 503);
   }
   if (!response.ok) {
-    throw new CdekError('Сервис проверки адреса временно недоступен. Попробуйте ещё раз.', 503);
+    throw cdekFail('cdek.address_unavailable', 503);
   }
 
   const results = await response.json().catch(() => []) as NominatimResult[];
@@ -416,7 +431,7 @@ async function validateRussianCourierAddress(input: CdekCalculationInput): Promi
       && (!postalCode || !address.postcode || address.postcode === postalCode);
   });
   if (!valid) {
-    throw new CdekError('Адрес не найден. Проверьте город, улицу и номер дома. Доставка доступна только по России.', 422);
+    throw cdekFail('cdek.address_not_found_detail', 422);
   }
 }
 
@@ -426,7 +441,7 @@ async function getCdekPickupPointByCode(code: string): Promise<CdekPickupPoint> 
     is_handout: 'true',
   }));
   const point = points.find((entry) => entry.code === code);
-  if (!point) throw new CdekError('Выбранный пункт выдачи СДЭК не найден.', 404);
+  if (!point) throw cdekFail('cdek.pvz_not_found', 404);
   return point;
 }
 
@@ -438,7 +453,7 @@ export async function calculateCdekDelivery(input: CdekCalculationInput): Promis
   const tariffCode = input.mode === 'pickup' ? config.pickupTariffCode : config.courierTariffCode;
 
   if (!city || (postalCode && !/^\d{6}$/.test(postalCode)) || itemCount < 1 || itemCount > 100) {
-    throw new CdekError('Проверьте адрес и состав заказа.', 400);
+    throw cdekFail('cdek.check_order', 400);
   }
 
   if (input.mode === 'courier') await validateRussianCourierAddress(input);
@@ -447,11 +462,11 @@ export async function calculateCdekDelivery(input: CdekCalculationInput): Promis
     ? await getCdekPickupPointByCode(input.deliveryPointCode)
     : null;
   if (input.mode === 'pickup' && !selectedPoint) {
-    throw new CdekError('Выберите пункт выдачи СДЭК.', 400);
+    throw cdekFail('cdek.select_pvz', 400);
   }
   const destination = (selectedPoint || input.cityCode) ? null : await findCdekCity(city, postalCode);
   const destinationCode = selectedPoint?.cityCode || input.cityCode || destination?.code;
-  if (!destinationCode) throw new CdekError('Адрес не найден', 404);
+  if (!destinationCode) throw cdekFail('cdek.address_not_found', 404);
   const toLocation = { code: destinationCode };
   const { response, data } = await authorizedRequest<CdekTariffResponse>('/calculator/tariff', {
     method: 'POST',
@@ -465,15 +480,14 @@ export async function calculateCdekDelivery(input: CdekCalculationInput): Promis
 
   if (!response.ok || data.errors?.length) {
     console.error('CDEK tariff error:', response.status, data.errors);
-    throw new CdekError(
-      joinApiErrors(data.errors, 'СДЭК не смог рассчитать доставку для указанного адреса.'),
-      response.status === 400 ? 400 : 502,
-    );
+    const apiMsg = joinApiErrors(data.errors, '');
+    if (apiMsg) throw new CdekError(apiMsg, response.status === 400 ? 400 : 502);
+    throw cdekFail('cdek.tariff_failed', response.status === 400 ? 400 : 502);
   }
 
   const rawAmount = Number(data.delivery_sum ?? data.total_sum);
   if (!Number.isFinite(rawAmount) || rawAmount < 0) {
-    throw new CdekError('СДЭК вернул некорректную стоимость доставки.');
+    throw cdekFail('cdek.bad_price');
   }
 
   return {
@@ -519,7 +533,7 @@ export async function getCdekRussianLocationsCatalog(): Promise<CdekLocation[]> 
   const params = new URLSearchParams({ country_codes: 'RU', size: '10000' });
   const { response, data } = await authorizedRequest<CdekCityResponse[]>(`/location/cities?${params.toString()}`);
   if (!response.ok || !Array.isArray(data)) {
-    throw new CdekError('Не удалось загрузить справочник населённых пунктов.', 502);
+    throw cdekFail('cdek.cities_failed', 502);
   }
   const unique = new Map<number, CdekLocation>();
   for (const entry of data) {
@@ -565,7 +579,7 @@ export async function findCdekCity(city: string, postalCode = ''): Promise<CdekC
   const selected = locations.find((entry) => postalCode && entry.postalCodes.includes(postalCode))
     || locations.find((entry) => entry.city.toLocaleLowerCase('ru-RU') === normalizedCity)
     || locations[0];
-  if (!selected) throw new CdekError('Адрес не найден', 404);
+  if (!selected) throw cdekFail('cdek.address_not_found', 404);
 
   return {
     code: selected.code,
@@ -582,7 +596,7 @@ export async function findCdekCity(city: string, postalCode = ''): Promise<CdekC
 async function loadCdekPickupPoints(params: URLSearchParams, city = ''): Promise<CdekPickupPoint[]> {
   const { response, data } = await authorizedRequest<CdekPointResponse[]>(`/deliverypoints?${params.toString()}`);
   if (!response.ok || !Array.isArray(data)) {
-    throw new CdekError('Не удалось получить пункты выдачи СДЭК.');
+    throw cdekFail('cdek.points_failed');
   }
 
   return data.flatMap((point) => {
@@ -638,7 +652,7 @@ export async function getCdekPickupPointsForLocation(location: CdekLocation): Pr
 
 export async function getCdekPickupPoints(city: string, postalCode = ''): Promise<CdekPickupPoint[]> {
   const cdekCity = await findCdekCity(city, postalCode);
-  if (!cdekCity.code) throw new CdekError('СДЭК не вернул код города.', 502);
+  if (!cdekCity.code) throw cdekFail('cdek.city_code_missing', 502);
   return getCdekPickupPointsByCityCode(cdekCity.code, cdekCity.city || city);
 }
 
@@ -646,7 +660,7 @@ export async function createCdekOrder(input: CdekOrderInput): Promise<CdekCreate
   const config = getConfig();
   const itemCount = input.items.reduce((sum, item) => sum + item.quantity, 0);
   if (!input.customerPhone || itemCount < 1) {
-    throw new CdekError('Недостаточно данных для создания заказа СДЭК.', 400);
+    throw cdekFail('cdek.order_data_missing', 400);
   }
 
   const payload = {
@@ -690,7 +704,9 @@ export async function createCdekOrder(input: CdekOrderInput): Promise<CdekCreate
 
   if (!response.ok || !data.entity?.uuid || errors.length > 0) {
     console.error('CDEK order creation error:', response.status, data.requests);
-    throw new CdekError(joinApiErrors(errors, 'СДЭК не принял заказ.'));
+    const apiMsg = joinApiErrors(errors, '');
+    if (apiMsg) throw new CdekError(apiMsg);
+    throw cdekFail('cdek.order_rejected');
   }
 
   return {

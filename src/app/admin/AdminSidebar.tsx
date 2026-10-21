@@ -3,6 +3,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { Icon, type IconName, SearchField, ConfirmPopover, CountBadge } from '@/components/admin';
+import {
+  APPEARANCE_SETTING_KEY,
+  applyAppearance,
+  cacheAppearance,
+  parseAppearance,
+  readCachedAppearance,
+} from '@/components/admin/appearance';
+import { adminFetch } from '@/lib/admin-client';
+import {
+  DEFAULT_MOBILE_NAV_SLOTS,
+  MOBILE_NAV_SETTING_KEY,
+  parseMobileNavSlots,
+  resolveMobileNavSlots,
+  type MobileNavOption,
+  type MobileNavSlotId,
+} from '@/lib/mobile-nav';
 
 interface Counts {
   newOrders: number;
@@ -19,48 +36,44 @@ interface SearchResult {
   href: string;
 }
 
-const NAV_ITEMS = [
-  { href: '/admin', icon: 'dashboard', label: 'Дашборд' },
-  { href: '/admin/email', icon: 'email', label: 'Почта', countKey: 'newEmails' },
+interface NavItem {
+  href: string;
+  icon: IconName;
+  label: string;
+  countKey?: keyof Counts;
+}
+
+const NAV_ITEMS: (NavItem | { section: string })[] = [
+  { href: '/admin', icon: 'analytics', label: 'Аналитика' },
+  { href: '/admin/email', icon: 'mail', label: 'Почта', countKey: 'newEmails' },
   { section: '' },
   { href: '/admin/orders', icon: 'orders', label: 'Заказы', countKey: 'newOrders' },
   { href: '/admin/products', icon: 'products', label: 'Товары' },
-  { href: '/admin/media', icon: 'media', label: 'Медиа' },
-  { href: '/admin/inquiries', icon: 'inquiries', label: 'Заявки', countKey: 'newInquiries' },
-  { href: '/admin/waitlist', icon: 'waitlist', label: 'В ожидании', countKey: 'newWaitlist' },
-  { href: '/admin/users', icon: 'users', label: 'Клиенты' },
+  { href: '/admin/media', icon: 'media', label: 'Галерея' },
+  { href: '/admin/inquiries', icon: 'requests', label: 'Заявки', countKey: 'newInquiries' },
+  { href: '/admin/waitlist', icon: 'waiting', label: 'В ожидании', countKey: 'newWaitlist' },
+  { href: '/admin/users', icon: 'customers', label: 'Клиенты' },
   { href: '/admin/reviews', icon: 'reviews', label: 'Отзывы', countKey: 'newReviews' },
   { section: '' },
   { href: '/admin/settings', icon: 'settings', label: 'Настройки' },
 ];
 
-const MOBILE_NAV_ITEMS = [
-  { href: '/admin', icon: 'dashboard', label: 'Главная' },
-  { href: '/admin/orders', icon: 'orders', label: 'Заказы', countKey: 'newOrders' },
-  { href: '/admin/products', icon: 'products', label: 'Товары' },
-  { href: '/admin/email', icon: 'email', label: 'Почта', countKey: 'newEmails' },
-] as const;
-
-const ICONS: Record<string, React.ReactNode> = {
-  dashboard: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/></svg>,
-  chart: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 3v18h18"/><path d="M7 16l4-6 4 3 5-7"/></svg>,
-  orders: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>,
-  products: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>,
-  media: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="M21 15l-5-5-5 5-2-2-6 6"/></svg>,
-  inquiries: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
-  waitlist: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M4.9 4.9l2.8 2.8"/><path d="M16.3 16.3l2.8 2.8"/><path d="M3 12h4"/><path d="M17 12h4"/><path d="M4.9 19.1l2.8-2.8"/><path d="M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="4"/></svg>,
-  email: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>,
-  content: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
-  pages: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
-  files: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>,
-  seo: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
-  settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
-  database: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>,
-  account: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-  users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
-  reviews: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3l2.9 5.88 6.5.95-4.7 4.58 1.1 6.47L12 17.85 6.2 20.88l1.1-6.47-4.7-4.58 6.5-.95L12 3z"/></svg>,
-  code: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="14" y1="4" x2="10" y2="20"/></svg>,
-  info: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
+const TYPE_LABELS: Record<string, string> = {
+  order: 'Заказ',
+  product: 'Товар',
+  inquiry: 'Заявка',
+  user: 'Клиент',
+  waitlist: 'Ожидание',
+  review: 'Отзыв',
+  email: 'Письмо',
+  media: 'Галерея',
+  page: 'Страница',
+  section: 'Раздел',
+  expense: 'Расход',
+  avito: 'Avito',
+  setting: 'Настройка',
+  content: 'Контент',
+  invite: 'Приглашение',
 };
 
 export function AdminSidebar() {
@@ -73,40 +86,65 @@ export function AdminSidebar() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileNavSlots, setMobileNavSlots] = useState<MobileNavSlotId[]>(DEFAULT_MOBILE_NAV_SLOTS);
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const prevTotalRef = useRef<number | null>(null);
   const notifySettingsRef = useRef<{ enabled: boolean; url: string }>({ enabled: false, url: '' });
+  const mobileNavItems: MobileNavOption[] = resolveMobileNavSlots(mobileNavSlots);
+
+  // Appearance (glass transparency + wallpaper) — cached first, then refreshed from settings.
+  useEffect(() => {
+    const cached = readCachedAppearance();
+    if (cached) applyAppearance(cached);
+    adminFetch(`/api/admin/settings?key=${APPEARANCE_SETTING_KEY}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const next = parseAppearance(d.value || '{}');
+        applyAppearance(next);
+        cacheAppearance(next);
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem('admin_token');
-    if (!token) return;
     Promise.all([
-      fetch('/api/admin/settings?key=notificationsEnabled', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
-      fetch('/api/admin/settings?key=notificationSoundUrl', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()).catch(() => ({})),
-    ]).then(([enabledRes, urlRes]) => {
+      adminFetch('/api/admin/settings?key=notificationsEnabled').then((r) => r.json()).catch(() => ({})),
+      adminFetch('/api/admin/settings?key=notificationSoundUrl').then((r) => r.json()).catch(() => ({})),
+      adminFetch(`/api/admin/settings?key=${MOBILE_NAV_SETTING_KEY}`).then((r) => r.json()).catch(() => ({})),
+    ]).then(([enabledRes, urlRes, mobileNavRes]) => {
       notifySettingsRef.current = {
         enabled: enabledRes?.value !== 'false',
         url: urlRes?.value || '',
       };
+      if (mobileNavRes?.value) setMobileNavSlots(parseMobileNavSlots(mobileNavRes.value));
     });
+
+    const onMobileNav = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) setMobileNavSlots(parseMobileNavSlots(detail));
+    };
+    window.addEventListener('admin:mobile-nav', onMobileNav);
+    return () => window.removeEventListener('admin:mobile-nav', onMobileNav);
   }, []);
 
   const fetchCounts = useCallback(async () => {
     try {
-      const token = localStorage.getItem('admin_token');
-      if (!token) return;
-      const countsRes = await fetch('/api/admin/counts', { headers: { Authorization: `Bearer ${token}` } });
+      const countsRes = await adminFetch('/api/admin/counts');
       if (countsRes.ok) {
         const data = await countsRes.json();
-        setCounts({
+        const next: Counts = {
           newOrders: data.newOrders || 0,
           newInquiries: data.newInquiries || 0,
           newWaitlist: data.newWaitlist || 0,
           newEmails: data.newEmails || 0,
           newReviews: data.newReviews || 0,
-        });
-        const total = (data.newOrders || 0) + (data.newInquiries || 0) + (data.newWaitlist || 0) + (data.newEmails || 0) + (data.newReviews || 0);
+        };
+        setCounts(next);
+        const total = Object.values(next).reduce((s, n) => s + n, 0);
         const { enabled, url } = notifySettingsRef.current;
         if (prevTotalRef.current !== null && total > prevTotalRef.current && enabled && url) {
           new Audio(url).play().catch(() => {});
@@ -119,7 +157,12 @@ export function AdminSidebar() {
   useEffect(() => {
     fetchCounts();
     const interval = setInterval(fetchCounts, 90000);
-    return () => clearInterval(interval);
+    const onRefresh = () => { void fetchCounts(); };
+    window.addEventListener('admin:counts-refresh', onRefresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('admin:counts-refresh', onRefresh);
+    };
   }, [fetchCounts]);
 
   useEffect(() => {
@@ -128,34 +171,31 @@ export function AdminSidebar() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-cms-theme', 'dark');
-  }, []);
-
-  // Close on route change
-  useEffect(() => {
     setMobileOpen(false);
+    setMobileSearchOpen(false);
   }, [pathname]);
 
-  // Body scroll lock when mobile drawer open
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    if (mobileOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    document.body.style.overflow = mobileOpen || mobileSearchOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
-  }, [mobileOpen]);
+  }, [mobileOpen, mobileSearchOpen]);
+
+  useEffect(() => {
+    if (!mobileSearchOpen) return;
+    const t = window.setTimeout(() => mobileSearchInputRef.current?.focus(), 50);
+    return () => window.clearTimeout(t);
+  }, [mobileSearchOpen]);
 
   const toggleCollapse = () => {
-    setCollapsed(prev => {
+    setCollapsed((prev) => {
       localStorage.setItem('cms_sidebar_collapsed', String(!prev));
       return !prev;
     });
   };
 
   const isActive = (href: string) => {
-    if (href === '/admin') return pathname === '/admin';
+    if (href === '/admin') return pathname === '/admin' || pathname === '/admin/analytics';
     return pathname.startsWith(href);
   };
 
@@ -165,15 +205,12 @@ export function AdminSidebar() {
     router.push('/admin/login');
   };
 
-  const getCount = (countKey?: string) => {
-    if (!countKey) return 0;
-    return counts[countKey as keyof Counts] || 0;
-  };
+  const getCount = (countKey?: keyof Counts) => (countKey ? counts[countKey] || 0 : 0);
 
-  // Debounced search across all content
+  // Debounced search across the whole admin (every text field)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!search.trim() || search.length < 2) {
+    if (!search.trim()) {
       setSearchResults([]);
       setShowResults(false);
       return;
@@ -181,11 +218,7 @@ export function AdminSidebar() {
     debounceRef.current = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const token = localStorage.getItem('admin_token');
-        if (!token) return;
-        const res = await fetch(`/api/admin/search?q=${encodeURIComponent(search.trim())}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await adminFetch(`/api/admin/search?q=${encodeURIComponent(search.trim())}`);
         if (res.ok) {
           const data = await res.json();
           setSearchResults(data.results || []);
@@ -194,202 +227,223 @@ export function AdminSidebar() {
       } catch { /* ignore */ } finally {
         setSearchLoading(false);
       }
-    }, 350);
+    }, 220);
   }, [search]);
+
+  const closeMobileSearch = () => {
+    setMobileSearchOpen(false);
+    setSearch('');
+    setSearchResults([]);
+    setShowResults(false);
+  };
+
+  const openMobileSearch = () => {
+    setMobileOpen(false);
+    setMobileSearchOpen(true);
+  };
+
+  const goSearchResult = (href: string) => {
+    closeMobileSearch();
+    router.push(href);
+  };
 
   return (
     <>
-      <button
-        className="cms-mobile-nav-toggle"
-        onClick={() => setMobileOpen(true)}
-        aria-label="Открыть меню"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <line x1="3" y1="12" x2="21" y2="12" />
-          <line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
+      <button className="cms-mobile-nav-toggle" onClick={() => setMobileOpen(true)} aria-label="Открыть меню">
+        <Icon name="menu" size={18} />
       </button>
 
       {mobileOpen && <div className="cms-sidebar-backdrop" onClick={() => setMobileOpen(false)} />}
 
       <aside className={`cms-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
-      <div className="cms-sidebar-brand">
+        <div className="cms-sidebar-brand">
+          {!collapsed && (
+            <div className="cms-sidebar-brand-text">
+              errani <span>admin</span>
+            </div>
+          )}
+          <button
+            className="cms-sidebar-toggle cms-sidebar-iconbox"
+            onClick={toggleCollapse}
+            data-tooltip={collapsed ? 'Развернуть' : 'Свернуть'}
+            data-tooltip-placement={collapsed ? 'right' : 'bottom'}
+            aria-label={collapsed ? 'Развернуть' : 'Свернуть'}
+          >
+            <Icon name={collapsed ? 'right' : 'left'} size={16} />
+          </button>
+        </div>
+
         {!collapsed && (
-          <div className="cms-sidebar-brand-text">
-            errani <span>admin</span>
+          <div className="cms-sidebar-search" onBlur={() => setTimeout(() => setShowResults(false), 200)}>
+            <div style={{ position: 'relative' }}>
+              <SearchField
+                value={search}
+                onChange={setSearch}
+                onFocus={() => searchResults.length > 0 && setShowResults(true)}
+              />
+              {searchLoading && <span className="cms-spinner" style={{ position: 'absolute', right: 12, top: 11, width: 14, height: 14 }} />}
+              {showResults && (
+                <div className="cms-search-results">
+                  {searchResults.length === 0 && !searchLoading && (
+                    <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--cms-text-muted)' }}>Ничего не найдено</div>
+                  )}
+                  {searchResults.map((r, i) => (
+                    <Link
+                      key={`${r.type}-${i}`}
+                      href={r.href}
+                      className="cms-search-result"
+                      onClick={() => { setSearch(''); setShowResults(false); }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{r.label}</span>
+                      <span className="cms-search-result-sub">{TYPE_LABELS[r.type] || r.type}{r.sub ? ` · ${r.sub}` : ''}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
-        <button
-          className="cms-sidebar-toggle"
-          onClick={toggleCollapse}
-          title={collapsed ? 'Развернуть' : 'Свернуть'}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            {collapsed ? (
-              <path d="M9 18l6-6-6-6" />
-            ) : (
-              <path d="M15 18l-6-6 6-6" />
-            )}
-          </svg>
-        </button>
-      </div>
 
-      {/* Search */}
-      {!collapsed && (
-        <div style={{ padding: '0 12px 8px' }} ref={searchRef}>
-          <div style={{ position: 'relative' }}>
-            <svg
-              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-              style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: searchLoading ? 0 : 0.4, transition: 'opacity 0.2s' }}
-            >
-              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-            </svg>
-            {searchLoading && (
-              <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 12, height: 12, border: '2px solid var(--cms-border)', borderTopColor: 'var(--cms-accent)', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'block' }} />
-            )}
-            <input
-              type="text"
-              placeholder="Поиск по всему..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onFocus={() => searchResults.length > 0 && setShowResults(true)}
-              onBlur={() => setTimeout(() => setShowResults(false), 200)}
-              style={{
-                width: '100%',
-                padding: '7px 10px 7px 32px',
-                border: '1px solid var(--cms-border)',
-                borderRadius: showResults && searchResults.length > 0 ? '8px 8px 0 0' : '8px',
-                background: 'var(--cms-surface)',
-                color: 'var(--cms-text)',
-                fontSize: '12px',
-                outline: 'none',
-              }}
-            />
-            {/* Search Results Dropdown */}
-            {showResults && searchResults.length > 0 && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                right: 0,
-                background: 'var(--cms-bg)',
-                border: '1px solid var(--cms-border)',
-                borderTop: 'none',
-                borderRadius: '0 0 8px 8px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-                zIndex: 100,
-                maxHeight: 220,
-                overflowY: 'auto',
-              }}>
-                {searchResults.map((r, i) => (
-                  <Link
-                    key={i}
-                    href={r.href}
-                    onClick={() => { setSearch(''); setShowResults(false); }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 12px',
-                      fontSize: '12px',
-                      borderBottom: i < searchResults.length - 1 ? '1px solid var(--cms-border)' : 'none',
-                      textDecoration: 'none',
-                      color: 'var(--cms-text)',
-                      gap: 8,
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--cms-surface-hover)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{r.label}</span>
-                    <span style={{ fontSize: '10px', color: 'var(--cms-text-muted)', flexShrink: 0 }}>{r.sub}</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-            {showResults && search.length >= 2 && searchResults.length === 0 && !searchLoading && (
-              <div style={{
-                position: 'absolute', top: '100%', left: 0, right: 0,
-                background: 'var(--cms-bg)', border: '1px solid var(--cms-border)', borderTop: 'none',
-                borderRadius: '0 0 8px 8px', padding: '10px 12px', fontSize: '12px',
-                color: 'var(--cms-text-muted)', zIndex: 100,
-              }}>
-                Ничего не найдено
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <nav className="cms-sidebar-nav">
-        {NAV_ITEMS.map((item, i) => {
-          if ('section' in item && !('href' in item)) {
-            if (!item.section) {
+        <nav className="cms-sidebar-nav">
+          {NAV_ITEMS.map((item, i) => {
+            if ('section' in item) {
               return <div key={i} style={{ borderTop: '1px solid var(--cms-border)', margin: '6px 12px' }} />;
             }
-            return !collapsed ? <div key={i} className="cms-sidebar-section">{item.section}</div> : null;
-          }
-          const nav = item as { href: string; icon: string; label: string; countKey?: string };
-          const count = getCount(nav.countKey);
-          return (
+            const count = getCount(item.countKey);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`cms-nav-item ${isActive(item.href) ? 'active' : ''}`}
+                data-tooltip={collapsed ? item.label : undefined}
+                data-tooltip-placement="right"
+                onClick={() => setMobileOpen(false)}
+              >
+                <span className="cms-nav-icon"><Icon name={item.icon} size={17} /></span>
+                {!collapsed && <span className="cms-nav-label">{item.label}</span>}
+                <CountBadge count={count} className="cms-nav-badge" />
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="cms-sidebar-footer">
+          <div className="cms-sidebar-footer-row">
             <Link
-              key={nav.href}
-              href={nav.href}
-              className={`cms-nav-item ${isActive(nav.href) ? 'active' : ''}`}
-              title={collapsed ? nav.label : undefined}
+              href="/admin/account"
+              className={`cms-sidebar-footer-btn${isActive('/admin/account') ? ' active' : ''}`}
+              data-tooltip={collapsed ? 'Пользователи' : undefined}
+              data-tooltip-placement="right"
               onClick={() => setMobileOpen(false)}
             >
-              <span className="cms-nav-icon">{ICONS[nav.icon]}</span>
-              {!collapsed && <span className="cms-nav-label">{nav.label}</span>}
-              {count > 0 && <span className="cms-nav-badge">{count > 99 ? '99+' : count}</span>}
+              <Icon name="betaComputer" size={16} />
+              {!collapsed && <span>Пользователи</span>}
             </Link>
-          );
-        })}
-      </nav>
-
-      <div className="cms-sidebar-footer">
-        <button
-          onClick={handleLogout}
-          title="Выйти"
-          className="cms-logout-btn"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" style={{ opacity: 0.7 }}>
-            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
-          </svg>
-          {!collapsed && <span style={{ marginLeft: 7 }}>Выход</span>}
-        </button>
-      </div>
+            <ConfirmPopover
+              open={confirmLogout}
+              placement="top"
+              align="center"
+              message="Выйти из админки?"
+              confirmLabel="Выйти"
+              confirmIcon="logout"
+              onConfirm={handleLogout}
+              onCancel={() => setConfirmLogout(false)}
+              width={210}
+            >
+              <button
+                type="button"
+                className="cms-sidebar-footer-btn"
+                onClick={() => setConfirmLogout((v) => !v)}
+                data-tooltip={collapsed ? 'Выйти' : undefined}
+                data-tooltip-placement="right"
+                aria-label="Выйти"
+              >
+                <Icon name="logout" size={16} />
+                {!collapsed && <span>Выйти</span>}
+              </button>
+            </ConfirmPopover>
+          </div>
+        </div>
       </aside>
 
       <nav className="cms-mobile-bottom-nav" aria-label="Основная навигация">
-        {MOBILE_NAV_ITEMS.map((item) => {
-          const count = getCount('countKey' in item ? item.countKey : undefined);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`cms-mobile-bottom-item ${isActive(item.href) ? 'active' : ''}`}
-              aria-current={isActive(item.href) ? 'page' : undefined}
-            >
-              <span className="cms-mobile-bottom-icon">
-                {ICONS[item.icon]}
-                {count > 0 && <span className="cms-mobile-bottom-badge">{count > 9 ? '9+' : count}</span>}
-              </span>
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+        <div className="cms-mobile-bottom-slots">
+          {mobileNavItems.map((item) => {
+            const count = getCount(item.countKey);
+            return (
+              <Link
+                key={item.id}
+                href={item.href}
+                className={`cms-mobile-bottom-item ${isActive(item.href) ? 'active' : ''}`}
+                aria-current={isActive(item.href) ? 'page' : undefined}
+              >
+                <span className="cms-mobile-bottom-icon">
+                  <Icon name={item.icon} size={20} />
+                  <CountBadge count={count} max={9} className="cms-mobile-bottom-badge" />
+                </span>
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
         <button
           type="button"
-          className={`cms-mobile-bottom-item ${mobileOpen ? 'active' : ''}`}
-          onClick={() => setMobileOpen(true)}
-          aria-expanded={mobileOpen}
-          aria-label="Открыть всё меню"
+          className={`cms-mobile-bottom-item cms-mobile-bottom-search ${mobileSearchOpen ? 'active' : ''}`}
+          onClick={openMobileSearch}
+          aria-expanded={mobileSearchOpen}
+          aria-label="Поиск"
         >
-          <span className="cms-mobile-bottom-icon">{ICONS.settings}</span>
-          <span>Ещё</span>
+          <span className="cms-mobile-bottom-icon"><Icon name="search" size={20} /></span>
+          <span>Поиск</span>
         </button>
       </nav>
+
+      {mobileSearchOpen && (
+        <div className="cms-mobile-search-overlay" role="dialog" aria-modal="true" aria-label="Поиск по админке">
+          <div className="cms-mobile-search-sheet">
+            <div className="cms-mobile-search-bar">
+              <Icon name="search" size={16} className="cms-mobile-search-ico" />
+              <input
+                ref={mobileSearchInputRef}
+                className="cms-mobile-search-input"
+                type="search"
+                enterKeyHint="search"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="Поиск по всей админке…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {searchLoading && <span className="cms-spinner cms-mobile-search-spinner" />}
+              <button type="button" className="cms-mobile-search-cancel" onClick={closeMobileSearch}>
+                Отмена
+              </button>
+            </div>
+            <div className="cms-mobile-search-results">
+              {!search.trim() && (
+                <div className="cms-mobile-search-hint">Ищем по заказам, товарам, письмам, клиентам и любому тексту в админке</div>
+              )}
+              {search.trim() && !searchLoading && searchResults.length === 0 && (
+                <div className="cms-mobile-search-hint">Ничего не найдено</div>
+              )}
+              {showResults && searchResults.map((r, i) => (
+                <button
+                  key={`${r.type}-${i}-${r.href}`}
+                  type="button"
+                  className="cms-mobile-search-result"
+                  onClick={() => goSearchResult(r.href)}
+                >
+                  <span className="cms-mobile-search-result-label">{r.label}</span>
+                  <span className="cms-mobile-search-result-sub">
+                    {TYPE_LABELS[r.type] || r.type}{r.sub ? ` · ${r.sub}` : ''}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

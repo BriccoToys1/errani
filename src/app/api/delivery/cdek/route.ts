@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateCdekDelivery, CdekDeliveryMode, CdekError } from '@/lib/cdek';
 import prisma from '@/lib/db';
+import { flash, langFromRequest } from '@/lib/flash';
 
 interface CartItemInput {
   productId?: string;
@@ -18,6 +19,7 @@ function formatHouseDetails(house: string, building?: string, corpus?: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const lang = langFromRequest(req, body.lang ?? body.language);
     const items = Array.isArray(body.items) ? body.items as CartItemInput[] : [];
     const itemCount = items.reduce((sum, item) => {
       const quantity = Math.floor(Number(item.quantity));
@@ -25,7 +27,7 @@ export async function POST(req: NextRequest) {
     }, 0);
 
     if (body.country !== 'RU' || items.length === 0 || itemCount < 1 || itemCount > 100) {
-      return NextResponse.json({ error: 'Некорректные данные для расчёта доставки.' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'cdek.calc_invalid') }, { status: 400 });
     }
 
     const mode: CdekDeliveryMode = body.shippingMethod === 'cdek_pvz' ? 'pickup' : 'courier';
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
       ? body.cdekDeliveryPoint as { code?: string; cityCode?: number }
       : null;
     if (mode === 'pickup' && (!deliveryPoint?.code || !Number(deliveryPoint.cityCode))) {
-      return NextResponse.json({ error: 'Выберите пункт выдачи СДЭК.' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'cdek.select_pvz') }, { status: 400 });
     }
 
     const productIds = [...new Set(items.map((item) => String(item.productId || '')).filter(Boolean))];
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
         })
       : [];
     if (products.length !== productIds.length) {
-      return NextResponse.json({ error: 'Не удалось проверить товары в корзине.' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'cdek.cart_check_failed') }, { status: 400 });
     }
     const freeDelivery = products.some((product) => product.freeDelivery);
 
@@ -71,10 +73,11 @@ export async function POST(req: NextRequest) {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
+    const lang = langFromRequest(req);
     if (error instanceof CdekError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json({ error: error.localize(lang) }, { status: error.status });
     }
     console.error('Unexpected CDEK calculation error:', error);
-    return NextResponse.json({ error: 'Не удалось рассчитать доставку СДЭК.' }, { status: 500 });
+    return NextResponse.json({ error: flash(lang, 'cdek.calc_failed') }, { status: 500 });
   }
 }

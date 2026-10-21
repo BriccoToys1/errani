@@ -55,3 +55,13 @@ Expected: HTTP 200, or a valid redirect where configured.
 - Do not use `vercel deploy` for production.
 - Do not run `prisma db push` during regular deploys.
 - Keep secrets only in server `.env` or managed secret stores.
+
+## Vercel staging clone (not production)
+
+Temporary/isolated **admin UI clone** for development when the VPS is unavailable.
+
+- Project: Vercel team project linked to `BriccoToys1/errani`, branch `staging-vercel`
+- Flag: `ADMIN_STAGING=1` (must **never** be set on SmartApe `/var/www/errani/.env`)
+- Database: separate Neon Postgres (`DATABASE_URL` on Vercel only) — not the VPS production DB
+- Does **not** replace `admin.errani.ru`; DNS/nginx/PM2 on SmartApe stay as-is
+- Prod deploys remain: `./deploy.sh` → VPS only

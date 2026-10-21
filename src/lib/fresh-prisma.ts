@@ -43,16 +43,35 @@ async function disconnectQuietly(db: PrismaClient): Promise<void> {
   ]);
 }
 
+function isTransientDbError(error: unknown): boolean {
+  const message =
+    typeof error === 'object' && error && 'message' in error
+      ? String((error as { message?: unknown }).message || '')
+      : String(error || '');
+  return (
+    message.includes('not yet accepting connections') ||
+    message.includes('recovery state') ||
+    message.includes('starting up') ||
+    message.includes('Fresh Prisma operation timeout') ||
+    message.includes('Timed out') ||
+    message.includes('ECONNRESET') ||
+    message.includes('ECONNREFUSED') ||
+    message.includes('too many clients')
+  );
+}
+
 export async function withFreshPrisma<T>(operation: (db: PrismaClient) => Promise<T>): Promise<T> {
   let lastError: unknown;
+  const maxAttempts = 4;
 
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const db = createFreshClient();
     try {
       return await withTimeout(operation(db));
     } catch (error) {
       lastError = error;
-      if (attempt === 2) throw error;
+      if (attempt === maxAttempts || !isTransientDbError(error)) throw error;
+      await new Promise((r) => setTimeout(r, 300 * attempt));
     } finally {
       await disconnectQuietly(db);
     }

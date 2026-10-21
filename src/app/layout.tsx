@@ -11,11 +11,11 @@ export const viewport: Viewport = {
 
 const DEFAULT_METADATA: Metadata = {
   title: {
-    default: 'errani — Авторская колода Таро',
+    default: 'errani — Авторские колоды Таро',
     template: '%s — errani',
   },
-  description: 'Авторская колода Таро «Tenderly Vibe» от Ekaterina Errani. 78 уникальных карт с оригинальными иллюстрациями.',
-  keywords: ['таро', 'колода таро', 'авторская колода', 'Ekaterina Errani', 'errani', 'tenderly vibe', 'tarot deck', 'предзаказ'],
+  description: 'Авторские колоды Таро Errani Studio: Gothic Vibe, Tenderly Vibe, Autumn Vibe и аксессуары. Оригинальные иллюстрации Ekaterina Errani.',
+  keywords: ['таро', 'колода таро', 'авторская колода', 'Ekaterina Errani', 'errani', 'gothic vibe', 'tenderly vibe', 'autumn vibe', 'tarot deck', 'предзаказ'],
   authors: [{ name: 'Ekaterina Errani' }],
   creator: 'Ekaterina Errani',
   publisher: 'errani',
@@ -26,14 +26,14 @@ const DEFAULT_METADATA: Metadata = {
     locale: 'ru_RU',
     url: 'https://errani.ru',
     siteName: 'errani',
-    title: 'errani — Авторская колода Таро «Tenderly Vibe»',
-    description: 'Авторская колода Таро «Tenderly Vibe» от Ekaterina Errani. 78 уникальных карт с оригинальными иллюстрациями и матовой ламинацией.',
-    images: [{ url: '/media/photo-11.jpeg', width: 1200, height: 630, alt: 'Tenderly Vibe — Авторская колода Таро' }],
+    title: 'errani — Авторские колоды Таро',
+    description: 'Авторские колоды Таро и аксессуары Errani Studio. Gothic Vibe, Tenderly Vibe и другие издания с оригинальными иллюстрациями.',
+    images: [{ url: '/media/photo-11.jpeg', width: 1200, height: 630, alt: 'errani — Авторские колоды Таро' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'errani — Авторская колода Таро',
-    description: 'Авторская колода Таро «Tenderly Vibe» от Ekaterina Errani.',
+    title: 'errani — Авторские колоды Таро',
+    description: 'Авторские колоды Таро Errani Studio от Ekaterina Errani.',
     images: ['/media/photo-11.jpeg'],
   },
   robots: {
@@ -85,7 +85,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru">
+    <html lang="ru" className="dark">
       <head>
         <link rel="preload" href="/fonts/Montserrat.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         <link rel="preload" href="/fonts/Montserrat-Italic.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
@@ -97,7 +97,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               '@type': 'WebSite',
               name: 'errani',
               url: 'https://errani.ru',
-              description: 'Авторская колода Таро «Tenderly Vibe» от Ekaterina Errani.',
+              description: 'Авторские колоды Таро Errani Studio от Ekaterina Errani.',
               author: { '@type': 'Person', name: 'Ekaterina Errani' },
             }),
           }}

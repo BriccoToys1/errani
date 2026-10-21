@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CdekError, getCdekRussianLocationsCatalog } from '@/lib/cdek';
+import { flash, langFromRequest } from '@/lib/flash';
 
 const POPULAR_CITIES = [
   'Москва',
@@ -124,10 +125,11 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json([]);
   } catch (error) {
+    const lang = langFromRequest(req);
     if (error instanceof CdekError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json({ error: error.localize(lang) }, { status: error.status });
     }
     console.error('Address suggestions error:', error);
-    return NextResponse.json({ error: 'Не удалось загрузить подсказки.' }, { status: 500 });
+    return NextResponse.json({ error: flash(lang, 'cdek.suggestions_failed') }, { status: 500 });
   }
 }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
-import { generateOrderNumber } from '@/lib/utils';
+import { allocateOrderNumber } from '@/lib/utils';
+import { ensureAdminSchema } from '@/lib/ensure-schema';
 
 // POST: create a manual order (admin only)
 export async function POST(req: NextRequest) {
@@ -9,6 +10,7 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   try {
+    await ensureAdminSchema(prisma);
     const body = await req.json();
     const {
       customerName, customerEmail, customerPhone,
@@ -36,9 +38,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const primaryProductId = orderItemsData[0]?.productId || null;
+    const orderNumber = await allocateOrderNumber(prisma, primaryProductId);
+
     const order = await prisma.order.create({
       data: {
-        orderNumber: generateOrderNumber(),
+        orderNumber,
         userId: null,
         customerName: customerName.trim(),
         customerEmail: (customerEmail || '').trim(),

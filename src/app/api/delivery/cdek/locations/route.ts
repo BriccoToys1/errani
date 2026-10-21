@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CdekError, CdekLocation, searchCdekLocations } from '@/lib/cdek';
+import { flash, langFromRequest } from '@/lib/flash';
 
 interface GeocodeAddress {
   city?: string;
@@ -178,10 +179,11 @@ export async function GET(req: NextRequest) {
     const locations = geocoded.length > 0 ? geocoded : await searchCdekLocations(query);
     return NextResponse.json(locations, { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' } });
   } catch (error) {
+    const lang = langFromRequest(req);
     if (error instanceof CdekError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json({ error: error.localize(lang) }, { status: error.status });
     }
     console.error('Unexpected CDEK location search error:', error);
-    return NextResponse.json({ error: 'Не удалось выполнить поиск адреса.' }, { status: 500 });
+    return NextResponse.json({ error: flash(lang, 'cdek.locations_failed') }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
+import { dialogFieldsFor } from '@/lib/mail-thread';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -82,6 +83,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         direction: 'outbound',
         fromAddr: 'mail@errani.ru',
         toAddr: inquiry.email,
+        ...dialogFieldsFor(inquiry.email),
         subject: emailSubject,
         body: html,
         textBody: body,

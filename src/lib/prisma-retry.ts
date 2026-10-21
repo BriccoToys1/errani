@@ -22,6 +22,14 @@ const RETRYABLE_MESSAGE_PARTS = [
   'Connection timed out',
   'Timed out fetching a new connection from the connection pool',
   'Prisma operation timeout',
+  // Disk-full / restart recovery: Postgres is up but not ready yet
+  'the database system is not yet accepting connections',
+  'Consistent recovery state has not been yet reached',
+  'the database system is starting up',
+  'too many clients already',
+  'remaining connection slots are reserved',
+  'ECONNRESET',
+  'ECONNREFUSED',
 ];
 
 const OPERATION_TIMEOUT_MS = Number(process.env.PRISMA_OPERATION_TIMEOUT_MS || 10_000);
@@ -52,8 +60,8 @@ export function isRetryablePrismaError(error: unknown): boolean {
 
 export async function withPrismaRetry<T>(
   operation: () => Promise<T>,
-  attempts = 3,
-  baseDelayMs = 150
+  attempts = 5,
+  baseDelayMs = 250
 ): Promise<T> {
   let lastError: unknown;
 
@@ -73,7 +81,11 @@ export async function withPrismaRetry<T>(
       } catch {
         // ignore
       }
-      await sleep(baseDelayMs * attempt);
+      // Longer backoff while Postgres finishes crash recovery after disk-full.
+      const recovery =
+        getErrorMessage(error).includes('not yet accepting') ||
+        getErrorMessage(error).includes('recovery state');
+      await sleep(baseDelayMs * attempt * (recovery ? 3 : 1));
     }
   }
 

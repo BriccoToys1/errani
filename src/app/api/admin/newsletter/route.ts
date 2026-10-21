@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { Resend } from 'resend';
+import crypto from 'crypto';
+import { withPrismaRetry } from '@/lib/prisma-retry';
+import { extractEmailAddress, newsletterThreadId } from '@/lib/mail-thread';
+import { buildBrandedEmailHtml } from '@/lib/email-template';
+import { newsletterFromMailbox } from '@/lib/mailboxes';
+
+async function getApiKey(): Promise<string | null> {
+  try {
+    const s = await withPrismaRetry(
+      () => prisma.siteSettings.findUnique({ where: { key: 'resend_api_key' } }),
+      2,
+      80
+    );
+    if (s?.value?.trim()) return s.value.trim();
+  } catch {
+    // fall back to env
+  }
+  return process.env.RESEND_API_KEY?.trim() || null;
+}
 
 // GET — unique customers from orders (for recipient list)
 export async function GET(req: NextRequest) {
@@ -40,11 +59,14 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   try {
-    const { recipients, subject, body } = (await req.json()) as {
+    const { recipients, subject, body, from: fromRaw } = (await req.json()) as {
       recipients: { email: string; name: string }[];
       subject: string;
       body: string;
+      from?: string;
     };
+    // mail@ / sales@ / katy@ must not send bulk newsletters — force info@
+    const fromMailbox = newsletterFromMailbox(fromRaw);
 
     if (!recipients?.length || !subject?.trim() || !body?.trim()) {
       return NextResponse.json({ error: 'Заполните все поля' }, { status: 400 });
@@ -53,10 +75,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Максимум 500 получателей за раз' }, { status: 400 });
     }
 
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: 'Email не настроен (RESEND_API_KEY)' }, { status: 500 });
+    const apiKey = await getApiKey();
+    if (!apiKey) return NextResponse.json({ error: 'Email не настроен: укажите Resend API Key в Настройках → Интеграции → Resend' }, { status: 500 });
 
     const resend = new Resend(apiKey);
+    const threadId = newsletterThreadId(crypto.randomUUID());
     let sent = 0;
     let failed = 0;
     const errors: string[] = [];
@@ -72,20 +95,22 @@ export async function POST(req: NextRequest) {
 
     for (const recipient of recipients) {
       try {
-        const html = buildNewsletterHtml(bodyHtml);
+        const html = buildBrandedEmailHtml(bodyHtml);
         const textBody = body.replace(/<[^>]*>/g, '').substring(0, 300);
 
         const result = await resend.emails.send({
-          from: 'errani <mail@errani.ru>',
+          from: `errani <${fromMailbox}>`,
           to: recipient.email,
           subject,
           html,
+          replyTo: fromMailbox,
         });
+        if (result.error) throw new Error(result.error.message);
 
         await prisma.adminEmail.create({
           data: {
             direction: 'outbound',
-            fromAddr: 'mail@errani.ru',
+            fromAddr: fromMailbox,
             toAddr: recipient.email,
             subject,
             body: html,
@@ -93,6 +118,9 @@ export async function POST(req: NextRequest) {
             status: 'sent',
             isRead: true,
             resendId: result.data?.id || '',
+            kind: 'newsletter',
+            threadId,
+            contactEmail: extractEmailAddress(recipient.email),
           },
         });
 
@@ -105,58 +133,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ sent, failed, errors });
+    return NextResponse.json({ sent, failed, errors, threadId });
   } catch (err) {
     console.error('Newsletter POST error:', err);
     return NextResponse.json({ error: err instanceof Error ? err.message : 'Ошибка' }, { status: 500 });
   }
-}
-
-function buildNewsletterHtml(bodyHtml: string): string {
-  const year = new Date().getFullYear();
-  return `<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-</head>
-<body style="margin:0;padding:0;background:#f2f2f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:36px 16px 48px;">
-    <tr><td align="center">
-      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;">
-        <tr><td style="padding:0 0 18px;text-align:center;">
-          <span style="font-size:26px;font-weight:900;letter-spacing:-0.03em;color:#1a1a1a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">errani</span>
-        </td></tr>
-        <tr>
-          <td style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.09);">
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr><td style="height:4px;background:#e8601c;font-size:0;line-height:0;">&nbsp;</td></tr>
-            </table>
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="padding:28px 28px 24px;font-size:14px;line-height:1.8;color:#333;">
-                  ${bodyHtml}
-                </td>
-              </tr>
-            </table>
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr><td style="height:1px;background:#f0f0f0;font-size:0;">&nbsp;</td></tr>
-            </table>
-            <table width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td style="padding:14px 28px 20px;font-size:11px;color:#bbb;line-height:1.7;">
-                  errani.ru &nbsp;&middot;&nbsp; <a href="mailto:mail@errani.ru" style="color:#e8601c;text-decoration:none;">mail@errani.ru</a>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:18px 0 0;text-align:center;font-size:11px;color:#bbb;">© ${year} errani.ru</td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
 }

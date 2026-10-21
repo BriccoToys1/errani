@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-
-import { AdminSidebar } from '../AdminSidebar';
+import { AdminPage } from '../AdminPage';
+import { HeaderActions, IconButton, SearchField, Toolbar, ScrollArea, useContactSheet, PageLoading } from '@/components/admin';
+import { adminFetch, adminToastClass, refreshAdminCounts } from '@/lib/admin-client';
 
 // ─── Получить отзыв tab types ──────────────────────────────────────────────
 type CandidateItem = { productId: string; productName: string; hasActiveInvite: boolean };
@@ -42,11 +43,14 @@ function fmtDate(input: string | null | undefined) {
 
 export default function AdminReviewsPage() {
   const router = useRouter();
+  const contactSheet = useContactSheet();
 
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
+  const [unviewedPending, setUnviewedPending] = useState(0);
+  const [reviewsViewedAt, setReviewsViewedAt] = useState<Date>(() => new Date(0));
   const [notification, setNotification] = useState('');
 
   const [status, setStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
@@ -108,15 +112,25 @@ export default function AdminReviewsPage() {
 
       setReviews(data.reviews || []);
       setProducts(data.products || []);
-      setPendingCount(data.pending || 0);
+      const pending = data.pending || 0;
+      setPendingCount(pending);
       setPage(data.page || 1);
       setPages(data.pages || 1);
+      // Unviewed badge: pending created after last "Просмотреть"
+      const viewedMs = reviewsViewedAt.getTime();
+      if (viewedMs <= 0) setUnviewedPending(pending);
+      else {
+        const rows = (data.reviews || []) as ReviewRow[];
+        const newer = rows.filter((r) => r.status === 'pending' && new Date(r.createdAt).getTime() > viewedMs).length;
+        // If filtered list isn't all-pending, keep previous or use API pending when never acknowledged
+        setUnviewedPending((prev) => (status === 'pending' ? newer : Math.min(prev, pending)));
+      }
     } catch {
       notify('Ошибка сети');
     } finally {
       setLoading(false);
     }
-  }, [page, productId, query, router, status]);
+  }, [page, productId, query, reviewsViewedAt, router, status]);
 
   useEffect(() => {
     if (!token) {
@@ -125,6 +139,32 @@ export default function AdminReviewsPage() {
     }
     void load(1);
   }, [load, router, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    adminFetch('/api/admin/settings?key=reviewsViewedAt')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.value) setReviewsViewedAt(new Date(d.value));
+      })
+      .catch(() => undefined);
+  }, [token]);
+
+  const markAllViewed = async () => {
+    try {
+      const res = await adminFetch('/api/admin/viewed', {
+        method: 'POST',
+        body: JSON.stringify({ section: 'reviews' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setReviewsViewedAt(data?.value ? new Date(data.value) : new Date());
+      setUnviewedPending(0);
+      setTab('reviews');
+      setStatus('pending');
+      refreshAdminCounts();
+      notify('Отзывы отмечены как просмотренные');
+    } catch { /* ignore */ }
+  };
 
   const moderateMedia = async (reviewId: string, mediaUrl: string, action: 'approveMedia' | 'rejectMedia') => {
     const adminToken = localStorage.getItem('admin_token');
@@ -218,38 +258,26 @@ export default function AdminReviewsPage() {
     } catch { notify('Ошибка сети'); } finally { setSendingKey(null); }
   };
 
+  if (loading && reviews.length === 0 && tab === 'reviews') return <PageLoading />;
+
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
-        <div className="cms-header">
-          <div>
-            <h1 className="cms-header-title">Отзывы</h1>
-            <p style={{ fontSize: '13px', color: 'var(--cms-text-muted)', marginTop: '2px' }}>
-              На модерации: {pendingCount}
-            </p>
-          </div>
-        </div>
+    <AdminPage
+      title="Отзывы"
+      fill
+      notifyCount={unviewedPending > 0 ? unviewedPending : undefined}
+      actions={
+        <HeaderActions>
+          <IconButton icon="add" label="Добавить" shape="plain" onClick={() => setTab('send')} />
+          <IconButton icon="refresh" label="Обновить" shape="plain" onClick={() => window.location.reload()} />
+          {unviewedPending > 0 && (
+            <IconButton icon="view" label="Просмотреть" shape="plain" onClick={() => { void markAllViewed(); }} />
+          )}
+        </HeaderActions>
+      }
+    >
 
-        {notification && <div className="cms-notification">{notification}</div>}
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--cms-border)', marginBottom: 0, padding: '0 24px' }}>
-          {(['reviews', 'send'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{
-              padding: '10px 18px', border: 'none', background: 'none', cursor: 'pointer',
-              fontWeight: 600, fontSize: 13, color: tab === t ? 'var(--cms-accent)' : 'var(--cms-text-muted)',
-              borderBottom: tab === t ? '2px solid var(--cms-accent)' : '2px solid transparent',
-              transition: 'all 0.15s',
-            }}>
-              {t === 'reviews' ? 'Все отзывы' : 'Получить отзыв'}
-            </button>
-          ))}
-        </div>
-
-        <div className="cms-content">
           {tab === 'send' && (
-            <div>
+            <ScrollArea>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
                 <button className="cms-btn cms-btn-sm cms-btn-ghost" onClick={() => void loadCandidates()}>Обновить</button>
               </div>
@@ -290,11 +318,15 @@ export default function AdminReviewsPage() {
                                     title={item.hasActiveInvite ? 'Переотправить ссылку' : 'Отправить ссылку на отзыв'}
                                     style={{ color: item.hasActiveInvite ? 'var(--cms-text-muted)' : undefined }}
                                   >
-                                    {item.hasActiveInvite ? (
-                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-                                    ) : (
-                                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-                                    )}
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                      <i className="fi fi-rr-link" style={{ fontSize: 13 }} />
+                                      {item.hasActiveInvite && (
+                                        <>
+                                          <i className="fi fi-rr-check" style={{ fontSize: 12, color: '#4ade80' }} />
+                                          <span style={{ fontSize: 11, fontWeight: 700 }}>x1</span>
+                                        </>
+                                      )}
+                                    </span>
                                   </button>
                                 )}
                               </div>
@@ -306,18 +338,18 @@ export default function AdminReviewsPage() {
                   ))}
                 </div>
               )}
-            </div>
+            </ScrollArea>
           )}
 
           {tab === 'reviews' && (<>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
-            <select className="cms-select" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
+          <Toolbar>
+            <SearchField value={query} onChange={(v) => { setQuery(v); }} onSubmit={() => void load(1)} style={{ minWidth: 250 }} />
+            <select className="cms-select" value={status} onChange={(e) => { setStatus(e.target.value as typeof status); }}>
               <option value="all">Все</option>
               <option value="pending">На модерации</option>
               <option value="approved">Одобренные</option>
               <option value="rejected">Отклонённые</option>
             </select>
-
             <select className="cms-select" value={productId} onChange={(e) => setProductId(e.target.value)}>
               <option value="">Все товары</option>
               {products.map((product) => (
@@ -326,23 +358,10 @@ export default function AdminReviewsPage() {
                 </option>
               ))}
             </select>
+          </Toolbar>
 
-            <input
-              className="cms-input"
-              placeholder="Поиск по email, имени, тексту"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              style={{ minWidth: '250px' }}
-            />
-
-            <button className="cms-btn cms-btn-sm cms-btn-secondary" onClick={() => void load(1)}>
-              Применить
-            </button>
-          </div>
-
-          {loading ? (
-            <div style={{ padding: '48px', textAlign: 'center', color: 'var(--cms-text-muted)' }}>Загрузка...</div>
-          ) : reviews.length === 0 ? (
+          <ScrollArea>
+          {reviews.length === 0 ? (
             <div className="cms-card" style={{ padding: '38px', textAlign: 'center', color: 'var(--cms-text-muted)' }}>
               Отзывов не найдено
             </div>
@@ -353,22 +372,37 @@ export default function AdminReviewsPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
                     <div>
                       <div style={{ fontWeight: 700 }}>{review.customerName || 'Без имени'} · {review.rating.toFixed(1)} ★</div>
-                      <div style={{ fontSize: '12px', color: 'var(--cms-text-muted)' }}>{review.customerEmail}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--cms-text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          type="button"
+                          className="cms-linkbtn"
+                          onClick={() => contactSheet.open({ type: "email", value: review.customerEmail })}
+                        >
+                          {review.customerEmail}
+                        </button>
+                        <IconButton
+                          icon="mail"
+                          label={review.customerEmail}
+                          shape="square"
+                          size="sm"
+                          onClick={() => contactSheet.open({ type: "email", value: review.customerEmail })}
+                        />
+                      </div>
                       <div style={{ fontSize: '12px', color: 'var(--cms-text-muted)' }}>
                         Товар: {review.product?.nameRu || review.product?.name || review.productId}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div className="cms-badge">{STATUS_LABELS[review.status] || review.status}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--cms-text-muted)', marginTop: '6px' }}>
-                        Создан: {fmtDate(review.createdAt)}
+                      <div
+                        className="cms-badge"
+                        style={{
+                          background: review.status === 'approved' ? 'rgba(34,197,94,0.18)' : review.status === 'rejected' ? 'rgba(239,68,68,0.18)' : 'rgba(234,179,8,0.18)',
+                          color: review.status === 'approved' ? '#4ade80' : review.status === 'rejected' ? '#f87171' : '#facc15',
+                          borderColor: review.status === 'approved' ? 'rgba(34,197,94,0.4)' : review.status === 'rejected' ? 'rgba(239,68,68,0.4)' : 'rgba(234,179,8,0.4)',
+                        }}
+                      >
+                        {STATUS_LABELS[review.status] || review.status}
                       </div>
-                      {review.approvedAt && (
-                        <div style={{ fontSize: '12px', color: 'var(--cms-text-muted)' }}>Одобрен: {fmtDate(review.approvedAt)}</div>
-                      )}
-                      {review.rejectedAt && (
-                        <div style={{ fontSize: '12px', color: 'var(--cms-text-muted)' }}>Отклонён: {fmtDate(review.rejectedAt)}</div>
-                      )}
                     </div>
                   </div>
 
@@ -411,7 +445,7 @@ export default function AdminReviewsPage() {
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px', alignItems: 'flex-end' }}>
                     <button
                       className="cms-btn cms-btn-sm"
                       disabled={busyId === review.id || review.status === 'approved'}
@@ -434,6 +468,11 @@ export default function AdminReviewsPage() {
                     >
                       Вернуть
                     </button>
+                    <div style={{ marginLeft: 'auto', textAlign: 'right', fontSize: 11, color: 'var(--cms-text-muted)', lineHeight: 1.5 }}>
+                      <div>Создан: {fmtDate(review.createdAt)}</div>
+                      {review.approvedAt && <div>Одобрен: {fmtDate(review.approvedAt)}</div>}
+                      {review.rejectedAt && <div>Отклонён: {fmtDate(review.rejectedAt)}</div>}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -451,9 +490,10 @@ export default function AdminReviewsPage() {
               </button>
             </div>
           )}
+          </ScrollArea>
           </>)}
-        </div>
-      </main>
-    </div>
+      {notification && <div className={adminToastClass(notification)}>{notification}</div>}
+      {contactSheet.node}
+    </AdminPage>
   );
 }

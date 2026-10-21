@@ -129,7 +129,27 @@ export function buildReceiptHtml(order: ReceiptOrder, options: boolean | Receipt
         order.intercom && `домофон ${order.intercom}`,
       ]).filter(Boolean);
 
-  const shippingLabel = SHIPPING_LABELS[order.shippingMethod] || order.shippingMethod || '—';
+  const fullAddress = [
+    order.country,
+    order.oblast,
+    order.city,
+    order.zipCode,
+    order.shippingMethod === 'cdek_pvz'
+      ? order.cdekDeliveryPointAddress
+      : [
+          order.street && `ул. ${order.street}`,
+          order.house && `д. ${order.house}`,
+          order.apartment && `кв. ${order.apartment}`,
+          order.entrance && `подъезд ${order.entrance}`,
+          order.floor && `этаж ${order.floor}`,
+          order.intercom && `домофон ${order.intercom}`,
+        ].filter(Boolean).join(', '),
+  ].filter(Boolean).join(', ');
+
+  // Instead of generic "Доставка по адресу" show the full address when applicable.
+  const shippingLabel = order.shippingMethod === 'manual_delivery'
+    ? (fullAddress || 'Доставка по адресу')
+    : (SHIPPING_LABELS[order.shippingMethod] || order.shippingMethod || '—');
   const paymentLabel = PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod || '—';
   const statusLabel = STATUS_LABELS[order.status] || order.status;
   const statusCls = STATUS_CLASS[order.status] || 'status-pending';
@@ -211,10 +231,14 @@ export function buildReceiptHtml(order: ReceiptOrder, options: boolean | Receipt
       padding: 22px 24px 18px;
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
+      align-items: center;
     }
-    .brand { font-size: 28px; font-weight: 900; letter-spacing: -0.02em; color: #1a1a1a; line-height: 1; }
-    .brand-sub { font-size: 10px; color: #bbb; letter-spacing: 0.04em; margin-top: 4px; font-weight: 500; }
+    .brand-logo {
+      display: block;
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+    }
     .order-meta { text-align: right; }
     .order-num { font-size: 13px; font-weight: 700; }
     .order-date { font-size: 10px; color: #999; margin-top: 4px; font-weight: 500; }
@@ -326,10 +350,7 @@ export function buildReceiptHtml(order: ReceiptOrder, options: boolean | Receipt
 
   <div class="receipt-wrap">
     <div class="receipt-header">
-      <div>
-        <div class="brand">errani</div>
-        <div class="brand-sub">errani.ru</div>
-      </div>
+      <img class="brand-logo" src="/logos/my_logo.png" alt="errani" width="44" height="44" />
       <div class="order-meta">
         <div class="order-num">Заказ #${order.orderNumber}</div>
         <div class="order-date">${dateStr} в ${timeStr}</div>
@@ -357,13 +378,10 @@ export function buildReceiptHtml(order: ReceiptOrder, options: boolean | Receipt
         </div>
       </div>
 
-      <div class="info-block">
+      ${fullAddress ? `<div class="info-block">
         <div class="section-title">Адрес доставки</div>
-        <div class="row"><span class="lbl">Страна</span><span class="val">${order.country}</span></div>
-        ${order.oblast ? `<div class="row"><span class="lbl">Регион</span><span class="val">${order.oblast}</span></div>` : ''}
-        ${order.city ? `<div class="row"><span class="lbl">Город</span><span class="val">${order.city}</span></div>` : ''}
-        ${addressParts.length ? `<div class="row"><span class="lbl">Адрес</span><span class="val">${addressParts.join(', ')}</span></div>` : ''}
-      </div>
+        <div class="row"><span class="lbl">Адрес</span><span class="val">${fullAddress}</span></div>
+      </div>` : ''}
 
       <div class="info-block">
         <div class="section-title">Состав заказа</div>
@@ -388,7 +406,6 @@ export function buildReceiptHtml(order: ReceiptOrder, options: boolean | Receipt
         </div>
       </div>
 
-      ${order.notes ? `<div class="info-block"><div class="section-title">Заметки</div><div style="font-size:11px;color:#555;font-weight:500;line-height:1.6;">${order.notes}</div></div>` : ''}
     </div>
 
     <div class="ticket-tear" style="margin-bottom: 0;">

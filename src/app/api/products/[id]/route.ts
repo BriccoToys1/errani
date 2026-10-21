@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
+import { hasUsableProductImage, normalizeStockFlags } from '@/lib/product-stock';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -55,8 +56,6 @@ export async function PUT(req: NextRequest, { params }: Params) {
   try {
     const { id } = await params;
     const body = await req.json();
-    const stock = Number(body.stock ?? 0);
-    const inStock = Boolean(body.inStock ?? true);
     const slug = String(body.slug || '').trim();
     if (!slug) {
       return NextResponse.json({ error: 'Slug is required' }, { status: 400 });
@@ -65,6 +64,20 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const name = String(body.name || '').trim();
     const descriptionRu = String(body.descriptionRu || '').trim();
     const description = String(body.description || '').trim();
+    const image = String(body.image || '').trim();
+    if (Boolean(body.isActive ?? true) && !hasUsableProductImage(image)) {
+      return NextResponse.json(
+        { error: 'Для публикации товара нужна валидная картинка (/media/… или /api/media/…)' },
+        { status: 400 }
+      );
+    }
+    const stockFlags = normalizeStockFlags({
+      stock: Number(body.stock ?? 0),
+      inStock: body.inStock,
+      isSoldOut: body.isSoldOut,
+      isSaleDisabled: body.isSaleDisabled ?? false,
+      isAvailable: body.isAvailable ?? true,
+    });
 
     const product = await withPrismaRetry(() =>
       prisma.product.update({
@@ -83,12 +96,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
           : null,
         discount: Number(body.discount) || 0,
         currency: String(body.currency || 'RUB'),
-        image: String(body.image || ''),
+        image,
         images: body.images !== undefined 
           ? normalizeJsonArrayString(body.images)
           : undefined,
-        stock,
-        inStock,
+        stock: stockFlags.stock ?? 0,
+        inStock: Boolean(stockFlags.inStock),
         isPreorder: Boolean(body.isPreorder),
         preorderClosed: body.preorderClosed ?? false,
         preorderAvailableDate: body.preorderAvailableDate ? new Date(body.preorderAvailableDate) : null,
@@ -99,9 +112,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
         noticeText: body.noticeText ?? '',
         noticeTextEn: body.noticeTextEn ?? '',
         isActive: body.isActive ?? true,
-        isAvailable: body.isAvailable ?? true,
-        isSaleDisabled: body.isSaleDisabled ?? false,
-        isSoldOut: body.isSoldOut ?? false,
+        isAvailable: Boolean(stockFlags.isAvailable),
+        isSaleDisabled: Boolean(stockFlags.isSaleDisabled),
+        isSoldOut: Boolean(stockFlags.isSoldOut),
         characteristics: normalizeJsonArrayString(body.characteristics),
         colors: normalizeJsonArrayString(body.colors),
         sortOrder: Number(body.sortOrder) || 0,

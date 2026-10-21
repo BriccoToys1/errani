@@ -88,6 +88,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// PUT: same as POST (the admin UI saves appearance / mobile nav / mailboxes with PUT)
+export async function PUT(req: NextRequest) {
+  return POST(req);
+}
+
 // DELETE: Remove a setting
 export async function DELETE(req: NextRequest) {
   const denied = adminGuard(req);

@@ -520,6 +520,7 @@ export function ProductContent({ product }: { product: Product }) {
                           email: waitlistEmail.trim(),
                           consentPersonalData: true,
                           selectedColor: selectedColor || '',
+                          language: lang,
                         }),
                       });
                       const data = await res.json();

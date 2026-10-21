@@ -209,8 +209,8 @@ function InteractivePickupMap({
           balloonContentBody: escapeMapText(point.address),
         },
         {
-          preset: selected ? 'islands#orangeDotIcon' : 'islands#blueDotIcon',
-          iconColor: selected ? '#e8722a' : '#2563eb',
+          preset: selected ? 'islands#pinkDotIcon' : 'islands#blueDotIcon',
+          iconColor: selected ? '#f58bdc' : '#2563eb',
           zIndex: selected ? 1000 : 0,
         },
       );
@@ -305,7 +305,7 @@ export function CdekPickupMap({
     const timer = window.setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const response = await fetch(`/api/delivery/cdek/locations?q=${encodeURIComponent(query.trim())}`, { signal: controller.signal });
+        const response = await fetch(`/api/delivery/cdek/locations?lang=${lang}&q=${encodeURIComponent(query.trim())}`, { signal: controller.signal });
         const data = await response.json();
         if (!response.ok) throw new Error(lang === 'ru' ? (data.error || 'Не удалось найти адрес.') : 'Could not find this address.');
         const nextLocations = Array.isArray(data) ? data as CdekPickupLocation[] : [];
@@ -349,6 +349,7 @@ export function CdekPickupMap({
     const controller = new AbortController();
     setPointsLoading(true);
     const params = new URLSearchParams({
+      lang,
       cityCode: String(selectedLocation.code),
       city: selectedLocation.city,
       regionCode: String(selectedLocation.regionCode),
@@ -359,7 +360,7 @@ export function CdekPickupMap({
     fetch(`/api/delivery/cdek/points?${params.toString()}`, { signal: controller.signal })
       .then(async (response) => {
         const data = await response.json();
-        if (!response.ok) throw new Error(lang === 'ru' ? (data.error || 'Не удалось загрузить пункты выдачи.') : 'Could not load pickup points.');
+        if (!response.ok) throw new Error(data.error || localize('Не удалось загрузить пункты выдачи.', 'Could not load pickup points.'));
         const nextPoints = Array.isArray(data) ? data as CdekPickupPoint[] : [];
         setPoints(nextPoints);
         if (selectedLocation.latitude !== null && selectedLocation.longitude !== null) {
@@ -416,12 +417,13 @@ export function CdekPickupMap({
     navigator.geolocation.getCurrentPosition(async ({ coords }) => {
       try {
         const params = new URLSearchParams({
+          lang,
           latitude: String(coords.latitude),
           longitude: String(coords.longitude),
         });
         const response = await fetch(`/api/delivery/cdek/locations?${params.toString()}`);
         const data = await response.json();
-        if (!response.ok) throw new Error(lang === 'ru' ? (data.error || 'Не удалось определить адрес.') : 'Could not determine your address.');
+        if (!response.ok) throw new Error(data.error || localize('Не удалось определить адрес.', 'Could not determine your address.'));
         const nearestLocation = Array.isArray(data) ? data[0] as CdekPickupLocation | undefined : undefined;
         if (!nearestLocation) {
           throw new Error(localize(
@@ -554,8 +556,8 @@ export function CdekPickupMap({
                       style={{
                         padding: '0.75rem 0.85rem',
                         borderRadius: 9,
-                        border: `1px solid ${selected ? 'var(--orange)' : 'var(--border)'}`,
-                        background: selected ? 'rgba(232,114,42,0.1)' : 'var(--surface-1)',
+                        border: `1px solid ${selected ? 'var(--primary)' : 'var(--border)'}`,
+                        background: selected ? 'rgba(245,139,220,0.1)' : 'var(--surface-1)',
                         color: 'var(--text)',
                         cursor: 'pointer',
                         textAlign: 'left',
@@ -563,7 +565,7 @@ export function CdekPickupMap({
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.7rem', fontSize: '0.82rem', fontWeight: 700 }}>
                         <span>{point.name}</span>
-                        {distance !== null && <span style={{ color: 'var(--orange)', whiteSpace: 'nowrap' }}>
+                        {distance !== null && <span style={{ color: 'var(--primary)', whiteSpace: 'nowrap' }}>
                           {distance.toFixed(1)} {localize('км', 'km')}
                         </span>}
                       </div>

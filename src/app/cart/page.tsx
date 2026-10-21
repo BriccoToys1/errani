@@ -368,9 +368,11 @@ export default function CartPage() {
                 : 'Your cart contains unavailable products. Remove them to continue checkout.'}
             </div>
           )}
-          <div className="cart-summary-inline">
-            <span className="cart-total-label-inline">{t(lang, 'cart.total')}</span>
-            <span className="cart-total-price-inline">{formatPrice(total)}</span>
+          <div className="cart-summary-inline cart-sticky-bar">
+            <div className="cart-sticky-total">
+              <span className="cart-total-label-inline">{t(lang, 'cart.total')}</span>
+              <span className="cart-total-price-inline">{formatPrice(total)}</span>
+            </div>
             <button
               type="button"
               className="cart-checkout-btn"
@@ -414,7 +416,7 @@ export default function CartPage() {
                     type="checkbox"
                     checked={formData.noMiddleName}
                     onChange={(e) => setFormData({ ...formData, noMiddleName: e.target.checked, middleName: '' })}
-                    style={{ accentColor: 'var(--orange)' }}
+                    style={{ accentColor: 'var(--primary)' }}
                   />
                   {lang === 'ru' ? 'Нет отчества' : 'No middle name'}
                 </label>
@@ -556,32 +558,38 @@ export default function CartPage() {
           {/* Consent checkboxes — only for Russia */}
           {isRussia && (
           <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', fontSize: '0.82rem', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+            <label htmlFor="consent-oferta" className="checkout-consent">
               <input
+                id="consent-oferta"
+                name="consentOferta"
                 type="checkbox"
                 checked={consentOferta}
                 onChange={(e) => setConsentOferta(e.target.checked)}
-                style={{ marginTop: '2px', flexShrink: 0, accentColor: 'var(--orange)' }}
+                required
+                aria-required="true"
               />
               <span>
                 {lang === 'ru' ? 'Я принимаю условия ' : 'I accept the terms of the '}
-                <a href="/oferta" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--orange)', textDecoration: 'underline' }}>
+                <a href="/oferta" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
                   {lang === 'ru' ? 'Публичной оферты' : 'Public Offer'}
                 </a>
               </span>
             </label>
             {errors.consentOferta && <p style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '-0.5rem' }}>{errors.consentOferta}</p>}
 
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', fontSize: '0.82rem', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+            <label htmlFor="consent-data" className="checkout-consent">
               <input
+                id="consent-data"
+                name="consentData"
                 type="checkbox"
                 checked={consentData}
                 onChange={(e) => setConsentData(e.target.checked)}
-                style={{ marginTop: '2px', flexShrink: 0, accentColor: 'var(--orange)' }}
+                required
+                aria-required="true"
               />
               <span>
                 {lang === 'ru' ? 'Я согласен на обработку ' : 'I consent to the processing of my '}
-                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--orange)', textDecoration: 'underline' }}>
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
                   {lang === 'ru' ? 'персональных данных' : 'personal data'}
                 </a>
               </span>
@@ -590,18 +598,19 @@ export default function CartPage() {
           </div>
           )}
 
-          {isRussia && <div className="cart-summary-inline" style={{ marginTop: '2rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          {isRussia && <div className="cart-summary-inline cart-sticky-bar" style={{ marginTop: '2rem' }}>
             {submitError && (
-              <div style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '0.84rem', lineHeight: 1.5 }}>
+              <div style={{ width: '100%', order: -1, padding: '0.85rem 1rem', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '0.84rem', lineHeight: 1.5 }}>
                 {submitError}
               </div>
             )}
             <button type="button" onClick={() => setStep('cart')} className="cart-back-btn">
               ← {lang === 'ru' ? 'Назад' : 'Back'}
             </button>
-            <span style={{ flex: 1 }} />
-            <span className="cart-total-label-inline">{lang === 'ru' ? 'К оплате' : 'Total due'}</span>
-            <span className="cart-total-price-inline">{formatPrice(grandTotal)}</span>
+            <div className="cart-sticky-total">
+              <span className="cart-total-label-inline">{lang === 'ru' ? 'К оплате' : 'Total due'}</span>
+              <span className="cart-total-price-inline">{formatPrice(grandTotal)}</span>
+            </div>
             <button type="submit" className="cart-checkout-btn" disabled={submitting || hasUnavailableItems || !availabilityChecked}>
               {submitting
                 ? (lang === 'ru' ? 'Обработка...' : 'Processing...')
@@ -647,7 +656,7 @@ function _ForeignCardModal_unused({ onClose, foreignForm, setForeignForm, submit
           <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
             <div style={{
               width: '64px', height: '64px', borderRadius: '50%',
-              background: 'var(--orange)',
+              background: 'var(--primary)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               margin: '0 auto 1.25rem',
             }}>
@@ -710,7 +719,7 @@ function _ForeignCardModal_unused({ onClose, foreignForm, setForeignForm, submit
                 checked={foreignForm.consent}
                 onChange={(e) => setForeignForm({ ...foreignForm, consent: e.target.checked })}
                 required
-                style={{ marginTop: '2px', flexShrink: 0, accentColor: 'var(--orange)' }}
+                style={{ marginTop: '2px', flexShrink: 0, accentColor: 'var(--primary)' }}
               />
               {lang === 'ru' ? 'Согласен на обработку персональных данных' : 'I consent to personal data processing'}
             </label>

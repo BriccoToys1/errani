@@ -1,8 +1,23 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { AdminSidebar } from "../AdminSidebar";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AdminPage } from "../AdminPage";
+import {
+  Button,
+  ConfirmPopover,
+  CountBadge,
+  HeaderActions,
+  Icon,
+  IconButton,
+  Modal,
+  SearchField,
+  SegmentedControl,
+  PageLoading,
+} from "@/components/admin";
+import { adminFetch, adminToastClass, refreshAdminCounts } from "@/lib/admin-client";
+import { isBrandedEmail } from "@/lib/email-template";
+import { DEFAULT_MAILBOX, MAILBOX_INFO, MAILBOXES, type MailboxAddress, normalizeMailbox } from "@/lib/mailboxes";
 
 interface Email {
   id: string;
@@ -14,9 +29,45 @@ interface Email {
   textBody: string;
   status: string;
   isRead: boolean;
-  resendId: string;
   inReplyTo: string;
+  kind: string;
+  threadId: string;
+  contactEmail: string;
   createdAt: string;
+}
+
+interface ParentPreview {
+  id: string;
+  subject: string;
+  textBody: string;
+  body: string;
+  direction: string;
+  kind: string;
+  createdAt: string;
+  fromAddr: string;
+}
+
+interface Conversation {
+  threadId: string;
+  contactEmail: string;
+  name: string;
+  subject: string;
+  lastText: string;
+  lastAt: string;
+  lastDirection: string;
+  unread: number;
+  count: number;
+}
+
+interface Campaign {
+  threadId: string;
+  subject: string;
+  body: string;
+  preview: string;
+  createdAt: string;
+  recipients: string[];
+  sent: number;
+  failed: number;
 }
 
 interface NlCustomer {
@@ -26,41 +77,339 @@ interface NlCustomer {
   orderCount: number;
 }
 
-function buildSafeEmailDocument(html: string, text: string): string {
-  const fallback = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid:; style-src 'unsafe-inline'; font-src 'self'"><style>@font-face{font-family:Montserrat;src:url('/fonts/Montserrat.woff2') format('woff2');font-weight:100 900;font-style:normal;font-display:swap}html{color-scheme:dark}body{margin:0;padding:16px;background:#111116;color:#e8e8ed;font:14px/1.65 Montserrat,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow-wrap:anywhere}a{color:#ff9a62}img{max-width:100%;height:auto}pre{white-space:pre-wrap;font:inherit}</style></head><body>${html || `<pre>${fallback || "(без текста)"}</pre>`}</body></html>`;
+type Pane = "dialogs" | "newsletters";
+
+function buildSafeEmailDocument(html: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: cid: https:; style-src 'unsafe-inline'; font-src 'self'"><style>html{color-scheme:light}body{margin:0;padding:14px;background:#ffffff;color:#1a1a1a;font:14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow-wrap:anywhere}a{color:#b0378f}img{max-width:100%;height:auto}pre{white-space:pre-wrap;font:inherit}</style></head><body>${html}</body></html>`;
 }
 
-// Conversations are grouped by the other party's email address (first address if several).
-function normalizeAddr(raw: string): string {
-  const first = (raw || "").split(",")[0].trim();
-  const match = first.match(/[^\s<>]+@[^\s<>]+/);
-  return (match ? match[0] : first).toLowerCase();
+/** Plain-text messages (no real HTML or our own branded wrapper) are shown natively for readability. */
+function isPlainMessage(m: { body: string; textBody: string; direction: string }): boolean {
+  const body = (m.body || "").trim();
+  if (!body || body.startsWith("<pre")) return true;
+  if (isBrandedEmail(body)) return true;
+  return !/<[a-z][\s\S]*>/i.test(body);
 }
 
-function contactKey(email: Email): string {
-  return normalizeAddr(email.direction === "inbound" ? email.fromAddr : email.toAddr);
+function plainText(m: { body: string; textBody: string }): string {
+  const text = (m.textBody || "").trim();
+  if (text) return text;
+  return (m.body || "").replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, "").trim();
 }
 
-export default function AdminEmailPage() {
+function stripReplyPrefix(subject: string): string {
+  let s = (subject || "").trim();
+  const re = /^(re|fw|fwd|ответ)\s*:\s*/i;
+  while (re.test(s)) s = s.replace(re, "").trim();
+  return s;
+}
+
+function formatListDate(d: string) {
+  const date = new Date(d);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) {
+    return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  }
+  return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
+function dayLabel(d: string) {
+  const date = new Date(d);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Сегодня";
+  if (date.toDateString() === yesterday.toDateString()) return "Вчера";
+  return date.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function initials(nameOrEmail: string) {
+  const s = (nameOrEmail || "?").trim();
+  const parts = s.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2 && !s.includes("@")) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return s.charAt(0).toUpperCase();
+}
+
+const BUBBLE_COLLAPSE_PX = 112;
+
+function AutoHeightFrame({
+  html,
+  title,
+  expanded,
+  onMeasure,
+}: {
+  html: string;
+  title: string;
+  expanded: boolean;
+  onMeasure?: (fullHeight: number) => void;
+}) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const [fullHeight, setFullHeight] = useState(BUBBLE_COLLAPSE_PX);
+  const onLoad = () => {
+    const doc = ref.current?.contentDocument;
+    if (!doc?.body) return;
+    const next = Math.min(Math.max(doc.body.scrollHeight + 4, 60), 1200);
+    setFullHeight(next);
+    onMeasure?.(next);
+  };
+  const height = expanded ? fullHeight : Math.min(fullHeight, BUBBLE_COLLAPSE_PX);
+  return (
+    <iframe
+      ref={ref}
+      title={title}
+      sandbox="allow-same-origin"
+      srcDoc={buildSafeEmailDocument(html)}
+      className={`mail-html-frame${expanded ? "" : " is-collapsed"}`}
+      style={{ height }}
+      onLoad={onLoad}
+    />
+  );
+}
+
+function MessageBody({ message }: { message: { body: string; textBody: string; direction: string; subject?: string } }) {
+  const [expanded, setExpanded] = useState(false);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [overflows, setOverflows] = useState(false);
+  const plain = isPlainMessage(message);
+
+  useEffect(() => {
+    if (!plain || !textRef.current) return;
+    setOverflows(textRef.current.scrollHeight > BUBBLE_COLLAPSE_PX + 8);
+  }, [plain, message.body, message.textBody]);
+
+  return (
+    <div className="messenger-bubble-body-wrap">
+      {plain ? (
+        <div
+          ref={textRef}
+          className={`messenger-bubble-text${expanded ? " is-expanded" : " is-collapsed"}`}
+        >
+          {plainText(message) || "(без текста)"}
+        </div>
+      ) : (
+        <AutoHeightFrame
+          html={message.body}
+          title={`Письмо: ${message.subject || "без темы"}`}
+          expanded={expanded}
+          onMeasure={(h) => setOverflows(h > BUBBLE_COLLAPSE_PX + 8)}
+        />
+      )}
+      {overflows && (
+        <button type="button" className="messenger-bubble-toggle" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? "Свернуть" : "Показать полностью"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+async function filesToAttachments(files: File[]) {
+  return Promise.all(
+    files.slice(0, 10).map(
+      (file) =>
+        new Promise<{ filename: string; content: string; contentType: string }>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const raw = String(reader.result || "");
+            resolve({
+              filename: file.name,
+              contentType: file.type || "application/octet-stream",
+              content: raw.includes(",") ? raw.split(",")[1] : raw,
+            });
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(file);
+        })
+    )
+  );
+}
+
+function RecipientsLine({ recipients }: { recipients: string[] }) {
+  const [open, setOpen] = useState(false);
+  const shown = open ? recipients : recipients.slice(0, 3);
+  const rest = recipients.length - 3;
+  return (
+    <div className="mail-recipients">
+      {shown.map((r) => (
+        <span key={r} className="mail-recipient">{r}</span>
+      ))}
+      {rest > 0 && (
+        <button type="button" className="mail-recipients-more" onClick={() => setOpen((v) => !v)}>
+          {open ? "свернуть" : `и ещё ${rest}+`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AdminEmailPageInner() {
   const router = useRouter();
-  const [emails, setEmails] = useState<Email[]>([]);
+  const searchParams = useSearchParams();
+  const [pane, setPane] = useState<Pane>(searchParams.get("pane") === "newsletters" ? "newsletters" : "dialogs");
+  const [search, setSearch] = useState(searchParams.get("q") || "");
   const [loading, setLoading] = useState(true);
-  const [folder, setFolder] = useState("inbox");
-  const [search, setSearch] = useState("");
-  const [activeContact, setActiveContact] = useState<string | null>(null);
-  const [replyDraft, setReplyDraft] = useState("");
-  const [replySending, setReplySending] = useState(false);
-  const [notification, setNotification] = useState("");
-  const [composing, setComposing] = useState(false);
-  const [replyTo, setReplyTo] = useState<Email | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [activeThread, setActiveThread] = useState<string | null>(null);
+  const [newContact, setNewContact] = useState<string>("");
+  const [messages, setMessages] = useState<Email[]>([]);
+  const [outsideParents, setOutsideParents] = useState<ParentPreview[]>([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [expandedQuotes, setExpandedQuotes] = useState<Set<string>>(new Set());
+  const [replyTarget, setReplyTarget] = useState<Email | null>(null);
+  const [replyDraft, setReplyDraft] = useState("");
+  const [newSubject, setNewSubject] = useState("");
+  const [replySending, setReplySending] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [notification, setNotification] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [activeCampaign, setActiveCampaign] = useState<string | null>(null);
   const [mailboxOpen, setMailboxOpen] = useState(false);
+  const [activeMailbox, setActiveMailbox] = useState<MailboxAddress>(DEFAULT_MAILBOX);
+  const [availableMailboxes, setAvailableMailboxes] = useState<MailboxAddress[]>([...MAILBOXES]);
   const mailboxRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const attachInputRef = useRef<HTMLInputElement>(null);
+  const [stickyDate, setStickyDate] = useState("");
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Compose modal
+  const [composing, setComposing] = useState(false);
+  const [compTo, setCompTo] = useState("");
+  const [compSubject, setCompSubject] = useState("");
+  const [compBody, setCompBody] = useState("");
+  const [compFiles, setCompFiles] = useState<File[]>([]);
+  const [sending, setSending] = useState(false);
+
+  // Newsletter modal
+  const [showNewsletter, setShowNewsletter] = useState(false);
+  const [nlView, setNlView] = useState<"select" | "sending" | "done">("select");
+  const [nlCustomers, setNlCustomers] = useState<NlCustomer[]>([]);
+  const [nlLoadingCustomers, setNlLoadingCustomers] = useState(false);
+  const [nlSearch, setNlSearch] = useState("");
+  const [nlSelected, setNlSelected] = useState<Set<string>>(new Set());
+  const [nlSubject, setNlSubject] = useState("");
+  const [nlBody, setNlBody] = useState("");
+  const [nlConfirm, setNlConfirm] = useState(false);
+  const [nlResult, setNlResult] = useState<{ sent: number; failed: number; errors: string[] } | null>(null);
+
+  const notify = useCallback((msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(""), 3000);
+  }, []);
+
+  const fetchList = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ view: pane, mailbox: activeMailbox });
+      if (search.trim()) params.set("search", search.trim());
+      const res = await adminFetch(`/api/admin/email?${params}`);
+      if (res.status === 401) { router.push("/admin/login"); return; }
+      if (!res.ok) {
+        notify("Не удалось загрузить почту — данные на экране сохранены");
+        return;
+      }
+      const data = await res.json();
+      if (pane === "dialogs") {
+        if (Array.isArray(data.conversations)) {
+          setConversations(data.conversations);
+          setUnreadCount(data.unreadCount || 0);
+        }
+      } else if (Array.isArray(data.campaigns)) {
+        setCampaigns(data.campaigns);
+      }
+    } catch {
+      notify("Не удалось загрузить почту — данные на экране сохранены");
+    } finally {
+      setLoading(false);
+    }
+  }, [pane, search, router, activeMailbox, notify]);
+
+  const fetchThread = useCallback(async (threadId: string) => {
+    setThreadLoading(true);
+    try {
+      const res = await adminFetch(`/api/admin/email?thread=${encodeURIComponent(threadId)}&mailbox=${encodeURIComponent(activeMailbox)}`);
+      if (!res.ok) {
+        notify("Не удалось загрузить переписку");
+        return;
+      }
+      const data = await res.json();
+      if (Array.isArray(data.messages)) {
+        setMessages(data.messages);
+        setOutsideParents(data.parents || []);
+      }
+    } catch {
+      notify("Не удалось загрузить переписку");
+    } finally {
+      setThreadLoading(false);
+    }
+  }, [activeMailbox, notify]);
+
+  useEffect(() => {
+    adminFetch("/api/admin/email?mailboxes=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const list = (d.mailboxes || []).map((m: string) => normalizeMailbox(m));
+        if (list.length) {
+          setAvailableMailboxes(list);
+          if (!list.includes(activeMailbox)) setActiveMailbox(list[0]);
+        }
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectMailbox = (addr: MailboxAddress) => {
+    setActiveMailbox(addr);
+    setMailboxOpen(false);
+    setActiveThread(null);
+    setActiveCampaign(null);
+    setMessages([]);
+  };
+
+  const syncEmails = useCallback(async (showResult = false) => {
+    if (showResult) setSyncing(true);
+    try {
+      const res = await adminFetch("/api/admin/email/sync", { method: "POST" });
+      const data = await res.json();
+      if (showResult) notify(data.error ? `Ошибка: ${data.error}` : `Синхронизировано: +${data.synced || 0}`);
+    } catch {
+      if (showResult) notify("Ошибка сети");
+    }
+    if (showResult) setSyncing(false);
+  }, [notify]);
+
+  useEffect(() => {
+    syncEmails().then(() => fetchList());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => { fetchList(); }, search ? 250 : 0);
+    return () => clearTimeout(t);
+  }, [fetchList, search]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchList();
+      if (activeThread) fetchThread(activeThread);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [fetchList, fetchThread, activeThread]);
+
+  // Deep link: /admin/email?thread=<email> or ?contact=<email> opens the dialog with that recipient.
+  useEffect(() => {
+    const contact = (searchParams.get("thread") || searchParams.get("contact") || "").trim().toLowerCase();
+    if (!contact) return;
+    setPane("dialogs");
+    openConversation(contact);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     if (!mailboxOpen) return;
@@ -71,139 +420,109 @@ export default function AdminEmailPage() {
     return () => document.removeEventListener("mousedown", onClick);
   }, [mailboxOpen]);
 
-  // Auto-grow the reply composer up to ~7 lines, then scroll.
   useEffect(() => {
     const el = composerRef.current;
     if (!el) return;
-    const maxHeight = 152; // roughly 7 lines
+    const maxHeight = 152;
     el.style.height = "auto";
-    const next = Math.min(el.scrollHeight, maxHeight);
-    el.style.height = `${next}px`;
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
     el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
   }, [replyDraft]);
 
-  // Compose state
-  const [compTo, setCompTo] = useState("");
-  const [compSubject, setCompSubject] = useState("");
-  const [compBody, setCompBody] = useState("");
-  const [sending, setSending] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<string>('');
-
-  // Newsletter state
-  const [showNewsletter, setShowNewsletter] = useState(false);
-  const [nlView, setNlView] = useState<'select' | 'sending' | 'done'>('select');
-  const [nlCustomers, setNlCustomers] = useState<NlCustomer[]>([]);
-  const [nlLoadingCustomers, setNlLoadingCustomers] = useState(false);
-  const [nlSearch, setNlSearch] = useState('');
-  const [nlSelected, setNlSelected] = useState<Set<string>>(new Set());
-  const [nlSubject, setNlSubject] = useState('');
-  const [nlBody, setNlBody] = useState('');
-  const [nlResult, setNlResult] = useState<{ sent: number; failed: number; errors: string[] } | null>(null);
-
-  const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
-
-  const fetchEmails = useCallback(async () => {
-    const token = getToken();
-    if (!token) { router.push("/admin/login"); return; }
-    try {
-      const params = new URLSearchParams({ folder });
-      if (search) params.set("search", search);
-      const res = await fetch(`/api/admin/email?${params}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.status === 401) { router.push("/admin/login"); return; }
-      if (res.ok) {
-        const data = await res.json();
-        setEmails(data.emails || []);
-        setUnreadCount(data.unreadCount || 0);
-      }
-    } catch { /* ignore */ }
-    setLoading(false);
-  }, [getToken, router, folder, search]);
-
-  const syncEmails = useCallback(async (showResult = false) => {
-    const token = getToken();
-    if (!token) return;
-    if (showResult) setSyncing(true);
-    try {
-      const res = await fetch('/api/admin/email/sync', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (showResult) {
-        if (data.error) setSyncResult(`Ошибка: ${data.error}`);
-        else setSyncResult(`Синхронизировано: +${data.synced} из ${data.total} писем`);
-        setTimeout(() => setSyncResult(''), 5000);
-      }
-    } catch { if (showResult) setSyncResult('Ошибка сети'); }
-    if (showResult) setSyncing(false);
-  }, [getToken]);
-
   useEffect(() => {
-    syncEmails().then(() => fetchEmails());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const t = window.setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
+    }, 40);
+    return () => window.clearTimeout(t);
+  }, [messages.length, activeThread]);
+
+  const updateStickyDate = useCallback(() => {
+    const root = messagesScrollRef.current;
+    if (!root) return;
+    const markers = Array.from(root.querySelectorAll<HTMLElement>("[data-day-label]"));
+    if (markers.length === 0) return;
+    const top = root.getBoundingClientRect().top + 28;
+    let current = markers[0].dataset.dayLabel || "";
+    for (const el of markers) {
+      if (el.getBoundingClientRect().top <= top) current = el.dataset.dayLabel || current;
+      else break;
+    }
+    setStickyDate(current);
   }, []);
 
-  useEffect(() => { fetchEmails(); }, [fetchEmails]);
+  const jumpToMessage = useCallback((messageId: string) => {
+    if (!messageId) return;
+    const el = document.getElementById(`mail-msg-${messageId}`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    setHighlightId(messageId);
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => setHighlightId(null), 1000);
+  }, []);
 
-  const notify = (msg: string) => { setNotification(msg); setTimeout(() => setNotification(""), 3000); };
-
-  // Group all emails into per-contact conversations, newest thread first.
-  const conversations = useMemo(() => {
-    const map = new Map<string, Email[]>();
-    for (const e of emails) {
-      const key = contactKey(e);
-      if (!key) continue;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(e);
+  const openConversation = async (threadId: string) => {
+    setActiveThread(threadId);
+    setReplyTarget(null);
+    setExpandedQuotes(new Set());
+    setConfirmDelete(false);
+    setNewSubject("");
+    await fetchThread(threadId);
+    const conv = conversations.find((c) => c.threadId === threadId);
+    setNewContact(conv ? "" : threadId);
+    if (!conv || conv.unread > 0) {
+      await adminFetch("/api/admin/email", { method: "PUT", body: JSON.stringify({ threadId }) }).catch(() => undefined);
+      setConversations((prev) => prev.map((c) => (c.threadId === threadId ? { ...c, unread: 0 } : c)));
+      setUnreadCount((prev) => Math.max(0, prev - (conv?.unread || 0)));
     }
-    return Array.from(map.entries())
-      .map(([contact, msgs]) => {
-        const messages = [...msgs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-        const last = messages[messages.length - 1];
-        const unread = messages.filter(m => m.direction === "inbound" && !m.isRead).length;
-        return { contact, messages, last, unread };
-      })
-      .sort((a, b) => new Date(b.last.createdAt).getTime() - new Date(a.last.createdAt).getTime());
-  }, [emails]);
-
-  const activeConversation = conversations.find(c => c.contact === activeContact) || null;
-
-  const openConversation = async (contact: string) => {
-    setActiveContact(contact);
-    const conv = conversations.find(c => c.contact === contact);
-    const unreadIds = conv?.messages.filter(m => m.direction === "inbound" && !m.isRead).map(m => m.id) || [];
-    if (unreadIds.length === 0) return;
-    const token = getToken();
-    await fetch("/api/admin/email", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ids: unreadIds }),
-    });
-    setEmails(prev => prev.map(e => unreadIds.includes(e.id) ? { ...e, isRead: true } : e));
-    setUnreadCount(prev => Math.max(0, prev - unreadIds.length));
   };
 
+  const activeConversation = conversations.find((c) => c.threadId === activeThread) || null;
+  const contactEmail = activeConversation?.contactEmail || newContact || activeThread || "";
+  const contactName = activeConversation?.name || "";
+
+  const byId = useMemo(() => {
+    const map = new Map<string, ParentPreview>();
+    for (const p of outsideParents) map.set(p.id, p);
+    for (const m of messages) map.set(m.id, m);
+    return map;
+  }, [messages, outsideParents]);
+
+  const lastInbound = useMemo(() => [...messages].reverse().find((m) => m.direction === "inbound") || null, [messages]);
+
   const handleInlineSend = async () => {
-    if (!activeConversation || !replyDraft.trim()) return;
+    if (!contactEmail || (!replyDraft.trim() && replyFiles.length === 0)) return;
+    const target = replyTarget || lastInbound || messages[messages.length - 1] || null;
+    const subject = target
+      ? `Re: ${stripReplyPrefix(target.subject) || "(без темы)"}`
+      : newSubject.trim();
+    if (!subject) {
+      notify("Укажите тему письма");
+      return;
+    }
     setReplySending(true);
-    const token = getToken();
-    const last = activeConversation.messages[activeConversation.messages.length - 1];
     try {
-      const res = await fetch("/api/admin/email", {
+      const attachments = replyFiles.length ? await filesToAttachments(replyFiles) : [];
+      const res = await adminFetch("/api/admin/email", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          to: activeContact,
-          subject: last.subject?.startsWith("Re: ") ? last.subject : `Re: ${last.subject || "(без темы)"}`,
-          body: replyDraft.replace(/\n/g, "<br>"),
-          replyTo: last.id,
+          to: contactEmail,
+          from: activeMailbox,
+          subject,
+          body: replyDraft.trim() || "(вложение)",
+          replyTo: target?.id || "",
+          attachments,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         setReplyDraft("");
-        fetchEmails();
+        setReplyTarget(null);
+        setReplyFiles([]);
+        setNewContact("");
+        const threadId = data.threadId || contactEmail;
+        setActiveThread(threadId);
+        await fetchThread(threadId);
+        fetchList();
       } else {
         notify(data.error || "Ошибка отправки");
       }
@@ -214,37 +533,54 @@ export default function AdminEmailPage() {
   };
 
   const handleCompose = () => {
-    setReplyTo(null);
     setComposing(true);
     setCompTo("");
     setCompSubject("");
     setCompBody("");
+    setCompFiles([]);
+  };
+
+  const handleForward = (m: Email) => {
+    setComposing(true);
+    setCompTo("");
+    setCompFiles([]);
+    setCompSubject(`Fwd: ${stripReplyPrefix(m.subject)}`);
+    setCompBody(`\n\n---------- Пересланное сообщение ----------\nОт: ${m.fromAddr}\nДата: ${new Date(m.createdAt).toLocaleString("ru-RU")}\nТема: ${m.subject}\n\n${plainText(m)}`);
   };
 
   const handleSend = async () => {
-    if (!compTo || !compSubject || !compBody) {
+    if (!compTo.trim() || !compSubject || !compBody) {
       notify("Заполните все поля");
       return;
     }
     setSending(true);
-    const token = getToken();
     try {
-      const res = await fetch("/api/admin/email", {
+      const recipients = compTo.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean);
+      const attachments = compFiles.length ? await filesToAttachments(compFiles) : [];
+      const res = await adminFetch("/api/admin/email", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          to: compTo,
+          to: recipients,
+          from: activeMailbox,
           subject: compSubject,
-          body: compBody.replace(/\n/g, "<br>"),
-          replyTo: replyTo?.id || "",
+          body: compBody,
+          attachments,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        notify("Письмо отправлено");
+        notify(recipients.length > 1 ? `Отправлено: ${data.sent || recipients.length}` : "Письмо отправлено");
         setComposing(false);
-        setCompTo(""); setCompSubject(""); setCompBody("");
-        fetchEmails();
+        setCompFiles([]);
+        if (data.kind === "newsletter") {
+          setPane("newsletters");
+          setActiveCampaign(data.threadId || null);
+          fetchList();
+        } else {
+          setPane("dialogs");
+          fetchList();
+          if (data.threadId) openConversation(data.threadId);
+        }
       } else {
         notify(data.error || "Ошибка отправки");
       }
@@ -254,554 +590,630 @@ export default function AdminEmailPage() {
     setSending(false);
   };
 
-  // Newsletter: derived values
-  const nlFiltered = nlCustomers.filter(c =>
+  const deleteConversation = async () => {
+    if (!activeThread) return;
+    try {
+      await adminFetch("/api/admin/email", { method: "DELETE", body: JSON.stringify({ threadId: activeThread }) });
+      setConversations((prev) => prev.filter((c) => c.threadId !== activeThread));
+      setActiveThread(null);
+      setMessages([]);
+      notify("Переписка удалена");
+    } catch {
+      notify("Ошибка удаления");
+    }
+    setConfirmDelete(false);
+  };
+
+  const markAllRead = async () => {
+    try {
+      await adminFetch("/api/admin/email", { method: "PUT", body: JSON.stringify({ markAll: true }) });
+      setConversations((prev) => prev.map((c) => ({ ...c, unread: 0 })));
+      setUnreadCount(0);
+      refreshAdminCounts();
+      notify("Все письма отмечены как прочитанные");
+    } catch { /* ignore */ }
+  };
+
+  // Newsletter
+  const nlFiltered = nlCustomers.filter((c) =>
     !nlSearch ||
     c.email.toLowerCase().includes(nlSearch.toLowerCase()) ||
     c.name.toLowerCase().includes(nlSearch.toLowerCase()) ||
     c.city.toLowerCase().includes(nlSearch.toLowerCase())
   );
-  const nlAllFilteredSelected = nlFiltered.length > 0 && nlFiltered.every(c => nlSelected.has(c.email));
+  const nlAllFilteredSelected = nlFiltered.length > 0 && nlFiltered.every((c) => nlSelected.has(c.email));
 
-  // Newsletter: handlers
   const openNewsletter = async () => {
     setShowNewsletter(true);
-    setNlView('select');
+    setNlView("select");
     setNlResult(null);
-    setNlSearch('');
+    setNlSearch("");
     setNlSelected(new Set());
+    setNlConfirm(false);
     if (nlCustomers.length === 0) {
       setNlLoadingCustomers(true);
-      const token = getToken();
       try {
-        const res = await fetch('/api/admin/newsletter', { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          const data = await res.json();
-          setNlCustomers(data.customers || []);
-        }
+        const res = await adminFetch("/api/admin/newsletter");
+        if (res.ok) setNlCustomers((await res.json()).customers || []);
       } catch { /* ignore */ }
       setNlLoadingCustomers(false);
     }
   };
 
-  const nlSelectFiltered = () =>
-    setNlSelected(prev => { const n = new Set(prev); nlFiltered.forEach(c => n.add(c.email)); return n; });
-
-  const nlDeselectFiltered = () =>
-    setNlSelected(prev => { const n = new Set(prev); nlFiltered.forEach(c => n.delete(c.email)); return n; });
-
+  const nlToggleAll = () =>
+    setNlSelected((prev) => {
+      const n = new Set(prev);
+      nlFiltered.forEach((c) => (nlAllFilteredSelected ? n.delete(c.email) : n.add(c.email)));
+      return n;
+    });
   const nlToggle = (email: string) =>
-    setNlSelected(prev => { const n = new Set(prev); n.has(email) ? n.delete(email) : n.add(email); return n; });
+    setNlSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(email)) n.delete(email);
+      else n.add(email);
+      return n;
+    });
 
   const handleSendNewsletter = async () => {
-    if (!confirm(`Отправить рассылку ${nlSelected.size} получателям?`)) return;
-    setNlView('sending');
-    const token = getToken();
-    const recipients = nlCustomers
-      .filter(c => nlSelected.has(c.email))
-      .map(c => ({ email: c.email, name: c.name }));
+    setNlConfirm(false);
+    setNlView("sending");
+    const recipients = nlCustomers.filter((c) => nlSelected.has(c.email)).map((c) => ({ email: c.email, name: c.name }));
     try {
-      const res = await fetch('/api/admin/newsletter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ recipients, subject: nlSubject, body: nlBody }),
+      const res = await adminFetch("/api/admin/newsletter", {
+        method: "POST",
+        body: JSON.stringify({ recipients, subject: nlSubject, body: nlBody, from: MAILBOX_INFO }),
       });
       const data = await res.json();
-      setNlResult(data);
-      fetchEmails();
+      setNlResult({ sent: data.sent || 0, failed: data.failed || 0, errors: data.errors || (data.error ? [data.error] : []) });
+      setPane("newsletters");
+      if (data.threadId) setActiveCampaign(data.threadId);
+      fetchList();
     } catch {
-      setNlResult({ sent: 0, failed: nlSelected.size, errors: ['Сетевая ошибка'] });
+      setNlResult({ sent: 0, failed: nlSelected.size, errors: ["Сетевая ошибка"] });
     }
-    setNlView('done');
+    setNlView("done");
   };
 
-  const markAllRead = async () => {
-    const token = getToken();
-    try {
-      await fetch("/api/admin/email", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ markAll: true }),
-      });
-      setEmails(prev => prev.map(e => ({ ...e, isRead: true })));
-      setUnreadCount(0);
-      notify("Все письма отмечены как прочитанные");
-    } catch { /* ignore */ }
-  };
+  const activeCampaignData = campaigns.find((c) => c.threadId === activeCampaign) || null;
 
-  const deleteEmail = async (ids: string[]) => {
-    if (!confirm(`Удалить ${ids.length} письмо(а)?`)) return;
-    const token = getToken();
-    try {
-      await fetch("/api/admin/email", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ids }),
-      });
-      setEmails(prev => prev.filter(e => !ids.includes(e.id)));
-      notify("Удалено");
-    } catch { /* ignore */ }
-  };
-
-  const formatDate = (d: string) => {
-    const date = new Date(d);
-    const today = new Date();
-    if (date.toDateString() === today.toDateString()) {
-      return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  // Group thread by day for dividers
+  const groupedMessages = useMemo(() => {
+    const groups: { day: string; items: Email[] }[] = [];
+    for (const m of messages) {
+      const day = new Date(m.createdAt).toDateString();
+      const last = groups[groups.length - 1];
+      if (last && last.day === day) last.items.push(m);
+      else groups.push({ day, items: [m] });
     }
-    return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
-  };
+    return groups;
+  }, [messages]);
 
-  if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
+  useEffect(() => {
+    if (groupedMessages.length > 0) {
+      setStickyDate(dayLabel(groupedMessages[groupedMessages.length - 1].items[0].createdAt));
+    } else {
+      setStickyDate("");
+    }
+  }, [groupedMessages, activeThread]);
+
+  if (loading) return <PageLoading />;
 
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
-        <div className="cms-header">
-          <h1 className="cms-header-title" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            Почта
-            {unreadCount > 0 && <span className="cms-badge cms-badge-notify" style={{ fontSize: "12px" }}>{unreadCount}</span>}
-            <div className="mail-mailbox-select" ref={mailboxRef}>
-              <button
-                type="button"
-                className="mail-mailbox-btn"
-                onClick={() => setMailboxOpen(o => !o)}
+    <AdminPage
+      fill
+      className="cms-mail-page"
+      title={
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+          Почта
+          <CountBadge count={unreadCount} />
+          <span className="mail-mailbox-select" ref={mailboxRef}>
+            <button type="button" className="mail-mailbox-btn" onClick={() => setMailboxOpen((o) => !o)}>
+              {activeMailbox}
+              <Icon name={mailboxOpen ? "up" : "down"} size={14} className="cms-btn-trailing" />
+            </button>
+            {mailboxOpen && (
+              <span className="mail-mailbox-dropdown">
+                {availableMailboxes.map((addr) => (
+                  <button
+                    key={addr}
+                    type="button"
+                    className={`mail-mailbox-option${addr === activeMailbox ? " active" : ""}`}
+                    onClick={() => selectMailbox(addr)}
+                  >
+                    {addr}
+                  </button>
+                ))}
+              </span>
+            )}
+          </span>
+        </span>
+      }
+      actions={
+        <HeaderActions>
+          <IconButton icon="newsletter" label="Рассылка" shape="plain" onClick={openNewsletter} />
+          <IconButton icon="add" label="Написать" shape="plain" onClick={handleCompose} />
+          <IconButton
+            icon="refresh"
+            label="Обновить"
+            shape="plain"
+            disabled={syncing}
+            onClick={() => syncEmails(true).then(() => { fetchList(); if (activeThread) fetchThread(activeThread); })}
+          />
+          {unreadCount > 0 && <IconButton icon="view" label="Просмотреть (отметить прочитанными)" shape="plain" onClick={markAllRead} />}
+        </HeaderActions>
+      }
+    >
+      <div className={`messenger-layout mail-fill${(pane === "dialogs" && activeThread) || (pane === "newsletters" && activeCampaign) ? " mail-thread-open" : ""}`}>
+        <div className="messenger-list">
+          <div className="mail-list-header">
+            <SegmentedControl<Pane>
+              fullWidth
+              value={pane}
+              onChange={(v) => { setPane(v); setActiveThread(null); setActiveCampaign(null); }}
+              options={[
+                { value: "dialogs", label: "Диалоги", badge: unreadCount },
+                { value: "newsletters", label: "Рассылки" },
+              ]}
+            />
+            <SearchField value={search} onChange={setSearch} style={{ width: "100%", flex: "none" }} />
+          </div>
+          <div className="mail-list-scroll">
+            {pane === "dialogs" && conversations.map((conv) => (
+              <div
+                key={conv.threadId}
+                className={`messenger-list-item${activeThread === conv.threadId ? " active" : ""}${conv.unread > 0 ? " has-unread" : ""}`}
+                onClick={() => openConversation(conv.threadId)}
               >
-                mail@errani.ru
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: mailboxOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </button>
-              {mailboxOpen && (
-                <div className="mail-mailbox-dropdown">
-                  <button type="button" className="mail-mailbox-option active">mail@errani.ru</button>
+                <div className="messenger-avatar">{initials(conv.contactEmail || conv.name)}</div>
+                <div className="messenger-list-meta">
+                  <div className="messenger-list-top">
+                    <span className="messenger-list-name">{conv.contactEmail || conv.name}</span>
+                    <span className="messenger-list-time">{formatListDate(conv.lastAt)}</span>
+                  </div>
+                  <div className={`messenger-list-preview${conv.unread > 0 ? " is-unread" : ""}`}>
+                    {conv.lastDirection === "outbound" ? "Вы: " : ""}
+                    {conv.lastText || conv.subject || "(без текста)"}
+                  </div>
                 </div>
-              )}
-            </div>
-          </h1>
-          <div className="cms-header-actions">
-            <button className="cms-btn cms-btn-sm" onClick={openNewsletter} title="Рассылка">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}>
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-              </svg>
-              Рассылка
-            </button>
-            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={handleCompose}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}>
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              Написать
-            </button>
-            <button className="cms-btn cms-btn-sm" onClick={markAllRead} title="Отметить все как прочитанные">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-            <button
-              className="cms-btn cms-btn-sm"
-              onClick={() => { setSyncing(true); syncEmails(true).then(() => { setLoading(true); fetchEmails(); }); }}
-              title="Обновить и синхронизировать с Resend"
-              disabled={syncing}
-            >
-              {syncing
-                ? <span style={{ fontSize: 11 }}>...</span>
-                : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-              }
-            </button>
+                {conv.unread > 0 && (
+                  <span className="messenger-list-badge" aria-label={`${conv.unread} непрочитанных`}>
+                    {conv.unread > 99 ? "99+" : conv.unread}
+                  </span>
+                )}
+              </div>
+            ))}
+            {pane === "newsletters" && campaigns.map((c) => (
+              <div
+                key={c.threadId}
+                className={`messenger-list-item${activeCampaign === c.threadId ? " active" : ""}`}
+                onClick={() => setActiveCampaign(c.threadId)}
+              >
+                <div className="messenger-avatar mail-avatar-newsletter"><Icon name="newsletter" size={16} /></div>
+                <div className="messenger-list-meta">
+                  <div className="messenger-list-top">
+                    <span className="messenger-list-name">{c.subject || "(без темы)"}</span>
+                    <span className="messenger-list-time">{formatListDate(c.createdAt)}</span>
+                  </div>
+                  <div className="messenger-list-preview">
+                    {c.recipients.slice(0, 2).join(", ")}
+                    {c.recipients.length > 2 ? ` и ещё ${c.recipients.length - 2}+` : ""}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {((pane === "dialogs" && conversations.length === 0) || (pane === "newsletters" && campaigns.length === 0)) && (
+              <div className="mail-list-empty">{pane === "dialogs" ? "Нет диалогов" : "Рассылок пока нет"}</div>
+            )}
           </div>
         </div>
 
-        <div className="cms-content">
-          {syncResult && (
-            <div style={{ marginBottom: 10, padding: '7px 12px', background: syncResult.startsWith('Ошибка') ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)', border: `1px solid ${syncResult.startsWith('Ошибка') ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}`, borderRadius: 8, fontSize: 12, color: syncResult.startsWith('Ошибка') ? '#fca5a5' : '#6ee7b7' }}>
-              {syncResult}
-            </div>
-          )}
-
-          {/* Conversations */}
-          <div className="messenger-layout">
-            <div className="messenger-list">
-              <div className="mail-list-header">
-                <div className="mail-segment">
-                  <div className="mail-segment-indicator" style={{ transform: folder === "sent" ? "translateX(100%)" : "translateX(0)" }} />
-                  {[{ key: "inbox", label: "Входящие" }, { key: "sent", label: "Отправленные" }].map(f => (
-                    <button
-                      key={f.key}
-                      className={`mail-segment-btn${folder === f.key ? " active" : ""}`}
-                      onClick={() => setFolder(f.key)}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  className="cms-input cms-input-sm mail-list-search"
-                  placeholder="Поиск..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-              <div className="mail-list-scroll">
-              {conversations.map(conv => (
-                <div
-                  key={conv.contact}
-                  className={`messenger-list-item${activeContact === conv.contact ? " active" : ""}`}
-                  onClick={() => openConversation(conv.contact)}
-                >
-                  <div className="messenger-avatar">{conv.contact.charAt(0).toUpperCase()}</div>
-                  <div className="messenger-list-meta">
-                    <div className="messenger-list-top">
-                      <span className="messenger-list-name">{conv.contact}</span>
-                      <span className="messenger-list-time">{formatDate(conv.last.createdAt)}</span>
-                    </div>
-                    <div className="messenger-list-preview">
-                      {conv.last.direction === "outbound" ? "Вы: " : ""}
-                      {conv.last.subject || conv.last.textBody.substring(0, 60) || "(без темы)"}
-                    </div>
+        <div className="messenger-thread">
+          {pane === "dialogs" && activeThread ? (
+            <>
+              <div className="messenger-thread-header">
+                <div className="mail-thread-contact">
+                  <div className="messenger-avatar">{initials(contactEmail || contactName)}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="mail-thread-name">{contactEmail || contactName}</div>
+                    {contactName ? <div className="mail-thread-email">{contactName}</div> : null}
                   </div>
-                  {conv.unread > 0 && <span className="messenger-list-badge">{conv.unread}</span>}
                 </div>
-              ))}
-              {conversations.length === 0 && (
-                <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--cms-text-muted)", fontSize: 13 }}>Нет писем</div>
-              )}
+                {messages.length > 0 && (
+                  <ConfirmPopover
+                    open={confirmDelete}
+                    placement="bottom"
+                    align="end"
+                    message="Удалить всю переписку с этим контактом?"
+                    confirmLabel="Удалить"
+                    confirmIcon="delete"
+                    onConfirm={deleteConversation}
+                    onCancel={() => setConfirmDelete(false)}
+                  >
+                    <IconButton icon="delete" label="Удалить переписку" tone="danger" onClick={() => setConfirmDelete((v) => !v)} />
+                  </ConfirmPopover>
+                )}
               </div>
-            </div>
-
-            <div className="messenger-thread">
-              {activeConversation ? (
-                <>
-                  <div className="messenger-thread-header">
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>{activeConversation.contact}</span>
-                    <button
-                      className="cms-btn cms-btn-xs cms-btn-ghost"
-                      onClick={() => deleteEmail(activeConversation.messages.map(m => m.id))}
-                      title="Удалить переписку"
-                      style={{ color: "var(--cms-danger)" }}
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                    </button>
+              <div className="messenger-messages" ref={messagesScrollRef} onScroll={updateStickyDate}>
+                {stickyDate && (
+                  <div className="messenger-date-sticky" aria-hidden>
+                    <span>{stickyDate}</span>
                   </div>
-                  <div className="messenger-messages">
-                    {activeConversation.messages.map(m => (
-                      <div key={m.id} className={`messenger-bubble-row ${m.direction === "outbound" ? "out" : "in"}`}>
-                        <div className={`messenger-bubble ${m.direction === "outbound" ? "out" : "in"}`}>
-                          <div className="messenger-bubble-subject">{m.subject || "(без темы)"}</div>
-                          <iframe
-                            title={`Письмо: ${m.subject || "без темы"}`}
-                            sandbox=""
-                            srcDoc={buildSafeEmailDocument(m.body, m.textBody)}
-                            className="messenger-bubble-frame"
-                          />
-                          <div className="messenger-bubble-time">{new Date(m.createdAt).toLocaleString("ru-RU")}</div>
+                )}
+                {threadLoading && messages.length === 0 && <div className="messenger-empty"><span className="cms-spinner" /></div>}
+                {!threadLoading && messages.length === 0 && (
+                  <div className="messenger-empty">Новая переписка с {contactEmail}</div>
+                )}
+                {groupedMessages.map((group) => {
+                  const label = dayLabel(group.items[0].createdAt);
+                  return (
+                  <div key={group.day} className="mail-day-group" data-day-label={label}>
+                    <div className="messenger-date-divider" aria-hidden><span>{label}</span></div>
+                    {group.items.map((m) => {
+                      const out = m.direction === "outbound";
+                      const parent = m.inReplyTo ? byId.get(m.inReplyTo) : undefined;
+                      const quoteOpen = expandedQuotes.has(m.id);
+                      return (
+                        <div key={m.id} className={`messenger-bubble-row ${out ? "out" : "in"}`}>
+                          <div
+                            id={`mail-msg-${m.id}`}
+                            className={`messenger-bubble ${out ? "out" : "in"}${highlightId === m.id ? " is-flash" : ""}`}
+                          >
+                            {parent && (
+                              <button
+                                type="button"
+                                className={`messenger-quote ${quoteOpen ? "open" : ""}`}
+                                onClick={() => {
+                                  const inThread = messages.some((x) => x.id === parent.id);
+                                  if (inThread) {
+                                    jumpToMessage(parent.id);
+                                    return;
+                                  }
+                                  setExpandedQuotes((prev) => {
+                                    const n = new Set(prev);
+                                    if (n.has(m.id)) n.delete(m.id);
+                                    else n.add(m.id);
+                                    return n;
+                                  });
+                                }}
+                              >
+                                <span className="messenger-quote-label">
+                                  <Icon name="reply" size={11} />
+                                  {parent.kind === "newsletter" ? "В ответ на рассылку" : "В ответ на"}: {stripReplyPrefix(parent.subject) || "(без темы)"}
+                                </span>
+                                {quoteOpen ? (
+                                  <span className="messenger-quote-expanded">{plainText(parent) || "(без текста)"}</span>
+                                ) : (
+                                  <span className="messenger-quote-text">{plainText(parent).slice(0, 140)}</span>
+                                )}
+                              </button>
+                            )}
+                            <div className="messenger-bubble-subject">{m.subject || "(без темы)"}</div>
+                            <MessageBody message={m} />
+                            <div className="messenger-bubble-footer">
+                              <span className="messenger-bubble-actions">
+                                <button type="button" onClick={() => { setReplyTarget(m); composerRef.current?.focus(); }} title="Ответить">
+                                  <Icon name="reply" size={12} /> Ответить
+                                </button>
+                                <button type="button" onClick={() => handleForward(m)} title="Переслать">
+                                  <Icon name="forward" size={12} /> Переслать
+                                </button>
+                              </span>
+                              <span className="messenger-bubble-time">
+                                {new Date(m.createdAt).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      );
+                    })}
+                  </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+              <div className="messenger-composer">
+                {replyTarget && (
+                  <div className="messenger-composer-quote">
+                    <button
+                      type="button"
+                      className="messenger-composer-quote-jump"
+                      onClick={() => jumpToMessage(replyTarget.id)}
+                    >
+                      <Icon name="reply" size={11} /> Ответ на: <strong>{stripReplyPrefix(replyTarget.subject) || "(без темы)"}</strong>
+                    </button>
+                    <IconButton icon="close" label="Отменить ответ" shape="plain" onClick={() => setReplyTarget(null)} />
+                  </div>
+                )}
+                {messages.length === 0 && (
+                  <input
+                    className="cms-input mail-new-subject"
+                    placeholder="Тема письма"
+                    value={newSubject}
+                    onChange={(e) => setNewSubject(e.target.value)}
+                  />
+                )}
+                {replyFiles.length > 0 && (
+                  <div className="messenger-attach-list">
+                    {replyFiles.map((f, i) => (
+                      <span key={`${f.name}-${i}`} className="messenger-attach-chip">
+                        {f.name}
+                        <button type="button" onClick={() => setReplyFiles((prev) => prev.filter((_, idx) => idx !== i))} aria-label="Убрать файл">×</button>
+                      </span>
                     ))}
                   </div>
-                  <div className="messenger-composer">
-                    <textarea
-                      ref={composerRef}
-                      className="messenger-composer-textarea"
-                      rows={1}
-                      placeholder="Написать сообщение..."
-                      value={replyDraft}
-                      onChange={e => setReplyDraft(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handleInlineSend();
-                        }
+                )}
+                <div className="messenger-composer-row">
+                  <textarea
+                    ref={composerRef}
+                    className="messenger-composer-textarea"
+                    rows={1}
+                    placeholder="Написать сообщение…"
+                    value={replyDraft}
+                    onChange={(e) => setReplyDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleInlineSend();
+                      }
+                    }}
+                  />
+                  <input
+                    ref={attachInputRef}
+                    type="file"
+                    multiple
+                    accept="*/*"
+                    hidden
+                    onChange={(e) => {
+                      const next = Array.from(e.target.files || []);
+                      if (next.length) setReplyFiles((prev) => [...prev, ...next].slice(0, 10));
+                      e.target.value = "";
+                    }}
+                  />
+                  <IconButton
+                    icon="attach"
+                    label="Вложение"
+                    shape="circle"
+                    size="md"
+                    className="messenger-attach-btn"
+                    onClick={() => attachInputRef.current?.click()}
+                  />
+                  <IconButton
+                    icon="send"
+                    label="Отправить"
+                    shape="circle"
+                    size="md"
+                    tone="accent"
+                    className="messenger-send-btn"
+                    onClick={handleInlineSend}
+                    disabled={replySending || (!replyDraft.trim() && replyFiles.length === 0)}
+                  />
+                </div>
+              </div>
+            </>
+          ) : pane === "newsletters" && activeCampaignData ? (
+            <>
+              <div className="messenger-thread-header mail-campaign-header">
+                <div className="mail-campaign-header-meta" style={{ minWidth: 0 }}>
+                  <div className="mail-thread-name">{activeCampaignData.subject || "(без темы)"}</div>
+                  <div className="mail-thread-email">
+                    {new Date(activeCampaignData.createdAt).toLocaleString("ru-RU")} · отправлено {activeCampaignData.sent}
+                    {activeCampaignData.failed > 0 ? ` · ошибок ${activeCampaignData.failed}` : ""}
+                  </div>
+                  <RecipientsLine recipients={activeCampaignData.recipients} />
+                </div>
+              </div>
+              <div className="messenger-messages">
+                <div className="messenger-bubble-row out">
+                  <div className="messenger-bubble out mail-campaign-bubble" style={{ maxWidth: "100%", width: "100%" }}>
+                    <MessageBody
+                      message={{
+                        body: activeCampaignData.body,
+                        textBody: activeCampaignData.preview,
+                        direction: "outbound",
+                        subject: activeCampaignData.subject,
                       }}
                     />
-                    <button className="cms-btn cms-btn-primary messenger-send-btn" onClick={handleInlineSend} disabled={replySending || !replyDraft.trim()}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                    </button>
                   </div>
-                </>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="messenger-empty" role="status">
+              <div className="messenger-empty-title">
+                {pane === "dialogs" ? "Выберите диалог" : "Выберите рассылку"}
+              </div>
+              <div className="messenger-empty-hint">
+                {pane === "dialogs"
+                  ? "Откройте переписку слева — письма не пропали, просто ещё ничего не выбрано."
+                  : "Выберите рассылку в списке слева, чтобы посмотреть содержимое."}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <Modal
+        open={composing}
+        title="Новое письмо"
+        width={600}
+        onClose={() => setComposing(false)}
+        footer={
+          <>
+            <Button onClick={() => setComposing(false)}>Отмена</Button>
+            <Button variant="primary" icon="send" onClick={handleSend} disabled={sending}>
+              {sending ? "Отправка…" : "Отправить"}
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <label className="cms-label">
+            Кому
+            <input
+              className="cms-input"
+              value={compTo}
+              onChange={(e) => setCompTo(e.target.value)}
+              placeholder="email@example.com, second@mail.com"
+            />
+          </label>
+          <div style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>
+            Несколько адресов через запятую — отправится как рассылка
+          </div>
+          <label className="cms-label">
+            Тема
+            <input className="cms-input" value={compSubject} onChange={(e) => setCompSubject(e.target.value)} placeholder="Тема письма" />
+          </label>
+          <label className="cms-label">
+            Сообщение
+            <textarea className="cms-textarea" value={compBody} onChange={(e) => setCompBody(e.target.value)} rows={10} placeholder="Текст письма…" style={{ width: "100%" }} />
+          </label>
+          <div className="messenger-compose-attach">
+            <input
+              type="file"
+              multiple
+              accept="*/*"
+              id="mail-compose-attach"
+              hidden
+              onChange={(e) => {
+                const next = Array.from(e.target.files || []);
+                if (next.length) setCompFiles((prev) => [...prev, ...next].slice(0, 10));
+                e.target.value = "";
+              }}
+            />
+            <Button size="sm" icon="attach" onClick={() => document.getElementById("mail-compose-attach")?.click()}>
+              Вложение
+            </Button>
+            {compFiles.map((f, i) => (
+              <span key={`${f.name}-${i}`} className="messenger-attach-chip">
+                {f.name}
+                <button type="button" onClick={() => setCompFiles((prev) => prev.filter((_, idx) => idx !== i))} aria-label="Убрать файл">×</button>
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>Файлы уходят только во вложении письма и не сохраняются в галерее</div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={showNewsletter}
+        title={<h3 style={{ display: "flex", alignItems: "center", gap: 8 }}><Icon name="newsletter" size={16} /> Рассылка</h3>}
+        width={960}
+        className="mail-newsletter-modal"
+        onClose={() => { if (nlView !== "sending") setShowNewsletter(false); }}
+        footer={
+          nlView === "select" ? (
+            <>
+              <span style={{ marginRight: "auto", fontSize: 12, color: "var(--cms-text-muted)" }}>
+                {nlSelected.size > 0 ? `Выбрано получателей: ${nlSelected.size}` : "Выберите получателей слева"}
+              </span>
+              <Button onClick={() => setShowNewsletter(false)}>Отмена</Button>
+              <ConfirmPopover
+                open={nlConfirm}
+                placement="top"
+                tone="primary"
+                message={`Отправить рассылку ${nlSelected.size} получателям?`}
+                confirmLabel="Отправить"
+                confirmIcon="send"
+                onConfirm={handleSendNewsletter}
+                onCancel={() => setNlConfirm(false)}
+              >
+                <Button
+                  variant="primary"
+                  icon="send"
+                  disabled={nlSelected.size === 0 || !nlSubject.trim() || !nlBody.trim()}
+                  onClick={() => setNlConfirm(true)}
+                >
+                  Отправить ({nlSelected.size})
+                </Button>
+              </ConfirmPopover>
+            </>
+          ) : nlView === "done" ? (
+            <Button variant="primary" icon="check" onClick={() => { setShowNewsletter(false); setNlView("select"); setNlResult(null); }}>
+              Готово
+            </Button>
+          ) : null
+        }
+      >
+        {nlView === "select" && (
+          <div className="mail-newsletter-grid">
+            <div className="mail-newsletter-col">
+              <div className="mail-newsletter-colhead">
+                <span>Получатели</span>
+                <Button size="xs" onClick={nlToggleAll}>{nlAllFilteredSelected ? "Снять" : "Все"}</Button>
+              </div>
+              <SearchField value={nlSearch} onChange={setNlSearch} style={{ width: "100%", flex: "none" }} />
+              {nlLoadingCustomers ? (
+                <div className="messenger-empty"><div className="cms-spinner" /></div>
               ) : (
-                <div className="messenger-empty">Выберите переписку слева</div>
-              )}
-            </div>
-          </div>
-
-        </div>
-      </main>
-
-      {/* Compose Modal */}
-      {composing && (
-        <div className="cms-modal-overlay" onClick={() => setComposing(false)}>
-          <div className="cms-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 600 }}>
-            <div className="cms-modal-header">
-              <h3>{replyTo ? "Ответ" : "Новое письмо"}</h3>
-              <button className="cms-modal-close" onClick={() => setComposing(false)}>&times;</button>
-            </div>
-            <div className="cms-modal-body">
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <label className="cms-label">
-                  Кому
-                  <input
-                    className="cms-input"
-                    value={compTo}
-                    onChange={e => setCompTo(e.target.value)}
-                    placeholder="email@example.com"
-                    type="email"
-                    required
-                  />
-                </label>
-                <label className="cms-label">
-                  Тема
-                  <input
-                    className="cms-input"
-                    value={compSubject}
-                    onChange={e => setCompSubject(e.target.value)}
-                    placeholder="Тема письма"
-                    required
-                  />
-                </label>
-                <label className="cms-label">
-                  Сообщение
-                  <textarea
-                    className="cms-textarea"
-                    value={compBody}
-                    onChange={e => setCompBody(e.target.value)}
-                    rows={10}
-                    placeholder="Текст письма..."
-                    style={{ width: "100%", resize: "vertical" }}
-                    required
-                  />
-                </label>
-              </div>
-              <div style={{ fontSize: 11, color: "var(--cms-text-muted)", marginTop: 8 }}>
-                Отправка от имени mail@errani.ru
-              </div>
-            </div>
-            <div className="cms-modal-actions" style={{ display: "flex", gap: 8 }}>
-              <button className="cms-btn cms-btn-primary" onClick={handleSend} disabled={sending}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 4 }}>
-                  <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                </svg>
-                {sending ? "Отправка..." : "Отправить"}
-              </button>
-              <button className="cms-btn" onClick={() => setComposing(false)}>Отмена</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Newsletter Modal */}
-      {showNewsletter && (
-        <div className="cms-modal-overlay" onClick={() => { if (nlView !== 'sending') setShowNewsletter(false); }}>
-          <div
-            className="cms-modal"
-            onClick={e => e.stopPropagation()}
-            style={{ maxWidth: 960, width: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0 }}
-          >
-            {/* Header */}
-            <div className="cms-modal-header" style={{ padding: '14px 20px', borderBottom: '1px solid var(--cms-border)' }}>
-              <h3 style={{ fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-                </svg>
-                Рассылка
-              </h3>
-              {nlView !== 'sending' && (
-                <button className="cms-modal-close" onClick={() => setShowNewsletter(false)}>&times;</button>
-              )}
-            </div>
-
-            {/* SELECT VIEW */}
-            {nlView === 'select' && (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-                  {/* Left: Recipients */}
-                  <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--cms-border)', padding: 16, overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--cms-text-muted)' }}>Получатели</span>
-                      {nlSelected.size > 0 && (
-                        <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(232,96,28,0.12)', color: 'var(--cms-accent)', padding: '2px 10px', borderRadius: 20 }}>
-                          {nlSelected.size} выбрано
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                      <input
-                        className="cms-input cms-input-sm"
-                        placeholder="Поиск по имени, email, городу..."
-                        value={nlSearch}
-                        onChange={e => setNlSearch(e.target.value)}
-                        style={{ flex: 1 }}
-                      />
-                      <button
-                        className={`cms-btn cms-btn-sm${nlAllFilteredSelected ? ' cms-btn-primary' : ''}`}
-                        onClick={() => nlAllFilteredSelected ? nlDeselectFiltered() : nlSelectFiltered()}
-                        title={nlAllFilteredSelected ? 'Снять выделение' : 'Выбрать всех из списка'}
-                      >
-                        {nlAllFilteredSelected ? 'Снять' : 'Все'}
-                      </button>
-                    </div>
-                    {nlLoadingCustomers ? (
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div className="cms-spinner" />
-                      </div>
-                    ) : (
-                      <div style={{ flex: 1, overflowY: 'auto' }}>
-                        <table className="cms-table" style={{ fontSize: 12 }}>
-                          <thead>
-                            <tr>
-                              <th style={{ width: 32 }}>
-                                <input
-                                  type="checkbox"
-                                  checked={nlAllFilteredSelected && nlFiltered.length > 0}
-                                  onChange={() => nlAllFilteredSelected ? nlDeselectFiltered() : nlSelectFiltered()}
-                                  style={{ cursor: 'pointer' }}
-                                />
-                              </th>
-                              <th>Имя</th>
-                              <th>Email</th>
-                              <th style={{ width: 80 }}>Город</th>
-                              <th style={{ width: 44, textAlign: 'center' }}>Зак.</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {nlFiltered.map(c => (
-                              <tr
-                                key={c.email}
-                                style={{ cursor: 'pointer', background: nlSelected.has(c.email) ? 'var(--cms-surface-hover)' : undefined }}
-                                onClick={() => nlToggle(c.email)}
-                              >
-                                <td onClick={e => e.stopPropagation()}>
-                                  <input type="checkbox" checked={nlSelected.has(c.email)} onChange={() => nlToggle(c.email)} style={{ cursor: 'pointer' }} />
-                                </td>
-                                <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }}>
-                                  {c.name || <span style={{ color: 'var(--cms-text-muted)' }}>—</span>}
-                                </td>
-                                <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 150, color: 'var(--cms-accent)' }}>
-                                  {c.email}
-                                </td>
-                                <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {c.city || <span style={{ color: 'var(--cms-text-muted)' }}>—</span>}
-                                </td>
-                                <td style={{ textAlign: 'center', fontWeight: 600 }}>{c.orderCount}</td>
-                              </tr>
-                            ))}
-                            {nlFiltered.length === 0 && (
-                              <tr>
-                                <td colSpan={5} style={{ textAlign: 'center', padding: '28px', color: 'var(--cms-text-muted)', fontSize: 12 }}>
-                                  {nlCustomers.length === 0 ? 'Нет клиентов с email-адресом' : 'Ничего не найдено'}
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                    <div style={{ paddingTop: 8, marginTop: 8, borderTop: '1px solid var(--cms-border)', fontSize: 11, color: 'var(--cms-text-muted)' }}>
-                      Всего клиентов с email: {nlCustomers.length}
-                    </div>
-                  </div>
-
-                  {/* Right: Compose */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 16 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--cms-text-muted)' }}>Письмо</span>
-                    <label className="cms-label">
-                      Тема
-                      <input
-                        className="cms-input"
-                        value={nlSubject}
-                        onChange={e => setNlSubject(e.target.value)}
-                        placeholder="Тема рассылки..."
-                      />
+                <div className="mail-newsletter-list">
+                  {nlFiltered.map((c) => (
+                    <label key={c.email} className={`mail-newsletter-item ${nlSelected.has(c.email) ? "active" : ""}`}>
+                      <input type="checkbox" checked={nlSelected.has(c.email)} onChange={() => nlToggle(c.email)} />
+                      <span className="mail-newsletter-item-name">{c.name || "—"}</span>
+                      <span className="mail-newsletter-item-email">{c.email}</span>
+                      <span className="mail-newsletter-item-count">{c.orderCount}</span>
                     </label>
-                    <label className="cms-label" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      Текст письма
-                      <textarea
-                        className="cms-textarea"
-                        value={nlBody}
-                        onChange={e => setNlBody(e.target.value)}
-                        placeholder={"Здравствуйте!\n\nТекст вашего сообщения...\n\nПоддерживается HTML: <b>жирный</b>, <a href=\"https://errani.ru\">ссылка</a>"}
-                        style={{ flex: 1, resize: 'none', minHeight: 200, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.6 }}
-                      />
-                    </label>
-                    <div style={{ fontSize: 11, color: 'var(--cms-text-muted)', background: 'var(--cms-surface)', padding: '8px 10px', borderRadius: 6, lineHeight: 1.7 }}>
-                      HTML:&nbsp;
-                      <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 3 }}>&lt;b&gt;</code>{' '}
-                      <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 3 }}>&lt;i&gt;</code>{' '}
-                      <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 3 }}>&lt;a href=&quot;...&quot;&gt;</code>{' '}
-                      <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 3 }}>&lt;br&gt;</code>
-                      &nbsp;·&nbsp; Двойной Enter = новый абзац
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 20px', borderTop: '1px solid var(--cms-border)' }}>
-                  <span style={{ marginRight: 'auto', fontSize: 12, color: nlSelected.size > 0 ? 'var(--cms-text-primary)' : 'var(--cms-text-muted)' }}>
-                    {nlSelected.size > 0
-                      ? <><strong>{nlSelected.size}</strong>{' '}{nlSelected.size === 1 ? 'получатель выбран' : nlSelected.size < 5 ? 'получателя выбрано' : 'получателей выбрано'}</>
-                      : 'Выберите получателей слева'}
-                  </span>
-                  <button className="cms-btn" onClick={() => setShowNewsletter(false)}>Отмена</button>
-                  <button
-                    className="cms-btn cms-btn-primary"
-                    disabled={nlSelected.size === 0 || !nlSubject.trim() || !nlBody.trim()}
-                    onClick={handleSendNewsletter}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 5, verticalAlign: 'middle' }}>
-                      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                    </svg>
-                    Отправить ({nlSelected.size})
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* SENDING VIEW */}
-            {nlView === 'sending' && (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 48, gap: 16 }}>
-                <div className="cms-spinner" style={{ width: 36, height: 36 }} />
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Идёт отправка...</h3>
-                <p style={{ color: 'var(--cms-text-muted)', fontSize: 13, textAlign: 'center', lineHeight: 1.7 }}>
-                  Рассылка отправляется {nlSelected.size} получателям.<br />
-                  Пожалуйста, не закрывайте окно.
-                </p>
-              </div>
-            )}
-
-            {/* DONE VIEW */}
-            {nlView === 'done' && nlResult && (
-              <>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', gap: 12 }}>
-                  <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 4 }}>
-                    {nlResult.failed === 0 ? '✅' : '⚠️'}
-                  </div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700 }}>Рассылка завершена</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, width: '100%', maxWidth: 300, margin: '8px 0' }}>
-                    <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: 12, padding: '18px 12px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 36, fontWeight: 900, color: '#10b981', lineHeight: 1 }}>{nlResult.sent}</div>
-                      <div style={{ fontSize: 10, color: 'var(--cms-text-muted)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Отправлено</div>
-                    </div>
-                    <div style={{ background: nlResult.failed > 0 ? 'rgba(239,68,68,0.1)' : 'var(--cms-surface)', border: `1px solid ${nlResult.failed > 0 ? 'rgba(239,68,68,0.25)' : 'var(--cms-border)'}`, borderRadius: 12, padding: '18px 12px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 36, fontWeight: 900, color: nlResult.failed > 0 ? '#ef4444' : 'var(--cms-text-muted)', lineHeight: 1 }}>{nlResult.failed}</div>
-                      <div style={{ fontSize: 10, color: 'var(--cms-text-muted)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ошибок</div>
-                    </div>
-                  </div>
-                  {nlResult.errors.length > 0 && (
-                    <div style={{ width: '100%', maxWidth: 420, background: 'var(--cms-surface)', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: 'var(--cms-text-muted)', maxHeight: 100, overflowY: 'auto', lineHeight: 1.8 }}>
-                      {nlResult.errors.map((e, i) => <div key={i}>{e}</div>)}
-                    </div>
+                  ))}
+                  {nlFiltered.length === 0 && (
+                    <div className="mail-list-empty">{nlCustomers.length === 0 ? "Нет клиентов с email-адресом" : "Ничего не найдено"}</div>
                   )}
                 </div>
-                <div style={{ padding: '12px 20px', borderTop: '1px solid var(--cms-border)', display: 'flex', justifyContent: 'flex-end' }}>
-                  <button className="cms-btn cms-btn-primary" onClick={() => { setShowNewsletter(false); setNlView('select'); setNlResult(null); }}>
-                    Готово
-                  </button>
-                </div>
-              </>
+              )}
+            </div>
+            <div className="mail-newsletter-col">
+              <label className="cms-label">
+                Тема
+                <input className="cms-input" value={nlSubject} onChange={(e) => setNlSubject(e.target.value)} placeholder="Тема рассылки…" />
+              </label>
+              <label className="cms-label" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                Текст письма
+                <textarea
+                  className="cms-textarea"
+                  value={nlBody}
+                  onChange={(e) => setNlBody(e.target.value)}
+                  placeholder={"Здравствуйте!\n\nТекст вашего сообщения…\n\nПоддерживается HTML: <b>жирный</b>, <a href=\"https://errani.ru\">ссылка</a>"}
+                  style={{ flex: 1, minHeight: 220, fontSize: 12.5, lineHeight: 1.6 }}
+                />
+              </label>
+            </div>
+          </div>
+        )}
+        {nlView === "sending" && (
+          <div className="messenger-empty" style={{ flexDirection: "column", gap: 14, padding: 40 }}>
+            <div className="cms-spinner" style={{ width: 32, height: 32 }} />
+            <div>Рассылка отправляется {nlSelected.size} получателям. Не закрывайте окно.</div>
+          </div>
+        )}
+        {nlView === "done" && nlResult && (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: "16px 0" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, width: "100%", maxWidth: 320 }}>
+              <div className="cms-card" style={{ padding: 16, textAlign: "center" }}>
+                <div style={{ fontSize: 30, fontWeight: 800, color: "#34d399" }}>{nlResult.sent}</div>
+                <div style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>Отправлено</div>
+              </div>
+              <div className="cms-card" style={{ padding: 16, textAlign: "center" }}>
+                <div style={{ fontSize: 30, fontWeight: 800, color: nlResult.failed ? "#ff6b81" : "var(--cms-text-muted)" }}>{nlResult.failed}</div>
+                <div style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>Ошибок</div>
+              </div>
+            </div>
+            {nlResult.errors.length > 0 && (
+              <div style={{ width: "100%", maxWidth: 440, fontSize: 11, color: "var(--cms-text-muted)", maxHeight: 120, overflowY: "auto" }}>
+                {nlResult.errors.map((e, i) => <div key={i}>{e}</div>)}
+              </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
-      {notification && <div className="cms-toast">{notification}</div>}
-    </div>
+      {notification && <div className={adminToastClass(notification)}>{notification}</div>}
+    </AdminPage>
+  );
+}
+
+export default function AdminEmailPage() {
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <AdminEmailPageInner />
+    </Suspense>
   );
 }

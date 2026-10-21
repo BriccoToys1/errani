@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
+import { flash } from '@/lib/flash';
 
 // Avito API endpoints
 const AVITO_API_BASE = 'https://api.avito.ru';
@@ -111,7 +112,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error('Avito sync status error:', error);
-    return NextResponse.json({ error: 'Failed to get sync status' }, { status: 500 });
+    return NextResponse.json({ error: flash('ru', 'avito.status_failed') }, { status: 500 });
   }
 }
 
@@ -125,8 +126,8 @@ export async function POST(req: NextRequest) {
     
     if (!credentials.clientId || !credentials.clientSecret || !credentials.userId) {
       return NextResponse.json({
-        error: 'Avito API не настроен',
-        message: 'Добавьте client_id, client_secret и user_id в настройках',
+        error: flash('ru', 'avito.not_configured'),
+        message: flash('ru', 'avito.not_configured_hint'),
       }, { status: 400 });
     }
 
@@ -134,8 +135,8 @@ export async function POST(req: NextRequest) {
     const accessToken = await getAccessToken(credentials.clientId, credentials.clientSecret);
     if (!accessToken) {
       return NextResponse.json({
-        error: 'Не удалось авторизоваться в Avito',
-        message: 'Проверьте client_id и client_secret',
+        error: flash('ru', 'avito.auth_failed'),
+        message: flash('ru', 'avito.auth_hint'),
       }, { status: 401 });
     }
 
@@ -189,14 +190,14 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Синхронизировано: ${created} создано, ${updated} обновлено`,
+      message: flash('ru', 'avito.sync_ok', { created, updated }),
       created,
       updated,
       total: items.length,
     });
   } catch (error) {
     console.error('Avito sync error:', error);
-    return NextResponse.json({ error: 'Ошибка синхронизации' }, { status: 500 });
+    return NextResponse.json({ error: flash('ru', 'avito.sync_failed') }, { status: 500 });
   }
 }
 
@@ -210,7 +211,7 @@ export async function PUT(req: NextRequest) {
     const { avitoId, productId } = body;
 
     if (!avitoId) {
-      return NextResponse.json({ error: 'avitoId is required' }, { status: 400 });
+      return NextResponse.json({ error: flash('ru', 'avito.id_required') }, { status: 400 });
     }
 
     const avitoProduct = await prisma.avitoProduct.update({
@@ -224,6 +225,6 @@ export async function PUT(req: NextRequest) {
     });
   } catch (error) {
     console.error('Avito link error:', error);
-    return NextResponse.json({ error: 'Failed to link product' }, { status: 500 });
+    return NextResponse.json({ error: flash('ru', 'avito.link_failed') }, { status: 500 });
   }
 }

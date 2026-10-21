@@ -1,10 +1,27 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { AdminSidebar } from "./AdminSidebar";
-import { clearAdminAuthToken, getAdminAuthToken } from '@/lib/admin-client';
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { AdminPage } from "./AdminPage";
+import {
+  HeaderActions,
+  Icon,
+  IconButton,
+  SegmentedControl,
+  Toolbar,
+  Tooltip,
+  Button,
+  Modal,
+  PageLoading,
+} from "@/components/admin";
+import {
+  ChartContainer,
+  ChartTooltip,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { adminFetch, clearAdminAuthToken, getAdminAuthToken } from "@/lib/admin-client";
 
 interface Expense {
   id: string;
@@ -14,1011 +31,585 @@ interface Expense {
   date: string;
 }
 
-interface DashboardData {
-  orderCount: number;
-  pendingCount: number;
-  productCount: number;
-  totalRevenue: number;
-  totalExpenses: number;
-  profit: number;
-  inquiryCount: number;
-  newInquiryCount: number;
-  recentOrders: Array<{
-    id: string;
-    orderNumber: string;
-    customerName: string;
-    totalAmount: number;
-    status: string;
-    createdAt: string;
-  }>;
+interface CommerceMetrics {
+  revenue: number;
+  profit: number | null;
+  margin: number | null;
+  orders: number;
+  aov: number;
+  conversionRate: number;
+  visitors: number;
+  roas: number | null;
+  cac: number | null;
+  ltv: number | null;
+  hasCogs: boolean;
+  marketingSpend: number | null;
+  expenses: number;
 }
 
 interface AnalyticsData {
   status: { enabled: boolean; firstEventAt: string | null; lastEventAt: string | null; hasFreshData: boolean };
   period: { value: string; from: string; to: string };
-  realtime: { onlineNow: number; activePages: BreakdownItem[] };
-  today: { views: number; visitors: number; orders: number; revenue: number; avgDuration: number; bounceRate: number };
-  chart: Array<{ date: string; views: number; visitors: number; orders: number; revenue: number; avgDuration: number }>;
-  countries: Array<{ country: string; count: number; percentage: number }>;
-  totals: {
-    views: number; visitors: number; uniqueIPs: number; orders: number; paidOrders: number;
-    revenue: number; products: number; avgDuration: number; avgPageDuration: number;
-    pagesPerSession: number; bounceRate: number; conversionRate: number; avgScroll: number;
-  };
-  allTime: { views: number; visitors: number; uniqueIPs: number; orders: number; revenue: number; avgDuration: number; pagesPerSession: number; bounceRate: number };
-  pages: Array<{ path: string; title: string; views: number; visitors: number; avgDuration: number; avgScroll: number }>;
-  entryPages: BreakdownItem[];
-  exitPages: BreakdownItem[];
-  sources: BreakdownItem[];
-  cities: BreakdownItem[];
-  devices: BreakdownItem[];
-  browsers: BreakdownItem[];
-  operatingSystems: BreakdownItem[];
-  languages: BreakdownItem[];
-  campaigns: BreakdownItem[];
-  mediums: BreakdownItem[];
-  screens: BreakdownItem[];
-  hourly: Array<{ hour: number; views: number }>;
-  recent: Array<{
-    at: string; path: string; title: string; duration: number; scroll: number; device: string;
-    browser: string; os: string; country: string; city: string; source: string; session: string;
-  }>;
+  commerce: CommerceMetrics;
+  seo: { score: number; checks: number; passed: number };
+  chart: Array<{ date: string; views: number; visitors: number; orders: number; revenue: number }>;
+  pages: Array<{ path: string; title: string; views: number; visitors: number; avgDuration: number }>;
+  sources: Array<{ label: string; count: number; percentage: number }>;
+  realtime: { onlineNow: number };
 }
-
-interface BreakdownItem { label: string; count: number; percentage: number }
 
 interface ServerStats {
   cpu: { usage: number; cores: number };
-  memory: { total: string; used: string; free: string; usage: number; process: { heapUsed: string; heapTotal: string; rss: string } };
+  memory: { total: string; used: string; free: string; usage: number };
   system: { platform: string; uptime: string; nodeVersion: string; hostname: string };
-  loadAverage: { '1m': number; '5m': number; '15m': number };
   disk?: { total: string; used: string; free: string; usage: number };
   dbConnected?: boolean;
 }
 
-const STATUS_MAP: Record<string, { label: string; cls: string }> = {
-  assembling: { label: "Сборка", cls: "cms-badge-yellow" },
-  shipped: { label: "Отправлен", cls: "cms-badge-blue" },
-  in_transit: { label: "В пути", cls: "cms-badge-blue" },
-  delivered: { label: "Доставлен", cls: "cms-badge-green" },
-  cancelled: { label: "Отменён", cls: "cms-badge-red" },
-  paid: { label: "Оплачен", cls: "cms-badge-green" },
+type PeriodKey = "1" | "3" | "7" | "30" | "365" | "custom";
+
+const PERIOD_STORAGE_KEY = "admin_analytics_period_v1";
+const PERIOD_OPTIONS: Array<{ value: PeriodKey; label: string; title: string }> = [
+  { value: "1", label: "1 день", title: "1 день" },
+  { value: "3", label: "3 дня", title: "3 дня" },
+  { value: "7", label: "Неделя", title: "Неделя" },
+  { value: "30", label: "Месяц", title: "Месяц" },
+  { value: "365", label: "Год", title: "Год" },
+  { value: "custom", label: "Указать", title: "Указать период" },
+];
+
+type ChartMetric = "revenue" | "orders" | "visitors";
+const CHART_METRIC_OPTIONS: Array<{ value: ChartMetric; label: string; title: string }> = [
+  { value: "revenue", label: "Выручка", title: "Выручка" },
+  { value: "orders", label: "Заказы", title: "Заказы" },
+  { value: "visitors", label: "Посетители", title: "Посетители" },
+];
+
+const CHART_CONFIG: ChartConfig = {
+  revenue: { label: "Выручка", color: "var(--cms-accent)" },
+  orders: { label: "Заказы", color: "var(--cms-accent)" },
+  visitors: { label: "Посетители", color: "var(--cms-accent)" },
 };
 
-const COUNTRY_NAMES: Record<string, string> = {
-  RU: "Россия", US: "США", DE: "Германия", FR: "Франция", IT: "Италия",
-  ES: "Испания", TR: "Турция", CN: "Китай", GB: "Великобритания", KZ: "Казахстан",
-  UA: "Украина", BY: "Беларусь", UZ: "Узбекистан", AZ: "Азербайджан",
-};
+/** Spec colour stops — interpolated for smooth transitions. */
+const LOAD_STOPS: Array<[number, [number, number, number]]> = [
+  [0, [0x3c, 0xf7, 0x39]],
+  [10, [0x3c, 0xf7, 0x39]],
+  [30, [0x29, 0xcc, 0x25]],
+  [60, [0xf7, 0xf5, 0x39]],
+  [70, [0xff, 0xd6, 0x33]],
+  [90, [0xff, 0x24, 0x24]],
+  [100, [0xd1, 0x00, 0x00]],
+];
 
-// ─── Mini line chart ──────────────────────────────────────────────────────────
-function SparkChart({ data, valueKey }: {
-  data: Array<{ date: string; views: number; visitors: number; orders: number; revenue: number }>;
-  valueKey: "views" | "visitors" | "orders";
-}) {
-  if (!data || data.length < 2) return (
-    <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--cms-text-muted)", fontSize: 12 }}>
-      Нет данных
+function fmt(n: number) {
+  return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 0 }).format(n);
+}
+
+function fmtNum(n: number) {
+  return new Intl.NumberFormat("ru-RU").format(n);
+}
+
+function loadBarColor(pct: number): string {
+  const p = Math.min(100, Math.max(0, pct));
+  for (let i = 1; i < LOAD_STOPS.length; i++) {
+    const [p1, c1] = LOAD_STOPS[i];
+    const [p0, c0] = LOAD_STOPS[i - 1];
+    if (p <= p1) {
+      const t = p1 === p0 ? 1 : (p - p0) / (p1 - p0);
+      const c = c0.map((v, k) => Math.round(v + (c1[k] - v) * t));
+      return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+    }
+  }
+  return "rgb(209, 0, 0)";
+}
+
+function statusTitle(pct: number): string {
+  if (pct < 10) return "Все отлично";
+  if (pct < 30) return "Все хорошо";
+  if (pct < 60) return "Стабильно";
+  if (pct < 70) return "Пока держимся";
+  if (pct < 90) return "Загружен";
+  return "Перегружен";
+}
+
+function LoadBar({ label, pct, detail }: { label: string; pct: number; detail?: string }) {
+  const color = loadBarColor(pct);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12 }}>
+        <span style={{ color: "var(--cms-text-muted)", fontWeight: 600 }}>{label}</span>
+        <span style={{ color, fontWeight: 700, transition: "color 700ms ease" }}>
+          {Math.round(pct)}%{detail ? ` · ${detail}` : ""}
+        </span>
+      </div>
+      <div style={{ height: 6, borderRadius: 999, background: "var(--cms-border)", overflow: "hidden" }}>
+        <div
+          style={{
+            width: `${Math.min(100, Math.max(0, pct))}%`,
+            height: "100%",
+            background: color,
+            borderRadius: 999,
+            transition: "width 700ms ease, background-color 700ms ease",
+          }}
+        />
+      </div>
     </div>
   );
+}
 
-  const W = 500, H = 90;
-  const pad = { t: 8, r: 8, b: 20, l: 34 };
-  const iW = W - pad.l - pad.r;
-  const iH = H - pad.t - pad.b;
+function StatusPulseIcon({ color }: { color: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      style={{ color, display: "block", transition: "color 700ms ease" }}
+    >
+      <g fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path
+          className="cms-status-pulse-path"
+          d="M3.00012 12H7.34073C7.74075 12 8.10229 12.2384 8.25987 12.6061L10.8436 18.6348C10.9386 18.8563 11.1564 19 11.3975 19C11.7303 19 12.0001 18.7302 12.0001 18.3974V5.60262C12.0001 5.2698 12.2699 5 12.6027 5C12.8438 5 13.0617 5.14367 13.1566 5.36526L15.74 11.3939C15.8976 11.7616 16.2591 12 16.6592 12H20.9998"
+        />
+      </g>
+    </svg>
+  );
+}
 
-  const values = data.map((d) => d[valueKey]);
-  const maxV = Math.max(...values, 1);
-  const minV = Math.min(...values, 0);
-  const range = maxV - minV || 1;
+function MetricCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="cms-stat-card cms-analytics-metric">
+      <div className="cms-analytics-metric-label">{label}</div>
+      <div className="cms-analytics-metric-value">{value}</div>
+      {sub && <div className="cms-analytics-metric-sub">{sub}</div>}
+    </div>
+  );
+}
 
-  const x = (i: number) => pad.l + (i / (data.length - 1)) * iW;
-  const y = (v: number) => pad.t + (1 - (v - minV) / range) * iH;
-
-  let linePath = `M ${x(0)},${y(values[0])}`;
-  for (let i = 1; i < values.length; i++) {
-    const x0 = x(i - 1), y0 = y(values[i - 1]);
-    const x1 = x(i), y1 = y(values[i]);
-    const cpx = (x0 + x1) / 2;
-    linePath += ` C ${cpx},${y0} ${cpx},${y1} ${x1},${y1}`;
+function formatChartDate(iso: string): string {
+  if (iso.length >= 10) {
+    return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
   }
-  const areaPath = `${linePath} L ${x(data.length - 1)},${pad.t + iH} L ${pad.l},${pad.t + iH} Z`;
+  return iso;
+}
 
-  const isUp = values[values.length - 1] >= values[0];
-  const lineColor = isUp ? "#22c55e" : "#ef4444";
-  const gradId = `sg-${valueKey}`;
+function formatAxisDate(iso: string): string {
+  if (iso.length >= 10) return `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
+  return iso;
+}
 
-  const yTicks = [0, 0.5, 1].map((pct) => ({
-    v: Math.round(minV + pct * range),
-    yPos: pad.t + (1 - pct) * iH,
-  }));
+function DynamicsTooltip({
+  active,
+  payload,
+  metric,
+  coordinate,
+  viewBox,
+}: {
+  active?: boolean;
+  payload?: Array<{ value?: number | string; payload?: { date?: string } }>;
+  metric: ChartMetric;
+  coordinate?: { x?: number; y?: number };
+  viewBox?: { x?: number; y?: number; width?: number; height?: number };
+}) {
+  if (!active || !payload?.length || typeof document === "undefined") return null;
+  const raw = Number(payload[0]?.value ?? 0);
+  const value = metric === "revenue" ? fmt(raw) : fmtNum(raw);
+  const date = formatChartDate(String(payload[0]?.payload?.date || ""));
 
-  const xLabels = [0, Math.floor((data.length - 1) / 2), data.length - 1];
-  const trendPct = values[0] > 0
-    ? (((values[values.length - 1] - values[0]) / values[0]) * 100).toFixed(1)
-    : null;
+  // Recharts gives chart-local coordinates; lift into a body portal so the tip is a free popup.
+  const chartEl = document.querySelector(".cms-analytics-chart") as HTMLElement | null;
+  const rect = chartEl?.getBoundingClientRect();
+  const left = (rect?.left ?? 0) + (coordinate?.x ?? viewBox?.x ?? 0) + 12;
+  const top = (rect?.top ?? 0) + (coordinate?.y ?? viewBox?.y ?? 0) - 12;
+
+  return createPortal(
+    <div
+      className="cms-analytics-chart-tooltip cms-analytics-chart-tooltip-portal"
+      style={{ left: Math.max(8, left), top: Math.max(8, top - 8) }}
+    >
+      <div className="cms-analytics-chart-tooltip-date">{date}</div>
+      <div className="cms-analytics-chart-tooltip-value">{value}</div>
+    </div>,
+    document.body,
+  );
+}
+
+function DynamicsChart({
+  data,
+  metric,
+}: {
+  data: AnalyticsData["chart"];
+  metric: ChartMetric;
+}) {
+  const rows = useMemo(() => {
+    const source = data?.length
+      ? data
+      : [
+          { date: new Date().toISOString().slice(0, 10), views: 0, visitors: 0, orders: 0, revenue: 0 },
+          {
+            date: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+            views: 0,
+            visitors: 0,
+            orders: 0,
+            revenue: 0,
+          },
+        ].reverse();
+    return source.map((d) => ({
+      ...d,
+      label: formatAxisDate(d.date),
+    }));
+  }, [data]);
 
   return (
-    <div>
-      {trendPct !== null && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: lineColor }}>
-            {isUp ? "▲" : "▼"} {isUp ? "+" : ""}{trendPct}%
-          </span>
-          <span style={{ fontSize: 10, color: "var(--cms-text-muted)" }}>за период</span>
-        </div>
-      )}
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: "visible", display: "block" }}>
+    <ChartContainer config={CHART_CONFIG} variant="default" className="cms-analytics-chart h-[132px] w-full aspect-auto">
+      <AreaChart data={rows} margin={{ left: 0, right: 4, top: 6, bottom: 0 }}>
         <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={lineColor} stopOpacity="0.22" />
-            <stop offset="100%" stopColor={lineColor} stopOpacity="0.01" />
+          <linearGradient id="analytics-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={`var(--color-${metric})`} stopOpacity={0.38} />
+            <stop offset="100%" stopColor={`var(--color-${metric})`} stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        {yTicks.map((t, i) => (
-          <g key={i}>
-            <line x1={pad.l} y1={t.yPos} x2={W - pad.r} y2={t.yPos} stroke="currentColor" strokeOpacity="0.07" strokeWidth="1" />
-            <text x={pad.l - 4} y={t.yPos + 4} textAnchor="end" fontSize="9" fill="currentColor" fillOpacity="0.4">{t.v}</text>
-          </g>
-        ))}
-        <path d={areaPath} fill={`url(#${gradId})`} />
-        <path d={linePath} fill="none" stroke={lineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={x(data.length - 1)} cy={y(values[values.length - 1])} r="3.5" fill={lineColor} />
-        {xLabels.map((idx) => (
-          <text key={idx} x={x(idx)} y={H - 3} textAnchor="middle" fontSize="9" fill="currentColor" fillOpacity="0.45">
-            {data[idx]?.date?.slice(5)}
-          </text>
-        ))}
-      </svg>
-    </div>
+        <CartesianGrid vertical={false} strokeOpacity={0.08} />
+        <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={6} minTickGap={28} />
+        <YAxis tickLine={false} axisLine={false} width={40} allowDecimals={false} />
+        <ChartTooltip
+          cursor={{ stroke: "var(--cms-accent)", strokeOpacity: 0.35 }}
+          content={<DynamicsTooltip metric={metric} />}
+          allowEscapeViewBox={{ x: true, y: true }}
+          wrapperStyle={{ outline: "none", zIndex: 1200, pointerEvents: "none", overflow: "visible" }}
+          offset={14}
+        />
+        <Area
+          dataKey={metric}
+          type="monotone"
+          stroke={`var(--color-${metric})`}
+          strokeWidth={2.2}
+          fill="url(#analytics-area)"
+          isAnimationActive
+          animationDuration={650}
+        />
+      </AreaChart>
+    </ChartContainer>
   );
 }
 
-function GaugeBar({ value, max = 100, color }: { value: number; max?: number; color: string }) {
-  const pct = Math.min((value / max) * 100, 100);
-  return (
-    <div style={{ height: 4, background: "var(--cms-border)", borderRadius: 3, overflow: "hidden" }}>
-      <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 3, transition: "width 0.5s ease" }} />
-    </div>
-  );
-}
-
-function AnalyticsBreakdown({ title, items, empty = "Нет данных" }: { title: string; items: BreakdownItem[]; empty?: string }) {
-  const max = items[0]?.count || 1;
-  return (
-    <div className="cms-table-wrap" style={{ padding: "14px 16px", minWidth: 0 }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>{title}</div>
-      {items.length > 0 ? (
-        <div style={{ display: "grid", gap: 9 }}>
-          {items.slice(0, 10).map((item) => (
-            <div key={item.label}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 4, fontSize: 12 }}>
-                <span style={{ color: "var(--cms-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.label}>{item.label}</span>
-                <span style={{ flexShrink: 0, fontWeight: 600 }}>{item.count} · {item.percentage}%</span>
-              </div>
-              <GaugeBar value={item.count} max={max} color="var(--cms-accent)" />
-            </div>
-          ))}
-        </div>
-      ) : <div style={{ color: "var(--cms-text-muted)", fontSize: 12 }}>{empty}</div>}
-    </div>
-  );
-}
-
-function HourlyActivity({ data }: { data: Array<{ hour: number; views: number }> }) {
-  const max = Math.max(...data.map((item) => item.views), 1);
-  return (
-    <div className="cms-table-wrap" style={{ padding: "14px 16px" }}>
-      <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>Активность по часам · МСК</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(24, minmax(8px, 1fr))", gap: 3, alignItems: "end", height: 110 }}>
-        {data.map((item) => (
-          <div key={item.hour} title={`${String(item.hour).padStart(2, "0")}:00 — ${item.views} просмотров`} style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", gap: 5 }}>
-            <div style={{ minHeight: 2, height: `${Math.max(2, (item.views / max) * 82)}px`, borderRadius: "3px 3px 1px 1px", background: item.views ? "var(--cms-accent)" : "var(--cms-border)" }} />
-            {item.hour % 3 === 0 && <span style={{ fontSize: 8, color: "var(--cms-text-muted)", textAlign: "center" }}>{item.hour}</span>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Metric Card ──────────────────────────────────────────────────────────────
-function MetricCard({ label, value, sub, accent, icon }: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  accent: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <div className="cms-stat-card" style={{ padding: "16px 18px" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-        <div>
-          <div style={{ fontSize: 12, color: "var(--cms-text-muted)", marginBottom: 6, fontWeight: 500 }}>{label}</div>
-          <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2, letterSpacing: "-0.5px" }}>{value}</div>
-          {sub && <div style={{ fontSize: 11, color: "var(--cms-text-muted)", marginTop: 4 }}>{sub}</div>}
-        </div>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Site Status ──────────────────────────────────────────────────────────────
-function SiteStatusDot({ ok }: { ok: boolean | null }) {
-  const color = ok === null ? "#6b7280" : ok ? "#22c55e" : "#ef4444";
-  return (
-    <span style={{
-      display: "inline-block", width: 8, height: 8, borderRadius: "50%",
-      background: color, animation: ok ? "pulse 2s infinite" : "none", flexShrink: 0,
-    }} />
-  );
-}
-
-export default function AdminDashboard() {
+export default function AdminAnalyticsPage() {
   const router = useRouter();
-  const [data, setData] = useState<DashboardData | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [serverStats, setServerStats] = useState<ServerStats | null>(null);
+  const [siteOnline, setSiteOnline] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [chartMode, setChartMode] = useState<"views" | "visitors" | "orders">("views");
-  const [period, setPeriod] = useState<"7" | "14" | "30" | "90" | "365" | "all">("all");
-  const [siteOnline, setSiteOnline] = useState<boolean | null>(null);
-  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
-  const serverRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const mountedRef = useRef(false);
-
-  const getToken = useCallback(() => getAdminAuthToken(), []);
-
-  const fetchWithTimeout = useCallback(async (url: string, token: string, timeoutMs = 20000) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      return await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
-  }, []);
-
-  const checkSiteStatus = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/public-status", { cache: "no-store" });
-      setSiteOnline(res.ok);
-    } catch {
-      setSiteOnline(false);
-    }
-  }, []);
-
-  const fetchServerStats = useCallback(async () => {
-    const token = getToken();
-    if (!token) return;
-    try {
-      const res = await fetchWithTimeout("/api/admin/server-stats", token);
-      if (res.ok) {
-        const d = await res.json();
-        if (d && !d.error) setServerStats(d);
-      }
-    } catch {}
-  }, [fetchWithTimeout, getToken]);
-
-  const fetchData = useCallback(async (isRefresh = false) => {
-    const token = getToken();
-      if (!token) {
-        clearAdminAuthToken();
-        router.push("/admin/login");
-        return;
-      }
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      // Load cached data immediately for instant display
-      try {
-        const cached = localStorage.getItem("admin_dashboard_cache");
-        if (cached) {
-          const { d, a, s } = JSON.parse(cached);
-          if (d) { setData(d); setLoading(false); }
-          if (a) setAnalytics(a);
-          if (s) setServerStats(s);
-        }
-      } catch {}
-    }
-
-    try {
-      const dashResponse = await fetchWithTimeout("/api/admin/dashboard", token, 8000).catch(() => null);
-      if (dashResponse?.status === 401) {
-        clearAdminAuthToken();
-        router.push("/admin/login");
-        return;
-      }
-
-      let freshD: DashboardData | null = null;
-      let freshA: AnalyticsData | null = null;
-      let freshS: ServerStats | null = null;
-
-      if (dashResponse?.ok) {
-        freshD = await dashResponse.json();
-        if (freshD) setData(freshD);
-      }
-
-      // Do not block first render on heavy analytics endpoints.
-      setLoading(false);
-
-      const [analyticsResult, serverResult] = await Promise.allSettled([
-        fetchWithTimeout(`/api/admin/analytics?period=${period}`, token, 20000),
-        fetchWithTimeout("/api/admin/server-stats", token, 4000),
-      ]);
-
-      if (analyticsResult.status === "fulfilled" && analyticsResult.value.ok) {
-        const json = await analyticsResult.value.json();
-        if (json && !json.error) { freshA = json; setAnalytics(freshA); }
-      }
-      if (serverResult.status === "fulfilled" && serverResult.value.ok) {
-        const json = await serverResult.value.json();
-        if (json && !json.error) { freshS = json; setServerStats(freshS); }
-      }
-
-      // Cache successful fetch
-      if (freshD || freshA || freshS) {
-        try {
-          localStorage.setItem("admin_dashboard_cache", JSON.stringify({ d: freshD, a: freshA, s: freshS }));
-        } catch {}
-      }
-
-      setLastRefreshed(new Date());
-    } finally {
-      setLoading(false);
-      if (isRefresh) setRefreshing(false);
-    }
-  }, [fetchWithTimeout, getToken, router, period]);
-
-  // Expenses
-  const [showExport, setShowExport] = useState(false);
-  const [exportFrom, setExportFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); });
-  const [exportTo, setExportTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const [exportFormat, setExportFormat] = useState("csv");
-
+  const [period, setPeriod] = useState<PeriodKey>("30");
+  const [chartMetric, setChartMetric] = useState<ChartMetric>("revenue");
+  const [customFrom, setCustomFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  });
+  const [customTo, setCustomTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [showExpenses, setShowExpenses] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [expenseForm, setExpenseForm] = useState({ amount: "", description: "", category: "other", date: new Date().toISOString().slice(0, 10) });
+  const [expenseForm, setExpenseForm] = useState({
+    amount: "",
+    description: "",
+    category: "other",
+    date: new Date().toISOString().slice(0, 10),
+  });
   const [savingExpense, setSavingExpense] = useState(false);
-  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PERIOD_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { period?: PeriodKey; from?: string; to?: string };
+      if (parsed.period && PERIOD_OPTIONS.some((o) => o.value === parsed.period)) {
+        setPeriod(parsed.period);
+      }
+      if (parsed.from) setCustomFrom(parsed.from);
+      if (parsed.to) setCustomTo(parsed.to);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify({ period, from: customFrom, to: customTo }));
+    } catch { /* ignore */ }
+  }, [period, customFrom, customTo]);
+
+  const fetchAll = useCallback(async (isRefresh = false) => {
+    const token = getAdminAuthToken();
+    if (!token) {
+      clearAdminAuthToken();
+      router.push("/admin/login");
+      return;
+    }
+    if (isRefresh) setRefreshing(true);
+    try {
+      const qs =
+        period === "custom"
+          ? `period=custom&from=${encodeURIComponent(customFrom)}&to=${encodeURIComponent(customTo)}`
+          : `period=${period}`;
+      const [aRes, sRes, statusRes] = await Promise.all([
+        adminFetch(`/api/admin/analytics?${qs}`),
+        adminFetch("/api/admin/server-stats"),
+        fetch("/api/admin/public-status", { cache: "no-store" }).catch(() => null),
+      ]);
+      if (aRes.status === 401) {
+        clearAdminAuthToken();
+        router.push("/admin/login");
+        return;
+      }
+      if (aRes.ok) {
+        const json = await aRes.json();
+        if (json && !json.error) setAnalytics(json);
+      }
+      if (sRes.ok) {
+        const json = await sRes.json();
+        if (json && !json.error) setServerStats(json);
+      }
+      if (statusRes) setSiteOnline(statusRes.ok);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [router, period, customFrom, customTo]);
+
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      fetchAll();
+      return;
+    }
+    fetchAll();
+  }, [fetchAll]);
 
   const fetchExpenses = useCallback(async () => {
-    const token = getToken();
-    const res = await fetch("/api/admin/expenses", { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) { const d = await res.json(); setExpenses(d.expenses || []); }
-  }, [getToken]);
+    const res = await adminFetch("/api/admin/expenses");
+    if (res.ok) {
+      const d = await res.json();
+      setExpenses(d.expenses || []);
+    }
+  }, []);
 
   const handleAddExpense = async () => {
     if (!expenseForm.amount || !expenseForm.description) return;
     setSavingExpense(true);
-    const token = getToken();
-    const res = await fetch("/api/admin/expenses", {
+    await adminFetch("/api/admin/expenses", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify(expenseForm),
+      body: JSON.stringify({
+        amount: Number(expenseForm.amount),
+        description: expenseForm.description,
+        category: expenseForm.category,
+        date: expenseForm.date,
+      }),
     });
-    if (res.ok) {
-      setExpenseForm({ amount: "", description: "", category: "other", date: new Date().toISOString().slice(0, 10) });
-      fetchExpenses();
-      fetchData(true);
-    }
+    setExpenseForm({ amount: "", description: "", category: "other", date: new Date().toISOString().slice(0, 10) });
     setSavingExpense(false);
+    await fetchExpenses();
+    await fetchAll(true);
   };
 
   const handleDeleteExpense = async (id: string) => {
-    setDeletingExpenseId(id);
-    const token = getToken();
-    await fetch(`/api/admin/expenses?id=${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-    fetchExpenses();
-    fetchData(true);
-    setDeletingExpenseId(null);
+    await adminFetch(`/api/admin/expenses?id=${id}`, { method: "DELETE" });
+    await fetchExpenses();
+    await fetchAll(true);
   };
 
-  useEffect(() => {
-    fetchData();
-    fetchExpenses();
-    checkSiteStatus();
-
-    const dashInterval = setInterval(() => fetchData(), 60000);
-    // Server stats + site status every 5 minutes
-    serverRefreshRef.current = setInterval(() => {
-      fetchServerStats();
-      checkSiteStatus();
-    }, 5 * 60 * 1000);
-
-    return () => {
-      clearInterval(dashInterval);
-      if (serverRefreshRef.current) clearInterval(serverRefreshRef.current);
-    };
-  }, [fetchData, fetchExpenses, checkSiteStatus, fetchServerStats]);
-
-  // Refetch when period changes (skip on initial mount)
-  useEffect(() => {
-    if (!mountedRef.current) { mountedRef.current = true; return; }
-    fetchData(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [period]);
-
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(n);
-
-  const fmtDur = (s: number) => s < 60 ? `${s}с` : `${Math.floor(s / 60)}м ${s % 60}с`;
-
-  const handleExport = () => {
-    const fromDate = new Date(exportFrom);
-    const toDate = new Date(exportTo);
-    const chartFiltered = (analytics?.chart ?? []).filter((d) => {
-      const dd = new Date(d.date);
-      return dd >= fromDate && dd <= toDate;
-    });
-    if (exportFormat === "csv") {
-      const csv = ["Date,Views,Visitors,Orders,Revenue",
-        ...chartFiltered.map((d) => `${d.date},${d.views},${d.visitors},${d.orders},${d.revenue}`)].join("\n");
-      downloadFile(csv, "analytics-report.csv", "text/csv");
-    } else {
-      const report = { period: { from: exportFrom, to: exportTo }, summary: analytics?.totals, today: analytics?.today, dailyData: chartFiltered };
-      downloadFile(JSON.stringify(report, null, 2), "analytics-report.json", "application/json");
-    }
-    setShowExport(false);
+  const exportXls = () => {
+    const qs =
+      period === "custom"
+        ? `type=orders&format=xls&from=${encodeURIComponent(customFrom)}&to=${encodeURIComponent(customTo)}`
+        : `type=orders&format=xls&period=${period}`;
+    window.location.href = `/api/admin/export?${qs}`;
   };
 
-  const downloadFile = (content: string, filename: string, type: string) => {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-  };
+  const commerce = analytics?.commerce;
+  const cpu = serverStats?.cpu.usage ?? 0;
+  const mem = serverStats?.memory.usage ?? 0;
+  const disk = serverStats?.disk?.usage ?? 0;
+  // Оценка по текущему состоянию сервера (без SEO).
+  const currentLoad = siteOnline === false ? 100 : Math.max(cpu, mem, disk);
+  const statusColor = loadBarColor(currentLoad);
+  const statusTip = siteOnline === false ? "Перегружен" : statusTitle(currentLoad);
 
-  if (loading) {
-    return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
+  if (loading && !analytics) {
+    return <PageLoading />;
   }
 
-  const cpuColor = (serverStats?.cpu.usage ?? 0) > 80 ? "#ef4444" : (serverStats?.cpu.usage ?? 0) > 60 ? "#f59e0b" : "#22c55e";
-  const ramColor = (serverStats?.memory.usage ?? 0) > 80 ? "#ef4444" : (serverStats?.memory.usage ?? 0) > 60 ? "#f59e0b" : "#3b82f6";
-  const statusDots = [
-    {
-      color: siteOnline === null ? "#f59e0b" : siteOnline ? "#22c55e" : "#ef4444",
-      title: siteOnline === null ? "Проверяем сайт" : siteOnline ? "Все отлично: сайт доступен" : "Ошибка: сайт недоступен",
-    },
-    {
-      color: serverStats?.dbConnected === false ? "#ef4444" : "#22c55e",
-      title: serverStats?.dbConnected === false ? "Ошибка: база данных недоступна" : "Все отлично: база данных подключена",
-    },
-    {
-      color: (serverStats?.cpu.usage ?? 0) > 80 ? "#ef4444" : (serverStats?.cpu.usage ?? 0) > 60 ? "#f59e0b" : "#22c55e",
-      title: (serverStats?.cpu.usage ?? 0) > 80
-        ? `Ошибка: высокая нагрузка CPU ${serverStats?.cpu.usage ?? 0}%`
-        : (serverStats?.cpu.usage ?? 0) > 60
-          ? `Предупреждение: CPU ${serverStats?.cpu.usage ?? 0}%`
-          : "Все отлично: нагрузка CPU в норме",
-    },
-  ];
-
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
+    <AdminPage
+      title="Аналитика"
+      actions={
+        <HeaderActions>
+          <IconButton icon="export" label="Экспорт" shape="plain" onClick={exportXls} />
+          <IconButton icon="refresh" label="Обновить" shape="plain" onClick={() => fetchAll(true)} disabled={refreshing} />
+          <IconButton icon="go" label="Перейти на сайт" shape="plain" onClick={() => window.open("https://errani.ru", "_blank")} />
+        </HeaderActions>
+      }
+    >
+      <Toolbar>
+        <SegmentedControl
+          size="sm"
+          options={PERIOD_OPTIONS}
+          value={period}
+          onChange={(v) => setPeriod(v as PeriodKey)}
+          ariaLabel="Период"
+        />
+        {period === "custom" && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input type="date" className="cms-input" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} style={{ width: 150 }} />
+            <span style={{ color: "var(--cms-text-muted)", fontSize: 12 }}>—</span>
+            <input type="date" className="cms-input" value={customTo} onChange={(e) => setCustomTo(e.target.value)} style={{ width: 150 }} />
+          </div>
+        )}
+      </Toolbar>
 
-        {/* ── Header ── */}
-        <div className="cms-header">
-          <div>
-            <h1 className="cms-header-title" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              Дашборд
-              {(analytics?.realtime.onlineNow ?? 0) > 0 && (
-                <span style={{ fontSize: 12, color: "#22c55e", fontWeight: 500, display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#22c55e", animation: "pulse 2s infinite" }} />
-                  {analytics!.realtime.onlineNow} онлайн
-                </span>
-              )}
-            </h1>
-            {lastRefreshed && (
-              <p style={{ fontSize: 12, color: "var(--cms-text-muted)", marginTop: 2 }}>
-                Обновлено в {lastRefreshed.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-              </p>
-            )}
-          </div>
-          <div className="cms-header-actions">
-            <span style={{ fontSize: 12, color: "var(--cms-text-muted)" }}>Статус</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              {statusDots.map((dot, idx) => (
-                <span key={idx} title={dot.title} style={{ width: 10, height: 10, borderRadius: "999px", background: dot.color, display: "inline-block" }} />
-              ))}
+      <div className="cms-section-stack" style={{ gap: 14 }}>
+        <div className="cms-stats-grid cms-dashboard-metrics">
+          <div className="cms-stat-card cms-analytics-metric cms-analytics-finance">
+            <div className="cms-analytics-finance-top">
+              <div className="cms-analytics-metric-label">Выручка</div>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="add"
+                onClick={() => { setShowExpenses(true); fetchExpenses(); }}
+              >
+                Расходы
+              </Button>
             </div>
-            <a href="https://errani.ru" target="_blank" rel="noopener noreferrer" className="cms-btn cms-btn-sm" title="Открыть сайт">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg>
-            </a>
-            <button
-              className="cms-btn cms-btn-sm cms-btn-ghost"
-              onClick={() => fetchData(true)}
-              disabled={refreshing}
-              style={{ display: "flex", alignItems: "center", gap: 5 }}
-              title="Обновить"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                style={{ animation: refreshing ? "spin 0.8s linear infinite" : "none" }}>
-                <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-              </svg>
-              {refreshing ? "..." : ""}
-            </button>
+            <div className="cms-analytics-metric-value">{fmt(commerce?.revenue ?? 0)}</div>
+            <div className="cms-analytics-finance-profit">
+              <span className="cms-analytics-metric-label">Прибыль</span>
+              <span className="cms-analytics-finance-profit-value">
+                {commerce?.profit != null ? fmt(commerce.profit) : "—"}
+                {commerce?.margin != null ? ` · ${commerce.margin}%` : ""}
+              </span>
+            </div>
           </div>
+          <MetricCard label="Заказы" value={fmtNum(commerce?.orders ?? 0)} />
+          <MetricCard label="Средний чек" value={fmt(commerce?.aov ?? 0)} />
+          <MetricCard label="Конверсия" value={`${commerce?.conversionRate ?? 0}%`} />
+          <MetricCard label="Посетители" value={fmtNum(commerce?.visitors ?? 0)} />
+          {commerce?.roas != null && <MetricCard label="ROAS" value={`${commerce.roas}x`} />}
+          {commerce?.cac != null && <MetricCard label="CAC" value={fmt(commerce.cac)} />}
+          {commerce?.ltv != null && <MetricCard label="LTV" value={fmt(commerce.ltv)} />}
         </div>
 
-        <div className="cms-content">
-
-          {/* ── Row 1: Business Metrics ── */}
-          <div className="cms-dashboard-metrics" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
-            <MetricCard
-              label="Заказов оплачено"
-              value={data?.orderCount ?? 0}
-              sub={data?.pendingCount ? `${data.pendingCount} ожидают` : "все проведены"}
-              accent="rgba(232,114,42,0.15)"
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8722a" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>}
-            />
-            <div onClick={() => { setShowExpenses(true); fetchExpenses(); }} style={{ cursor: "pointer" }} title="Управление расходами">
-              <MetricCard
-                label="Выручка (нажмите)"
-                value={fmt(data?.totalRevenue ?? 0)}
-                sub={data?.totalExpenses ? `расходы: ${fmt(data.totalExpenses)}` : "добавить расходы"}
-                accent="rgba(34,197,94,0.15)"
-                icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>}
+        <div className="cms-analytics-split">
+          <div className="cms-card cms-analytics-panel cms-analytics-dynamics">
+            <div className="cms-analytics-panel-head">
+              <div className="cms-analytics-panel-title">
+                <Icon name="chatArrowGrow" size={15} />
+                <span>Динамика за период</span>
+              </div>
+              <SegmentedControl
+                size="sm"
+                options={CHART_METRIC_OPTIONS}
+                value={chartMetric}
+                onChange={(v) => setChartMetric(v as ChartMetric)}
+                ariaLabel="Метрика графика"
               />
             </div>
-            <MetricCard
-              label="Прибыль"
-              value={fmt(data?.profit ?? 0)}
-              sub={(data?.profit ?? 0) >= 0 ? "в плюсе" : "в минусе"}
-              accent={(data?.profit ?? 0) >= 0 ? "rgba(16,185,129,0.12)" : "rgba(239,68,68,0.12)"}
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={(data?.profit ?? 0) >= 0 ? "#10b981" : "#ef4444"} strokeWidth="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>}
-            />
-            <MetricCard
-              label="Обращения"
-              value={data?.inquiryCount ?? 0}
-              sub={data?.newInquiryCount ? `${data.newInquiryCount} новых` : "все прочитаны"}
-              accent="rgba(245,158,11,0.15)"
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>}
-            />
+            <DynamicsChart data={analytics?.chart || []} metric={chartMetric} />
           </div>
 
-          {analytics && !analytics.status.hasFreshData && (
-            <div style={{ marginBottom: 14, padding: "11px 14px", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 10, background: "rgba(245,158,11,0.08)", color: "#fbbf24", fontSize: 12 }}>
-              Новых событий за последние 24 часа нет. Последняя запись: {analytics.status.lastEventAt ? new Date(analytics.status.lastEventAt).toLocaleString("ru-RU") : "никогда"}. Сбор начнётся после согласия посетителя на cookie.
+          <div className="cms-card cms-analytics-panel cms-analytics-status">
+            <div className="cms-analytics-panel-head">
+              <div className="cms-analytics-panel-title">
+                <Tooltip content={statusTip}>
+                  <span
+                    className="cms-status-pulse"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "default",
+                      filter: `drop-shadow(0 0 6px ${statusColor}55)`,
+                      transition: "filter 700ms ease",
+                    }}
+                  >
+                    <StatusPulseIcon color={statusColor} />
+                  </span>
+                </Tooltip>
+                <span>Статус</span>
+              </div>
             </div>
-          )}
-
-          {/* ── Row 2: Analytics Today ── */}
-          <div className="cms-dashboard-metrics" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
-            <MetricCard
-              label="Просмотры сегодня"
-              value={analytics?.today.views ?? 0}
-              sub={`за всё время: ${analytics?.allTime.views ?? 0}`}
-              accent="rgba(59,130,246,0.15)"
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
-            />
-            <MetricCard
-              label="Посетители сегодня"
-              value={analytics?.today.visitors ?? 0}
-              sub={`за всё время: ${analytics?.allTime.visitors ?? 0}`}
-              accent="rgba(139,92,246,0.15)"
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>}
-            />
-            <MetricCard
-              label="Заказов сегодня"
-              value={analytics?.today.orders ?? 0}
-              sub={`выручка: ${fmt(analytics?.today.revenue ?? 0)}`}
-              accent="rgba(6,182,212,0.15)"
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>}
-            />
-            <MetricCard
-              label="Ср. время на сайте"
-              value={fmtDur(analytics?.today.avgDuration ?? 0)}
-              sub="за сегодня"
-              accent="rgba(236,72,153,0.12)"
-              icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ec4899" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>}
-            />
-          </div>
-
-          {/* ── Row 3: Chart + Server ── */}
-          <div className="cms-dashboard-split" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, marginBottom: 14 }}>
-
-            {/* Chart */}
-            <div className="cms-table-wrap" style={{ padding: "18px 20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: 14 }}>Тренд: {period === "all" ? "всё время" : `${period} дней`}</span>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <select className="cms-select" value={period} onChange={(e) => setPeriod(e.target.value as typeof period)} style={{ padding: "3px 8px", fontSize: 12 }}>
-                    <option value="7">7 дней</option>
-                    <option value="14">14 дней</option>
-                    <option value="30">30 дней</option>
-                    <option value="90">90 дней</option>
-                    <option value="365">365 дней</option>
-                    <option value="all">Всё время</option>
-                  </select>
-                  <div className="cms-tabs">
-                    {(["views", "visitors", "orders"] as const).map((m) => (
-                      <button key={m} className={`cms-tab ${chartMode === m ? "active" : ""}`} onClick={() => setChartMode(m)}>
-                        {m === "views" ? "Просмотры" : m === "visitors" ? "Посетители" : "Заказы"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              {analytics?.chart ? (
-                <SparkChart data={analytics.chart} valueKey={chartMode} />
-              ) : (
-                <div style={{ height: 90, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--cms-text-muted)", fontSize: 13 }}>Нет данных</div>
-              )}
-            </div>
-
-            {/* Site Status + Server */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-
-              {/* Site Status */}
-              <div className="cms-table-wrap" style={{ padding: "14px 16px" }}>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Статус сайта</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
-                    <span style={{ color: "var(--cms-text-muted)" }}>Сайт</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 5, fontWeight: 600, color: siteOnline ? "#22c55e" : "#ef4444" }}>
-                      <SiteStatusDot ok={siteOnline} />
-                      {siteOnline === null ? "..." : siteOnline ? "Онлайн" : "Офлайн"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
-                    <span style={{ color: "var(--cms-text-muted)" }}>База данных</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 5, fontWeight: 600, color: serverStats?.dbConnected !== false ? "#22c55e" : "#ef4444" }}>
-                      <SiteStatusDot ok={serverStats ? serverStats.dbConnected !== false : null} />
-                      {serverStats === null ? "..." : serverStats?.dbConnected !== false ? "Подключена" : "Недоступна"}
-                    </span>
-                  </div>
-                  {serverStats && (
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--cms-text-muted)", paddingTop: 4, borderTop: "1px solid var(--cms-border)" }}>
-                      <span>↑ {serverStats.system.uptime}</span>
-                      <span>{serverStats.system.nodeVersion}</span>
-                    </div>
-                  )}
-                  <div style={{ fontSize: 10, color: "var(--cms-text-muted)", marginTop: 2 }}>
-                    Обновляется каждые 5 мин
-                  </div>
-                </div>
-              </div>
-
-              {/* Server Resources */}
-              <div className="cms-table-wrap" style={{ padding: "14px 16px" }}>
-                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Ресурсы сервера</div>
-                {serverStats ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                        <span style={{ color: "var(--cms-text-muted)" }}>CPU</span>
-                        <span style={{ fontWeight: 600, color: cpuColor }}>{serverStats.cpu.usage}% · {serverStats.cpu.cores} ядра</span>
-                      </div>
-                      <GaugeBar value={serverStats.cpu.usage} color={cpuColor} />
-                    </div>
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                        <span style={{ color: "var(--cms-text-muted)" }}>ОЗУ</span>
-                        <span style={{ fontWeight: 600, color: ramColor }}>{serverStats.memory.usage}% · {serverStats.memory.used}/{serverStats.memory.total}</span>
-                      </div>
-                      <GaugeBar value={serverStats.memory.usage} color={ramColor} />
-                    </div>
-                    {serverStats.disk && (
-                      <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                          <span style={{ color: "var(--cms-text-muted)" }}>Диск</span>
-                          <span style={{ fontWeight: 600, color: "var(--cms-text-muted)" }}>{serverStats.disk.usage}% · {serverStats.disk.used}/{serverStats.disk.total}</span>
-                        </div>
-                        <GaugeBar value={serverStats.disk.usage} color="#8b5cf6" />
-                      </div>
-                    )}
-                    <div style={{ fontSize: 11, color: "var(--cms-text-muted)", paddingTop: 4, borderTop: "1px solid var(--cms-border)" }}>
-                      Load: {serverStats.loadAverage['1m']} / {serverStats.loadAverage['5m']} / {serverStats.loadAverage['15m']}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ color: "var(--cms-text-muted)", fontSize: 13 }}>Нет данных</div>
-                )}
-              </div>
+            <div style={{ display: "grid", gap: 12 }}>
+              <LoadBar label="ЦП" pct={cpu} detail={serverStats ? `${serverStats.cpu.cores} ядер` : undefined} />
+              <LoadBar label="ОЗУ" pct={mem} detail={serverStats?.memory.used} />
+              <LoadBar label="Диск" pct={disk} detail={serverStats?.disk?.used} />
             </div>
           </div>
+        </div>
 
-          {/* ── Row 4: Orders + Geography ── */}
-          <div className="cms-dashboard-split" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14, marginBottom: 20 }}>
-
-            {/* Recent Orders */}
-            <div className="cms-table-wrap">
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--cms-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: 700, fontSize: 13 }}>Последние оплаченные заказы</span>
-                <Link href="/admin/orders" className="cms-btn cms-btn-sm cms-btn-ghost">Все заказы →</Link>
-              </div>
-              <table className="cms-table">
-                <thead>
-                  <tr><th>№</th><th>Клиент</th><th>Сумма</th><th>Статус</th><th>Дата</th></tr>
-                </thead>
-                <tbody>
-                  {data?.recentOrders && data.recentOrders.length > 0 ? (
-                    data.recentOrders.map((order) => (
-                      <tr key={order.id}>
-                        <td className="cms-td-mono">{order.orderNumber}</td>
-                        <td className="cms-td-bold">{order.customerName}</td>
-                        <td>{fmt(order.totalAmount)}</td>
-                        <td>
-                          <span className={`cms-badge ${STATUS_MAP[order.status]?.cls ?? "cms-badge-yellow"}`}>
-                            {STATUS_MAP[order.status]?.label ?? order.status}
-                          </span>
-                        </td>
-                        <td>{new Date(order.createdAt).toLocaleDateString("ru-RU")}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr><td colSpan={5} style={{ textAlign: "center", padding: 32, color: "var(--cms-text-muted)" }}>Заказов пока нет</td></tr>
-                  )}
-                </tbody>
-              </table>
+        <div className="cms-analytics-split cms-analytics-split-equal">
+          <div className="cms-card cms-analytics-panel" style={{ padding: 16 }}>
+            <div className="cms-analytics-panel-title" style={{ marginBottom: 10 }}>
+              <Icon name="browser" size={15} />
+              <span>Топ страниц</span>
             </div>
-
-            {/* Geography */}
-            <div className="cms-table-wrap" style={{ padding: "14px 16px" }}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>География за период</div>
-              {analytics?.countries && analytics.countries.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-                  {analytics.countries.slice(0, 6).map((c, i) => {
-                    const maxC = analytics.countries[0]?.count || 1;
-                    return (
-                      <div key={i}>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                          <span style={{ color: "var(--cms-text-muted)" }}>{COUNTRY_NAMES[c.country] || c.country}</span>
-                          <span style={{ fontWeight: 600 }}>{c.count} · {c.percentage}%</span>
-                        </div>
-                        <GaugeBar value={c.count} max={maxC} color="var(--cms-accent)" />
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div style={{ color: "var(--cms-text-muted)", fontSize: 13 }}>Нет данных</div>
-              )}
-            </div>
-          </div>
-
-          {analytics && (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 12, margin: "24px 0 12px", flexWrap: "wrap" }}>
-                <div>
-                  <h2 style={{ margin: 0, fontSize: 18 }}>Полная аналитика сайта</h2>
-                  <div style={{ marginTop: 4, color: "var(--cms-text-muted)", fontSize: 11 }}>
-                    Период: {new Date(analytics.period.from).toLocaleDateString("ru-RU")} — {new Date(analytics.period.to).toLocaleDateString("ru-RU")}
-                  </div>
-                </div>
-                <div style={{ color: "var(--cms-text-muted)", fontSize: 11 }}>
-                  Данные с {analytics.status.firstEventAt ? new Date(analytics.status.firstEventAt).toLocaleDateString("ru-RU") : "—"}
-                </div>
+            {(analytics?.pages || []).slice(0, 8).map((p) => (
+              <div key={p.path} className="cms-analytics-row">
+                <span className="cms-analytics-row-label">{p.title || p.path}</span>
+                <span className="cms-analytics-row-value">{p.views}</span>
               </div>
-
-              <div className="cms-dashboard-metrics" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
-                <MetricCard label="Посетители за период" value={analytics.totals.visitors} sub={`${analytics.totals.uniqueIPs} уникальных IP`} accent="rgba(139,92,246,0.15)" icon={<span style={{ color: "#a78bfa", fontWeight: 800 }}>UV</span>} />
-                <MetricCard label="Страниц за визит" value={analytics.totals.pagesPerSession} sub={`${analytics.totals.views} просмотров`} accent="rgba(59,130,246,0.15)" icon={<span style={{ color: "#60a5fa", fontWeight: 800 }}>PV</span>} />
-                <MetricCard label="Средний визит" value={fmtDur(analytics.totals.avgDuration)} sub={`страница: ${fmtDur(analytics.totals.avgPageDuration)}`} accent="rgba(236,72,153,0.12)" icon={<span style={{ color: "#f472b6", fontWeight: 800 }}>T</span>} />
-                <MetricCard label="Глубина прокрутки" value={`${analytics.totals.avgScroll}%`} sub="средняя по страницам" accent="rgba(6,182,212,0.15)" icon={<span style={{ color: "#22d3ee", fontWeight: 800 }}>↓</span>} />
-                <MetricCard label="Показатель отказов" value={`${analytics.totals.bounceRate}%`} sub="одна страница за визит" accent="rgba(245,158,11,0.14)" icon={<span style={{ color: "#fbbf24", fontWeight: 800 }}>↩</span>} />
-                <MetricCard label="Конверсия в оплату" value={`${analytics.totals.conversionRate}%`} sub={`${analytics.totals.paidOrders} оплаченных`} accent="rgba(34,197,94,0.14)" icon={<span style={{ color: "#4ade80", fontWeight: 800 }}>%</span>} />
-                <MetricCard label="Заказы за период" value={analytics.totals.orders} sub={`оплачено: ${analytics.totals.paidOrders}`} accent="rgba(6,182,212,0.15)" icon={<span style={{ color: "#22d3ee", fontWeight: 800 }}>#</span>} />
-                <MetricCard label="Выручка за период" value={fmt(analytics.totals.revenue)} sub={`за всё время: ${fmt(analytics.allTime.revenue)}`} accent="rgba(34,197,94,0.14)" icon={<span style={{ color: "#4ade80", fontWeight: 800 }}>₽</span>} />
-              </div>
-
-              {analytics.realtime.activePages.length > 0 && (
-                <div style={{ marginBottom: 14 }}>
-                  <AnalyticsBreakdown title={`Сейчас онлайн: ${analytics.realtime.onlineNow}`} items={analytics.realtime.activePages} />
-                </div>
-              )}
-
-              <div className="cms-table-wrap" style={{ marginBottom: 14 }}>
-                <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--cms-border)", fontWeight: 700, fontSize: 13 }}>Страницы сайта</div>
-                <div style={{ overflowX: "auto" }}>
-                  <table className="cms-table" style={{ minWidth: 720 }}>
-                    <thead><tr><th>Страница</th><th>Просмотры</th><th>Посетители</th><th>Ср. время</th><th>Прокрутка</th></tr></thead>
-                    <tbody>
-                      {analytics.pages.length > 0 ? analytics.pages.map((page) => (
-                        <tr key={page.path}>
-                          <td style={{ maxWidth: 360 }}>
-                            <div className="cms-td-bold" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{page.title || page.path}</div>
-                            <div className="cms-td-mono" style={{ marginTop: 2, fontSize: 10 }}>{page.path}</div>
-                          </td>
-                          <td>{page.views}</td><td>{page.visitors}</td><td>{fmtDur(page.avgDuration)}</td><td>{page.avgScroll}%</td>
-                        </tr>
-                      )) : <tr><td colSpan={5} style={{ textAlign: "center", padding: 24, color: "var(--cms-text-muted)" }}>Нет данных</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 12, marginBottom: 14 }}>
-                <AnalyticsBreakdown title="Источники переходов" items={analytics.sources} />
-                <AnalyticsBreakdown title="Входные страницы" items={analytics.entryPages} />
-                <AnalyticsBreakdown title="Страницы выхода" items={analytics.exitPages} />
-                <AnalyticsBreakdown title="Устройства" items={analytics.devices} />
-                <AnalyticsBreakdown title="Браузеры" items={analytics.browsers} />
-                <AnalyticsBreakdown title="Операционные системы" items={analytics.operatingSystems} />
-                <AnalyticsBreakdown title="Страны" items={analytics.countries.map((item) => ({ label: COUNTRY_NAMES[item.country] || item.country || "Не определено", count: item.count, percentage: item.percentage }))} />
-                <AnalyticsBreakdown title="Города" items={analytics.cities} />
-                <AnalyticsBreakdown title="Языки" items={analytics.languages} />
-                <AnalyticsBreakdown title="Размеры экранов" items={analytics.screens} />
-                <AnalyticsBreakdown title="UTM-кампании" items={analytics.campaigns} />
-                <AnalyticsBreakdown title="UTM-каналы" items={analytics.mediums} />
-              </div>
-
-              <div style={{ marginBottom: 14 }}><HourlyActivity data={analytics.hourly} /></div>
-
-              <div className="cms-table-wrap" style={{ marginBottom: 20 }}>
-                <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--cms-border)", fontWeight: 700, fontSize: 13 }}>Последние посещения</div>
-                <div style={{ overflowX: "auto" }}>
-                  <table className="cms-table" style={{ minWidth: 900 }}>
-                    <thead><tr><th>Время</th><th>Страница</th><th>Визит</th><th>Источник</th><th>Устройство</th><th>Время</th><th>Scroll</th><th>География</th></tr></thead>
-                    <tbody>
-                      {analytics.recent.length > 0 ? analytics.recent.map((visit, index) => (
-                        <tr key={`${visit.at}-${visit.session}-${index}`}>
-                          <td style={{ whiteSpace: "nowrap" }}>{new Date(visit.at).toLocaleString("ru-RU")}</td>
-                          <td className="cms-td-mono" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={visit.path}>{visit.path}</td>
-                          <td className="cms-td-mono">{visit.session}</td>
-                          <td>{visit.source}</td>
-                          <td>{visit.device}<div style={{ fontSize: 10, color: "var(--cms-text-muted)" }}>{visit.browser} · {visit.os}</div></td>
-                          <td>{fmtDur(visit.duration)}</td><td>{visit.scroll}%</td>
-                          <td>{[COUNTRY_NAMES[visit.country] || visit.country, visit.city].filter(Boolean).join(", ") || "—"}</td>
-                        </tr>
-                      )) : <tr><td colSpan={8} style={{ textAlign: "center", padding: 24, color: "var(--cms-text-muted)" }}>Нет данных</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* ── Quick Links ── */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-            {[
-              { href: "/admin/orders", label: "Заказы", icon: <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg> },
-              { href: "/admin/products", label: "Товары", icon: <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg> },
-              { href: "/admin/inquiries", label: "Обращения", icon: <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg> },
-              { href: "/admin/media", label: "Медиа", icon: <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> },
-              { href: "/admin/reviews", label: "Отзывы", icon: <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3l2.9 5.88 6.5.95-4.7 4.58 1.1 6.47L12 17.85 6.2 20.88l1.1-6.47-4.7-4.58 6.5-.95L12 3z"/></svg> },
-              { href: "/admin/settings", label: "Настройки", icon: <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg> },
-            ].map((item) => (
-              <Link key={item.href} href={item.href} className="cms-quick-link">
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </Link>
             ))}
+            {!analytics?.pages?.length && <div style={{ color: "var(--cms-text-muted)", fontSize: 12 }}>Нет данных</div>}
+          </div>
+          <div className="cms-card cms-analytics-panel" style={{ padding: 16 }}>
+            <div className="cms-analytics-panel-title" style={{ marginBottom: 10 }}>
+              <Icon name="list" size={15} />
+              <span>Источники</span>
+            </div>
+            {(analytics?.sources || []).slice(0, 8).map((s) => (
+              <div key={s.label} className="cms-analytics-row">
+                <span className="cms-analytics-row-label">{s.label}</span>
+                <span className="cms-analytics-row-value">{s.percentage}%</span>
+              </div>
+            ))}
+            {!analytics?.sources?.length && <div style={{ color: "var(--cms-text-muted)", fontSize: 12 }}>Нет данных</div>}
           </div>
         </div>
-      </main>
+      </div>
 
-      {/* ── Expenses Modal ── */}
-      {showExpenses && (
-        <div className="cms-modal-overlay" onClick={() => setShowExpenses(false)}>
-          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
-            <div className="cms-modal-header">
-              <h3>Расходы</h3>
-              <button className="cms-modal-close" onClick={() => setShowExpenses(false)}>&times;</button>
-            </div>
-            <div className="cms-modal-body" style={{ maxHeight: "55vh", overflowY: "auto" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-                <div style={{ background: "rgba(34,197,94,0.08)", borderRadius: 8, padding: "10px 14px" }}>
-                  <div style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>Выручка</div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{fmt(data?.totalRevenue ?? 0)}</div>
+      <Modal open={showExpenses} onClose={() => setShowExpenses(false)} title="Расходы" width={560}>
+        <div className="cms-section-stack" style={{ gap: 12 }}>
+          <div className="cms-analytics-expense-form">
+            <input className="cms-input" type="number" placeholder="Сумма" value={expenseForm.amount} onChange={(e) => setExpenseForm((f) => ({ ...f, amount: e.target.value }))} />
+            <input className="cms-input" type="date" value={expenseForm.date} onChange={(e) => setExpenseForm((f) => ({ ...f, date: e.target.value }))} />
+            <input className="cms-input cms-analytics-expense-desc" placeholder="Описание" value={expenseForm.description} onChange={(e) => setExpenseForm((f) => ({ ...f, description: e.target.value }))} />
+            <select className="cms-select" value={expenseForm.category} onChange={(e) => setExpenseForm((f) => ({ ...f, category: e.target.value }))}>
+              <option value="other">Другое</option>
+              <option value="shipping">Доставка</option>
+              <option value="packaging">Упаковка</option>
+              <option value="marketing">Маркетинг</option>
+            </select>
+            <Button variant="primary" icon="add" onClick={handleAddExpense} disabled={savingExpense}>
+              Добавить
+            </Button>
+          </div>
+          <div style={{ maxHeight: 280, overflowY: "auto" }}>
+            {expenses.map((exp) => (
+              <div key={exp.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--cms-border)", fontSize: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 600 }}>{exp.description}</div>
+                  <div style={{ color: "var(--cms-text-muted)" }}>{exp.date} · {exp.category}</div>
                 </div>
-                <div style={{ background: "rgba(239,68,68,0.08)", borderRadius: 8, padding: "10px 14px" }}>
-                  <div style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>Расходы</div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{fmt(data?.totalExpenses ?? 0)}</div>
-                </div>
-                <div style={{ background: (data?.profit ?? 0) >= 0 ? "rgba(16,185,129,0.1)" : "rgba(239,68,68,0.1)", borderRadius: 8, padding: "10px 14px" }}>
-                  <div style={{ fontSize: 11, color: "var(--cms-text-muted)" }}>Прибыль</div>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: (data?.profit ?? 0) >= 0 ? "#10b981" : "#ef4444" }}>{fmt(data?.profit ?? 0)}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontWeight: 700 }}>{fmt(exp.amount)}</span>
+                  <IconButton icon="delete" label="Удалить" shape="square" tone="danger" onClick={() => handleDeleteExpense(exp.id)} />
                 </div>
               </div>
-              <div style={{ background: "var(--cms-bg-hover)", borderRadius: 8, padding: 14, marginBottom: 16 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Добавить расход</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                  <label className="cms-label">
-                    Описание
-                    <input className="cms-input" value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} placeholder="Упаковка, доставка..." style={{ marginTop: 4 }} />
-                  </label>
-                  <label className="cms-label">
-                    Сумма (₽)
-                    <input className="cms-input" type="number" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} placeholder="0" style={{ marginTop: 4 }} />
-                  </label>
-                  <label className="cms-label">
-                    Категория
-                    <select className="cms-select" value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })} style={{ marginTop: 4 }}>
-                      <option value="shipping">Доставка</option>
-                      <option value="packaging">Упаковка</option>
-                      <option value="marketing">Маркетинг</option>
-                      <option value="product">Закупка товара</option>
-                      <option value="other">Прочее</option>
-                    </select>
-                  </label>
-                  <label className="cms-label">
-                    Дата
-                    <input className="cms-input" type="date" value={expenseForm.date} onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })} style={{ marginTop: 4 }} />
-                  </label>
-                </div>
-                <button className="cms-btn cms-btn-primary cms-btn-sm" onClick={handleAddExpense} disabled={savingExpense}>
-                  {savingExpense ? "Сохранение..." : "+ Добавить расход"}
-                </button>
-              </div>
-              {expenses.length > 0 ? (
-                <table className="cms-table">
-                  <thead>
-                    <tr><th>Дата</th><th>Описание</th><th>Категория</th><th style={{ textAlign: "right" }}>Сумма</th><th style={{ width: 40 }}></th></tr>
-                  </thead>
-                  <tbody>
-                    {expenses.map((exp) => (
-                      <tr key={exp.id}>
-                        <td style={{ fontSize: 12, color: "var(--cms-text-muted)" }}>{exp.date}</td>
-                        <td style={{ fontSize: 13 }}>{exp.description}</td>
-                        <td><span style={{ fontSize: 11, background: "var(--cms-border)", borderRadius: 4, padding: "2px 6px" }}>{exp.category}</span></td>
-                        <td style={{ textAlign: "right", fontWeight: 600, color: "#ef4444" }}>−{fmt(exp.amount)}</td>
-                        <td>
-                          <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => handleDeleteExpense(exp.id)} disabled={deletingExpenseId === exp.id}>×</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div style={{ textAlign: "center", padding: 20, color: "var(--cms-text-muted)", fontSize: 13 }}>Расходов пока нет</div>
-              )}
-            </div>
-            <div className="cms-modal-actions">
-              <button className="cms-btn" onClick={() => setShowExpenses(false)}>Закрыть</button>
-            </div>
+            ))}
+            {!expenses.length && <div style={{ color: "var(--cms-text-muted)", fontSize: 12 }}>Расходов пока нет</div>}
           </div>
         </div>
-      )}
-
-      {/* ── Export Modal ── */}
-      {showExport && (
-        <div className="cms-modal-overlay" onClick={() => setShowExport(false)}>
-          <div className="cms-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="cms-modal-header">
-              <h3>Экспорт отчёта</h3>
-              <button className="cms-modal-close" onClick={() => setShowExport(false)}>&times;</button>
-            </div>
-            <div className="cms-modal-body">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-                <label className="cms-label">С<input className="cms-input" type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} /></label>
-                <label className="cms-label">По<input className="cms-input" type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} /></label>
-              </div>
-              <label className="cms-label">
-                Формат
-                <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                  {[{ v: "csv", l: "CSV" }, { v: "json", l: "JSON" }].map((f) => (
-                    <label key={f.v} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${exportFormat === f.v ? "var(--cms-accent)" : "var(--cms-border)"}`, background: exportFormat === f.v ? "rgba(232,114,42,0.1)" : "transparent", cursor: "pointer", fontSize: 13 }}>
-                      <input type="radio" name="fmt" value={f.v} checked={exportFormat === f.v} onChange={() => setExportFormat(f.v)} style={{ display: "none" }} />
-                      {f.l}
-                    </label>
-                  ))}
-                </div>
-              </label>
-            </div>
-            <div className="cms-modal-actions">
-              <button className="cms-btn cms-btn-primary" onClick={handleExport}>Скачать</button>
-              <button className="cms-btn" onClick={() => setShowExport(false)}>Отмена</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style jsx>{`
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
-    </div>
+      </Modal>
+    </AdminPage>
   );
 }

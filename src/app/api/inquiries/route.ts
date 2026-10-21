@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
 import { withPrismaRetry } from '@/lib/prisma-retry';
+import { flash, parseLang } from '@/lib/flash';
 
 // GET all inquiries (admin only)
 export async function GET(req: NextRequest) {
@@ -39,6 +40,8 @@ export async function PUT(req: NextRequest) {
         data: { status: 'read' },
       })
     );
+    const { clearAdminCountsCache } = await import('@/lib/admin-counts-cache');
+    clearAdminCountsCache();
     return NextResponse.json({ updated: result.count });
   } catch (error) {
     console.error('Error marking inquiries as read:', error);
@@ -48,11 +51,13 @@ export async function PUT(req: NextRequest) {
 
 // POST new inquiry (public)
 export async function POST(req: NextRequest) {
+  let lang = parseLang(req.headers.get('accept-language'), 'ru');
   try {
     const body = await req.json();
+    lang = parseLang(body.language ?? body.lang, lang);
 
     if (!body.name?.trim() || !body.email?.trim() || !body.message?.trim()) {
-      return NextResponse.json({ error: 'Name, email and message are required' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'inquiry.required') }, { status: 400 });
     }
 
     // Get IP and User-Agent
@@ -77,6 +82,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, id: inquiry.id });
   } catch (error) {
     console.error('Error creating inquiry:', error);
-    return NextResponse.json({ error: 'Failed to create inquiry' }, { status: 500 });
+    return NextResponse.json({ error: flash(lang, 'inquiry.create_failed') }, { status: 500 });
   }
 }

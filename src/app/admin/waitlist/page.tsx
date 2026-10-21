@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AdminSidebar } from "../AdminSidebar";
+import { AdminPage } from "../AdminPage";
+import { HeaderActions, IconButton, SearchField, Toolbar, DataList, ScrollArea, useContactSheet, PageLoading } from "@/components/admin";
+import { adminToastClass, adminFetch, refreshAdminCounts } from "@/lib/admin-client";
 
 interface WaitlistRequest {
   id: string;
@@ -35,15 +37,17 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 
 export default function AdminWaitlistPage() {
   const router = useRouter();
+  const contactSheet = useContactSheet();
   const [requests, setRequests] = useState<WaitlistRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState<string[] | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("active");
+  const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [search, setSearch] = useState("");
   const [notification, setNotification] = useState("");
   const [notifyProductConfirm, setNotifyProductConfirm] = useState<GroupedWaitlist | null>(null);
   const [notifyingProductSlug, setNotifyingProductSlug] = useState<string | null>(null);
+  const [waitlistViewedAt, setWaitlistViewedAt] = useState<Date>(() => new Date(0));
 
   const getToken = useCallback(() => localStorage.getItem("admin_token"), []);
 
@@ -70,6 +74,31 @@ export default function AdminWaitlistPage() {
   useEffect(() => {
     fetchRequests();
   }, [fetchRequests]);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    adminFetch("/api/admin/settings?key=waitlistViewedAt")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.value) setWaitlistViewedAt(new Date(d.value));
+      })
+      .catch(() => undefined);
+  }, [getToken]);
+
+  const markAllViewed = async () => {
+    try {
+      const res = await adminFetch("/api/admin/viewed", {
+        method: "POST",
+        body: JSON.stringify({ section: "waitlist" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setWaitlistViewedAt(data?.value ? new Date(data.value) : new Date());
+      setViewMode("active");
+      refreshAdminCounts();
+      notify("Заявки отмечены как просмотренные");
+    } catch { /* ignore */ }
+  };
 
   const notify = (msg: string) => {
     setNotification(msg);
@@ -162,119 +191,121 @@ export default function AdminWaitlistPage() {
     }
   };
 
-  if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
+  const pendingTotal = requests.filter(
+    (r) => r.status === "pending" && new Date(r.createdAt) > waitlistViewedAt
+  ).length;
+
+  if (loading) return <PageLoading />;
 
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
-        <div className="cms-header">
-          <h1 className="cms-header-title">В ожидании</h1>
-          <div className="cms-header-actions">
-            <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>{requests.length} всего</span>
-            <button className="cms-refresh-btn" onClick={fetchRequests} title="Обновить">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-            </button>
-          </div>
-        </div>
+    <AdminPage
+      title="В ожидании"
+      fill
+      notifyCount={pendingTotal > 0 ? pendingTotal : undefined}
+      actions={
+        <HeaderActions>
+          <IconButton icon="export" label="Скачать" shape="plain" onClick={() => { window.location.href = "/api/admin/export?type=waitlist&format=xls"; }} />
+          <IconButton icon="refresh" label="Обновить" shape="plain" onClick={() => { setLoading(true); fetchRequests(); }} />
+          {pendingTotal > 0 && (
+            <IconButton icon="view" label="Просмотреть" shape="plain" onClick={() => { void markAllViewed(); }} />
+          )}
+        </HeaderActions>
+      }
+    >
 
-        <div className="cms-content">
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" }}>
-            <input
-              className="cms-input cms-input-sm"
-              placeholder="Поиск..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "260px" }}
-            />
+          <Toolbar>
+            <SearchField value={search} onChange={setSearch} style={{ width: 260 }} />
             <select className="cms-select cms-select-sm" value={viewMode} onChange={(e) => setViewMode(e.target.value as ViewMode)}>
+              <option value="all">Все</option>
               <option value="active">Активные</option>
               <option value="archived">Архив</option>
-              <option value="all">Все</option>
             </select>
-            {filtered.length > 0 && (
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "var(--cms-text-muted)" }}>
-                <input
-                  type="checkbox"
-                  checked={checkedIds.size === filtered.length && filtered.length > 0}
-                  onChange={toggleAll}
-                />
-                Выбрать все
-              </label>
-            )}
             {checkedIds.size > 0 && (
               <button className="cms-btn cms-btn-sm cms-btn-danger" onClick={() => setDeleteConfirm(Array.from(checkedIds))}>
                 {viewMode === "archived" ? `Удалить навсегда (${checkedIds.size})` : `В архив (${checkedIds.size})`}
               </button>
             )}
-          </div>
+          </Toolbar>
 
+          <ScrollArea>
           {grouped.map((group) => {
             const pendingCount = group.requests.filter((r) => r.status === "pending").length;
             return (
               <div key={group.productSlug} className="cms-card" style={{ marginBottom: "14px", border: "1px solid var(--cms-border)" }}>
                 <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--cms-border)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{group.productName}</div>
-                    <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>{group.productSlug}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <input
+                      type="checkbox"
+                      checked={group.requests.length > 0 && group.requests.every((r) => checkedIds.has(r.id))}
+                      onChange={() => {
+                        setCheckedIds((prev) => {
+                          const next = new Set(prev);
+                          const allOn = group.requests.every((r) => next.has(r.id));
+                          group.requests.forEach((r) => { if (allOn) next.delete(r.id); else next.add(r.id); });
+                          return next;
+                        });
+                      }}
+                      title="Выбрать все в группе"
+                    />
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{group.productName}</div>
+                      <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>{group.productSlug}</div>
+                    </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>
-                      {group.requests.length} заявка(ок)
-                    </div>
                     {pendingCount > 0 && viewMode !== "archived" && (
                       <button
                         className="cms-btn cms-btn-xs"
                         disabled={notifyingProductSlug === group.productSlug}
                         onClick={() => setNotifyProductConfirm(group)}
-                        title="Отправить уведомление всем ожидающим по этому товару"
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                       >
-                        Уведомить о поступлении ({pendingCount})
+                        <i className="fi fi-rr-bell" style={{ fontSize: 13 }} />
+                        Уведомить о поступлении
                       </button>
                     )}
                   </div>
                 </div>
 
-                <div className="cms-table-wrap">
+                <DataList>
                   <table className="cms-table">
                     <thead>
                       <tr>
-                        <th style={{ width: 36 }} />
-                        <th>Тег</th>
+                        <th className="cms-col-check" />
                         <th>Имя</th>
                         <th>Email</th>
                         <th>Цвет</th>
-                        <th>Согласие</th>
                         <th>Статус</th>
                         <th>Дата</th>
-                        <th style={{ width: 170 }}>Действия</th>
+                        <th style={{ width: 48 }} />
                       </tr>
                     </thead>
                     <tbody>
                       {group.requests.map((item) => (
-                        <tr key={item.id} className={checkedIds.has(item.id) ? "cms-row-selected" : ""} style={item.selectedColor === "под заказ" ? { background: 'rgba(232,114,42,0.13)', borderLeft: '3px solid #E8722A' } : {}}>
-                          <td><input type="checkbox" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} /></td>
-                          <td style={{ fontFamily: "monospace", fontSize: "12px" }}>{item.requestTag || `WaitlistRequest_${item.productSlug}`}</td>
-                          <td className="cms-td-bold">{item.name}</td>
-                          <td><a href={`mailto:${item.email}`} style={{ color: "var(--cms-accent)" }}>{item.email}</a></td>
+                        <tr key={item.id} className={checkedIds.has(item.id) ? "cms-row-selected" : ""} style={item.selectedColor === "под заказ" ? { background: 'rgba(245,139,220,0.13)', borderLeft: '3px solid #f58bdc' } : {}}>
+                          <td className="cms-col-check"><input type="checkbox" checked={checkedIds.has(item.id)} onChange={() => toggleCheck(item.id)} /></td>
+                          <td>
+                            <div className="cms-list-client">
+                              <span className="cms-list-client-actions">
+                                <IconButton icon="mail" label={item.email} shape="square" size="sm" onClick={() => contactSheet.open({ type: "email", value: item.email })} />
+                              </span>
+                              <span className="cms-list-client-name">{item.name}</span>
+                            </div>
+                          </td>
+                          <td className="cms-list-clamp-24">{item.email}</td>
                           <td>{item.selectedColor || "—"}</td>
-                          <td>{item.consentPersonalData ? "Да" : "Нет"}</td>
-                          <td><span className={`cms-badge ${STATUS_MAP[item.status]?.cls || "cms-badge"}`}>{STATUS_MAP[item.status]?.label || item.status}</span></td>
+                          <td className="cms-col-status"><span className={`cms-badge ${STATUS_MAP[item.status]?.cls || "cms-badge"}`}>{STATUS_MAP[item.status]?.label || item.status}</span></td>
                           <td>{new Date(item.createdAt).toLocaleDateString("ru-RU")}</td>
-                          <td style={{ display: "flex", gap: "8px" }}>
-                            <button
-                              className="cms-btn cms-btn-xs cms-btn-ghost"
-                              onClick={() => setDeleteConfirm([item.id])}
-                              style={{ color: "var(--cms-danger)" }}
-                            >
-                              {item.status === "archived" ? "Удалить навсегда" : "В архив"}
-                            </button>
+                          <td className="cms-col-actions">
+                            <div className="cms-row-actions">
+                              <IconButton icon="archive" label={item.status === "archived" ? "Удалить" : "В архив"} shape="square" tone="danger" onClick={() => setDeleteConfirm([item.id])} />
+                            </div>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </DataList>
               </div>
             );
           })}
@@ -284,8 +315,7 @@ export default function AdminWaitlistPage() {
               Записей не найдено
             </div>
           )}
-        </div>
-      </main>
+          </ScrollArea>
 
       {notifyProductConfirm && (
         <div className="cms-modal-overlay" onClick={() => setNotifyProductConfirm(null)}>
@@ -341,7 +371,8 @@ export default function AdminWaitlistPage() {
         </div>
       )}
 
-      {notification && <div className="cms-toast">{notification}</div>}
-    </div>
+      {notification && <div className={adminToastClass(notification)}>{notification}</div>}
+      {contactSheet.node}
+    </AdminPage>
   );
 }

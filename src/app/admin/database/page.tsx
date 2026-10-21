@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AdminSidebar } from "../AdminSidebar";
+import { AdminPage } from "../AdminPage";
+import { PageLoading } from "@/components/admin";
+import { adminToastClass } from "@/lib/admin-client";
 
 interface TableStats {
   products: number;
@@ -112,22 +114,25 @@ export default function AdminDatabasePage() {
     delivered: "Доставлен", cancelled: "Отменён",
   };
 
-  if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
+  if (loading) {
+    return (
+      <AdminPage title="База данных">
+        <PageLoading />
+      </AdminPage>
+    );
+  }
 
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
-        <div className="cms-header">
-          <h1 className="cms-header-title">База данных</h1>
-          <div className="cms-header-actions">
-            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchData(); }} title="Обновить">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-            </button>
-          </div>
+    <AdminPage
+      title="База данных"
+      actions={
+        <div className="cms-header-actions">
+          <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchData(); }} title="Обновить">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+          </button>
         </div>
-
-        <div className="cms-content">
+      }
+    >
           {/* Stats Grid */}
           {stats && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: "12px", marginBottom: "24px" }}>
@@ -266,9 +271,7 @@ export default function AdminDatabasePage() {
               </table>
             </div>
           )}
-        </div>
-      </main>
-      {notification && <div className="cms-toast">{notification}</div>}
-    </div>
+      {notification && <div className={adminToastClass(notification)}>{notification}</div>}
+    </AdminPage>
   );
 }

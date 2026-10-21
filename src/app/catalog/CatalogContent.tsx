@@ -163,8 +163,16 @@ export function CatalogContent() {
         </div>
 
         {loading ? (
-          <div className="catalog-loading">
-            <div className="spinner" />
+          <div className="catalog-grid" aria-busy="true" aria-label={lang === 'ru' ? 'Загрузка каталога' : 'Loading catalog'}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="catalog-card catalog-skeleton-card">
+                <div className="catalog-card-image aspect-4-3 catalog-skeleton-media" />
+                <div className="catalog-card-info">
+                  <div className="catalog-skeleton-line catalog-skeleton-line-lg" />
+                  <div className="catalog-skeleton-line catalog-skeleton-line-sm" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : sortedProducts.length === 0 ? (
           <div className="catalog-empty">
@@ -177,6 +185,7 @@ export function CatalogContent() {
               const heroImg = product.image || imgs[0] || '';
               const displayName = lang === 'ru' && product.nameRu ? product.nameRu : product.name;
               const price = product.price;
+              const soldOut = product.isSoldOut || product.stock <= 0 || !product.inStock;
               return (
                 <Link 
                   href={`/${product.slug}`} 
@@ -194,7 +203,7 @@ export function CatalogContent() {
                         quality={85}
                       />
                     )}
-                    {product.isSoldOut && (
+                    {soldOut && (
                       <span className="catalog-sold-out-badge">Sold Out</span>
                     )}
                     <div className="catalog-card-badges">

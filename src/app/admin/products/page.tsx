@@ -2,8 +2,19 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { AdminSidebar } from "../AdminSidebar";
+import { AdminPage } from "../AdminPage";
+import {
+  HeaderActions,
+  IconButton,
+  SearchField,
+  Toolbar,
+  DataList,
+  Button,
+  PageLoading,
+} from "@/components/admin";
 import { DEFAULT_LIMITED_EDITION_TEXT_EN, DEFAULT_LIMITED_EDITION_TEXT_RU } from "@/lib/product-defaults";
+import { adminToastClass } from "@/lib/admin-client";
+import { isPhotoMedia } from "@/lib/media-kind";
 
 const SUPPORTED_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp"];
 const SUPPORTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
@@ -69,7 +80,7 @@ interface Product {
   sortOrder: number; characteristics: string; colors: string; customBadges?: string; createdAt: string;
 }
 
-interface MediaItem { filename: string; relativePath: string; url: string; size: number; updatedAt: string; }
+interface MediaItem { filename: string; relativePath: string; url: string; size: number; updatedAt: string; mimeType?: string; }
 type ColorEntry = { name: string; nameEn?: string; hex: string; stock?: number; photo?: string };
 type CharEntry = { key: string; keyEn?: string; value: string; valueEn?: string };
 type Lang = "ru" | "en";
@@ -229,7 +240,7 @@ function PhotoGallery({
 
 // ─── CharacteristicsEditor ────────────────────────────────────────────────────
 
-function CharacteristicsEditor({ value, onChange, lang }: { value: string; onChange: (v: string) => void; lang: Lang }) {
+function CharacteristicsEditor({ value, onChange }: { value: string; onChange: (v: string) => void; lang?: Lang }) {
   let chars: CharEntry[] = [];
   try { chars = JSON.parse(value || "[]"); } catch { chars = []; }
   const update = (next: CharEntry[]) => onChange(toJson(next));
@@ -237,21 +248,20 @@ function CharacteristicsEditor({ value, onChange, lang }: { value: string; onCha
   return (
     <div>
       {chars.map((c, i) => (
-        <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 28px", gap: "6px", marginBottom: "6px", alignItems: "center" }}>
-          <input className="cms-input" placeholder={lang === "ru" ? "Название (RU)" : "Name (EN)"}
-            value={lang === "ru" ? c.key : (c.keyEn || "")}
-            onChange={(e) => update(chars.map((x, j) => j === i ? (lang === "ru" ? { ...x, key: e.target.value } : { ...x, keyEn: e.target.value }) : x))} />
-          <input className="cms-input" placeholder={lang === "ru" ? "Значение (RU)" : "Value (EN)"}
-            value={lang === "ru" ? c.value : (c.valueEn || "")}
-            onChange={(e) => update(chars.map((x, j) => j === i ? (lang === "ru" ? { ...x, value: e.target.value } : { ...x, valueEn: e.target.value }) : x))} />
+        <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 28px", gap: "6px", marginBottom: "6px", alignItems: "center" }}>
+          <input className="cms-input" placeholder="Ключ RU" value={c.key}
+            onChange={(e) => update(chars.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} />
+          <input className="cms-input" placeholder="Значение RU" value={c.value}
+            onChange={(e) => update(chars.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} />
+          <input className="cms-input" placeholder="Key EN" value={c.keyEn || ""}
+            onChange={(e) => update(chars.map((x, j) => j === i ? { ...x, keyEn: e.target.value } : x))} />
+          <input className="cms-input" placeholder="Value EN" value={c.valueEn || ""}
+            onChange={(e) => update(chars.map((x, j) => j === i ? { ...x, valueEn: e.target.value } : x))} />
           <button type="button" onClick={() => update(chars.filter((_, j) => j !== i))}
             style={{ background: "none", border: "none", color: "#666", cursor: "pointer", fontSize: "16px", lineHeight: 1, padding: 0 }}>×</button>
         </div>
       ))}
-      <button type="button" className="cms-btn cms-btn-xs"
-        onClick={() => update([...chars, { key: "", keyEn: "", value: "", valueEn: "" }])}>
-        + Добавить
-      </button>
+      <IconButton icon="add" label="Добавить" shape="square" onClick={() => update([...chars, { key: "", keyEn: "", value: "", valueEn: "" }])} />
     </div>
   );
 }
@@ -260,10 +270,10 @@ function CharacteristicsEditor({ value, onChange, lang }: { value: string; onCha
 
 const COLOR_PALETTE = [
   '#ffffff','#000000','#1e293b','#374151','#6b7280','#9ca3af','#d1d5db','#f1f5f9',
-  '#ef4444','#f97316','#f59e0b','#eab308','#84cc16','#22c55e','#10b981','#14b8a6',
+  '#ef4444','#f58bdc','#fbbf24','#eab308','#84cc16','#22c55e','#10b981','#14b8a6',
   '#06b6d4','#3b82f6','#6366f1','#8b5cf6','#a855f7','#d946ef','#ec4899','#f43f5e',
   '#fca5a5','#fdba74','#fcd34d','#86efac','#6ee7b7','#93c5fd','#c4b5fd','#f0abfc',
-  '#9b87f5','#e8722a','#ff6eb4','#ffb400','#a78bfa','#2dd4bf','#fb923c','#4ade80',
+  '#9b87f5','#f58bdc','#ff6eb4','#ffb400','#a78bfa','#2dd4bf','#f58bdc','#4ade80',
   '#1d4ed8','#7c3aed','#be185d','#0369a1','#065f46','#7c2d12','#581c87','#1e3a8a',
 ];
 
@@ -385,11 +395,11 @@ function CustomBadgesEditor({ value, onChange, lang }: { value: string; onChange
           {BADGE_ICONS_LIST.map(k => <option key={k} value={k}>{k}</option>)}
         </select>
         <ColorPickerField value={color} onChange={setColor} />
-        <button type="button" className="cms-btn cms-btn-sm" onClick={() => {
+        <IconButton icon="add" label="Добавить" shape="square" onClick={() => {
           if (!textRu.trim()) return;
           update([...badges, { text: textRu.trim(), textEn: textEn.trim() || undefined, icon, color }]);
           setTextRu(''); setTextEn('');
-        }}>+ Добавить</button>
+        }} />
       </div>
     </div>
   );
@@ -414,7 +424,9 @@ function ColorsEditor({ value, onChange, lang, galleryPhotos }: { value: string;
           {colors.map((c, i) => (
             <div key={i} style={{ position: "relative", display: "grid", gridTemplateColumns: "auto auto 1fr auto auto", gap: "8px", alignItems: "center", padding: "7px 10px", borderBottom: i < colors.length - 1 ? "1px solid var(--cms-border)" : "none" }}>
               <span style={{ width: 16, height: 16, borderRadius: "50%", background: c.hex, border: "1px solid rgba(255,255,255,0.2)", display: "block", flexShrink: 0 }} />
-              <span style={{ fontSize: "12px", color: "#ddd", minWidth: 60 }}>{lang === "ru" ? c.name : (c.nameEn || c.name)}</span>
+              <span style={{ fontSize: "12px", color: "#ddd", minWidth: 90 }}>
+                {c.name}{c.nameEn ? ` / ${c.nameEn}` : ""}
+              </span>
               {/* Photo from gallery */}
               <div style={{ display: "flex", alignItems: "center", gap: "6px", position: "relative" }}>
                 {c.photo ? (
@@ -465,11 +477,11 @@ function ColorsEditor({ value, onChange, lang, galleryPhotos }: { value: string;
         <ColorPickerField value={hex} onChange={setHex} />
         <input type="number" min="0" className="cms-input" placeholder="Остаток" value={stock}
           onChange={e => setStock(e.target.value === "" ? "" : Number(e.target.value))} style={{ fontSize: "12px" }} />
-        <button type="button" className="cms-btn cms-btn-sm" onClick={() => {
+        <IconButton icon="add" label="Добавить" shape="square" onClick={() => {
           if (!nameRu.trim()) return;
           update([...colors, { name: nameRu.trim(), nameEn: nameEn.trim() || undefined, hex, stock: stock === "" ? undefined : Number(stock) }]);
           setNameRu(""); setNameEn(""); setStock("");
-        }}>+</button>
+        }} />
       </div>
     </div>
   );
@@ -510,6 +522,7 @@ export default function AdminProductsPage() {
   const [bulkApplying, setBulkApplying] = useState(false);
   const [archiveView, setArchiveView] = useState<"active" | "archived" | "all">("active");
   const [showFilters, setShowFilters] = useState(false);
+  const [showSort, setShowSort] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [mediaPickerOpen, setMediaPickerOpen] = useState(false);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
@@ -554,7 +567,15 @@ export default function AdminProductsPage() {
       const d = r.data as { success?: boolean; items?: unknown[] };
       if (r.ok && d?.success && Array.isArray(d.items)) {
         setMediaItems(d.items.filter((x): x is Record<string, unknown> => typeof x === "object" && x !== null)
-          .map(x => ({ filename: String(x.filename||""), relativePath: String(x.relativePath||""), url: String(x.url||""), size: Number(x.size||0), updatedAt: String(x.updatedAt||"") })));
+          .map(x => ({
+            filename: String(x.filename||""),
+            relativePath: String(x.relativePath||""),
+            url: String(x.url||""),
+            size: Number(x.size||0),
+            updatedAt: String(x.updatedAt||""),
+            mimeType: String(x.mimeType||""),
+          }))
+          .filter((item) => isPhotoMedia(item)));
       }
     } finally { setMediaLoading(false); }
   }, [getToken, req]);
@@ -675,6 +696,8 @@ export default function AdminProductsPage() {
     setSaving(false);
   };
 
+  const archiveProduct = (p: Product) => setDeleteConfirm([p.id]);
+
   const handleDelete = async (ids: string[]) => {
     const token = getToken(); const hard = archiveView === "archived";
     let failed = 0;
@@ -717,7 +740,6 @@ export default function AdminProductsPage() {
     if (p.discount > 0) b.push({ label: `-${p.discount}%`, cls: "cms-badge-green" });
     if (p.isAuthor) b.push({ label: "Signature", cls: "cms-badge-blue" });
     if (p.isLimited) b.push({ label: "Limited", cls: "cms-badge-yellow" });
-    if (p.freeDelivery) b.push({ label: "Доставка 0 ₽", cls: "cms-badge-green" });
     if (p.inStock && p.stock <= LOW_STOCK_THRESHOLD && !p.isSaleDisabled && !p.isSoldOut) b.push({ label: `Мало: ${p.stock}`, cls: "cms-badge-red" });
     if (b.length === 0 && p.inStock) b.push({ label: "В продаже", cls: "cms-badge-green" });
     return b;
@@ -764,91 +786,91 @@ export default function AdminProductsPage() {
   const adminToken = typeof window !== "undefined" ? (getToken() || "") : "";
   const filteredMedia = mediaItems.filter(m => !mediaSearch || m.filename.toLowerCase().includes(mediaSearch.toLowerCase()));
 
-  if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
+  if (loading) return <PageLoading />;
 
-  const hasFilters = filterStock !== "all" || filterType !== "all" || filterStatus !== "all" || search;
+  const hasFilters = filterStock !== "all" || filterType !== "all" || filterStatus !== "all" || Boolean(search);
 
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
-
-        {/* ── Header ── */}
-        <div className="cms-header">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h1 className="cms-header-title">Товары</h1>
-            <span style={{ fontSize: 12, color: "var(--cms-text-muted)", background: "var(--cms-surface)", border: "1px solid var(--cms-border)", borderRadius: 12, padding: "1px 8px" }}>{products.length}</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={openNew} title="Добавить товар">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </button>
-            <div style={{ position: "relative" }}>
-              <button className="cms-btn cms-btn-sm" onClick={() => setShowExport(v => !v)} title="Импорт / Экспорт">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M16 3h3a2 2 0 012 2v3"/><path d="M8 21H5a2 2 0 01-2-2v-3"/><path d="M16 21h3a2 2 0 002-2v-3"/></svg>
-              </button>
-              {showExport && (
-                <div onClick={() => setShowExport(false)} style={{ position: "fixed", inset: 0, zIndex: 999 }} />
-              )}
-              {showExport && (
-                <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "var(--cms-surface)", border: "1px solid var(--cms-border)", borderRadius: 8, minWidth: 150, zIndex: 1000, overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                  <a href="/api/admin/export?type=products&format=xls" download className="cms-btn" style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 0, border: "none", borderBottom: "1px solid var(--cms-border)", padding: "9px 14px", fontSize: 13, width: "100%" }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Экспорт XLS
-                  </a>
-                  <button className="cms-btn" style={{ display: "flex", alignItems: "center", gap: 8, borderRadius: 0, border: "none", padding: "9px 14px", fontSize: 13, width: "100%", opacity: 0.5, cursor: "not-allowed" }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    Импорт
-                  </button>
+    <AdminPage
+      title="Товары"
+      count={products.length}
+      fill
+      titleExtra={
+        <div className="cms-popover-anchor cms-title-filter">
+          <IconButton
+            icon="filter"
+            label="Фильтр"
+            shape="square"
+            active={showFilters || filterStock !== "all" || filterType !== "all" || filterStatus !== "all"}
+            onClick={() => { setShowFilters((v) => !v); setShowSort(false); }}
+          />
+          {showFilters && (
+            <div className="cms-dropdown-panel cms-popover-start" style={{ minWidth: 260, padding: 12 }}>
+              <div className="cms-menu-title">Наличие</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {([
+                  ["all", "Все"], ["inStock", "В наличии"], ["outOfStock", "Нет в наличии"],
+                  ["preorder", "Предзаказ"], ["lowStock", `Мало (≤${LOW_STOCK_THRESHOLD})`],
+                ] as [StockFilter, string][]).map(([v, label]) => (
+                  <button key={v} type="button" className={`cms-btn cms-btn-xs${filterStock === v ? " cms-btn-primary" : ""}`} onClick={() => setFilterStock(v)}>{label}</button>
+                ))}
+              </div>
+              <div className="cms-menu-title">Тип</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {([["all", "Все"], ["author", "Авторские"], ["limited", "Лимитированные"]] as [TypeFilter, string][]).map(([v, label]) => (
+                  <button key={v} type="button" className={`cms-btn cms-btn-xs${filterType === v ? " cms-btn-primary" : ""}`} onClick={() => setFilterType(v)}>{label}</button>
+                ))}
+              </div>
+              <div className="cms-menu-title">Статус</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {([["all", "Все"], ["onSale", "В продаже"], ["soon", "Скоро"], ["soldOut", "Sold Out"]] as [StatusFilter, string][]).map(([v, label]) => (
+                  <button key={v} type="button" className={`cms-btn cms-btn-xs${filterStatus === v ? " cms-btn-primary" : ""}`} onClick={() => setFilterStatus(v)}>{label}</button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      }
+      actions={
+        <HeaderActions>
+          <IconButton icon="add" label="Добавить" shape="plain" onClick={openNew} />
+          <IconButton icon="export" label="Экспорт" shape="plain" onClick={() => { window.location.href = "/api/admin/export?type=products&format=xls"; }} />
+          <IconButton icon="refresh" label="Обновить" shape="plain" onClick={() => { setLoading(true); fetchProducts(); }} />
+          <IconButton icon="archive" label="Архив" shape="plain" active={archiveView === "archived"} onClick={() => setArchiveView(v => v === "archived" ? "active" : "archived")} />
+        </HeaderActions>
+      }
+    >
+          <Toolbar>
+            <SearchField value={searchInput} onChange={(v) => { setSearchInput(v); setSearch(v); }} style={{ width: 260 }} />
+            <div className="cms-popover-anchor">
+              <IconButton
+                icon="sort"
+                label="Сортировка"
+                shape="square"
+                active={showSort || sortMode !== "updatedDesc"}
+                onClick={() => { setShowSort(v => !v); setShowFilters(false); }}
+              />
+              {showSort && (
+                <div className="cms-dropdown-panel cms-popover-start cms-menu" style={{ minWidth: 180 }}>
+                  {([
+                    ["updatedDesc", "Новые"], ["nameAsc", "По имени"], ["priceAsc", "Цена ↑"],
+                    ["priceDesc", "Цена ↓"], ["stockAsc", "Остаток ↑"], ["stockDesc", "Остаток ↓"],
+                  ] as [SortMode, string][]).map(([v, label]) => (
+                    <button key={v} type="button" className={`cms-menu-item${sortMode === v ? " active" : ""}`} onClick={() => { setSortMode(v); setShowSort(false); }}>
+                      <span className="cms-menu-label">{label}</span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
-            <button className="cms-btn cms-btn-sm" onClick={() => { setLoading(true); fetchProducts(); }} title="Обновить">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-            </button>
-          </div>
-        </div>
-
-        <div className="cms-content">
-          {/* ── Toolbar ── */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-            {/* Все tab */}
-            <button
-              className={`cms-btn cms-btn-sm${archiveView === "active" && !hasFilters ? " cms-btn-primary" : ""}`}
-              onClick={() => { setArchiveView("active"); setFilterStock("all"); setFilterType("all"); setFilterStatus("all"); setSearchInput(""); setSearch(""); }}
-              style={{ display: "flex", alignItems: "center", gap: 5 }}
-            >
-              Все
-              <span style={{ background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "0 5px", fontSize: 11, fontWeight: 600 }}>{stats.active}</span>
-            </button>
-
-            {/* Filter toggle */}
-            <button
-              className={`cms-btn cms-btn-sm${showFilters || hasFilters ? " cms-btn-primary" : ""}`}
-              onClick={() => setShowFilters(v => !v)} title="Фильтры"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-              {hasFilters && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#9b87f5", display: "inline-block", marginLeft: 2 }} />}
-            </button>
-
-            {/* Search */}
-            <input
-              className="cms-input"
-              placeholder="Поиск по товарам..."
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              style={{ flex: 1, minWidth: 160, maxWidth: 320, height: 32, fontSize: 13 }}
-            />
-
-            {/* Archive toggle */}
-            <button
-              className={`cms-btn cms-btn-sm${archiveView === "archived" ? " cms-btn-primary" : ""}`}
-              onClick={() => setArchiveView(v => v === "archived" ? "active" : "archived")} title="Архив"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-              {archiveView === "archived" && <span style={{ marginLeft: 4, fontSize: 11 }}>Архив</span>}
-            </button>
-
+            {hasFilters && (
+              <IconButton
+                icon="close"
+                label="Сбросить"
+                shape="square"
+                onClick={() => { setFilterStock("all"); setFilterType("all"); setFilterStatus("all"); setSortMode("updatedDesc"); setSearchInput(""); setSearch(""); setShowFilters(false); setShowSort(false); }}
+              />
+            )}
             {checkedIds.size > 0 && (
               <>
                 <select className="cms-select" value={bulkAction} onChange={e => setBulkAction(e.target.value as BulkAction)} disabled={bulkApplying} style={{ height: 32, fontSize: 12 }}>
@@ -863,71 +885,31 @@ export default function AdminProductsPage() {
                   <option value="unmarkSoldOut">← Снять Sold Out</option>
                   <option value="archive">{archiveView === "archived" ? "Удалить" : "В архив"}</option>
                 </select>
-                <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={applyBulk} disabled={bulkApplying}>
+                <Button variant="primary" onClick={applyBulk} disabled={bulkApplying}>
                   {bulkApplying ? "..." : `Применить (${checkedIds.size})`}
-                </button>
+                </Button>
               </>
             )}
-          </div>
-
-          {/* Filter panel */}
-          {showFilters && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10, padding: "10px 12px", background: "var(--cms-surface)", border: "1px solid var(--cms-border)", borderRadius: 8 }}>
-              <select className="cms-select" value={filterStock} onChange={e => setFilterStock(e.target.value as StockFilter)} style={{ fontSize: 12, height: 30 }}>
-                <option value="all">Наличие: все</option>
-                <option value="inStock">В наличии</option>
-                <option value="outOfStock">Нет в наличии</option>
-                <option value="preorder">Предзаказ</option>
-                <option value="lowStock">Мало (≤{LOW_STOCK_THRESHOLD})</option>
-              </select>
-              <select className="cms-select" value={filterType} onChange={e => setFilterType(e.target.value as TypeFilter)} style={{ fontSize: 12, height: 30 }}>
-                <option value="all">Тип: все</option>
-                <option value="author">Авторские</option>
-                <option value="limited">Лимитированные</option>
-              </select>
-              <select className="cms-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value as StatusFilter)} style={{ fontSize: 12, height: 30 }}>
-                <option value="all">Статус: все</option>
-                <option value="onSale">В продаже</option>
-                <option value="soon">Скоро</option>
-                <option value="soldOut">Sold Out</option>
-              </select>
-              <select className="cms-select" value={sortMode} onChange={e => setSortMode(e.target.value as SortMode)} style={{ fontSize: 12, height: 30 }}>
-                <option value="updatedDesc">Новые</option>
-                <option value="nameAsc">По имени</option>
-                <option value="priceAsc">Цена ↑</option>
-                <option value="priceDesc">Цена ↓</option>
-                <option value="stockAsc">Остаток ↑</option>
-                <option value="stockDesc">Остаток ↓</option>
-              </select>
-              {hasFilters && (
-                <button className="cms-btn cms-btn-sm" onClick={() => { setFilterStock("all"); setFilterType("all"); setFilterStatus("all"); setSortMode("updatedDesc"); setSearchInput(""); setSearch(""); }}>
-                  Сбросить
-                </button>
-              )}
-              <span style={{ fontSize: 12, color: "var(--cms-text-muted)", alignSelf: "center", marginLeft: "auto" }}>
-                {filtered.length} из {products.length}
-              </span>
-            </div>
-          )}
+          </Toolbar>
 
           {/* ── Desktop Table ── */}
-          <div className="cms-table-wrap cms-products-desktop-table">
+          <DataList className="cms-products-desktop-table">
             <table className="cms-table">
               <thead>
                 <tr>
-                  <th style={{ width: 32 }}><input type="checkbox" checked={checkedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>
-                  <th style={{ width: 52 }}>Фото</th>
-                  <th>Товар</th>
-                  <th>Статусы</th>
-                  <th>Цена</th>
-                  <th>Остаток</th>
-                  <th style={{ width: 120 }}></th>
+                  <th className="cms-col-check"><input type="checkbox" checked={checkedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>
+                  <th style={{ width: "8%" }}>Фото</th>
+                  <th style={{ width: "28%" }}>Товар</th>
+                  <th style={{ width: "20%" }}>Статусы</th>
+                  <th className="cms-col-sum">Цена</th>
+                  <th style={{ width: "10%" }}>Остаток</th>
+                  <th className="cms-col-actions" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(p => (
                   <tr key={p.id} className={checkedIds.has(p.id) ? "cms-row-selected" : ""}>
-                    <td><input type="checkbox" checked={checkedIds.has(p.id)} onChange={() => toggleCheck(p.id)} /></td>
+                    <td className="cms-col-check"><input type="checkbox" checked={checkedIds.has(p.id)} onChange={() => toggleCheck(p.id)} /></td>
                     <td>
                       {p.image ? (
                         <img src={p.image} alt="" className="cms-products-thumb" onClick={() => openProduct(p)}
@@ -938,39 +920,24 @@ export default function AdminProductsPage() {
                       )}
                     </td>
                     <td>
-                      <div className="cms-td-bold" style={{ cursor: "pointer" }} onClick={() => openProduct(p)}>{p.nameRu || p.name}</div>
-                      <div className="cms-td-mono" style={{ fontSize: 11, marginTop: 2 }}>{p.slug}</div>
+                      <div className="cms-list-clamp-35 cms-list-client-name" style={{ cursor: "pointer" }} onClick={() => openProduct(p)}>{p.nameRu || p.name}</div>
+                      <div className="cms-list-clamp-35" style={{ color: "var(--cms-text-muted)", marginTop: 2 }}>{p.slug}</div>
                     </td>
                     <td>
                       <div className="cms-products-badges">
                         {getStatusBadges(p).map((b, idx) => <span key={idx} className={`cms-badge ${b.cls}`}>{b.label}</span>)}
                       </div>
                     </td>
-                    <td>
+                    <td className="cms-col-sum cms-list-sum">
                       <div>{formatPrice(p.price)}</div>
-                      {p.oldPrice && p.oldPrice > p.price && <div style={{ fontSize: 11, color: "var(--cms-text-muted)", textDecoration: "line-through" }}>{formatPrice(p.oldPrice)}</div>}
+                      {p.oldPrice && p.oldPrice > p.price && <div style={{ color: "var(--cms-text-muted)", textDecoration: "line-through" }}>{formatPrice(p.oldPrice)}</div>}
                     </td>
-                    <td style={{ fontWeight: 700 }}>{p.stock}</td>
-                    <td>
-                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                        {/* Edit */}
-                        <button className="cms-btn cms-btn-xs" onClick={() => openProduct(p)} title="Изменить">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                        </button>
-                        {/* Duplicate */}
-                        <button className="cms-btn cms-btn-xs" onClick={() => duplicateProduct(p)} title="Дубль">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><rect x="2" y="2" width="13" height="13" rx="2"/></svg>
-                        </button>
-                        {/* Hide/Show */}
-                        <button className="cms-btn cms-btn-xs" onClick={async () => { const ok = await updateById(p, { isActive: !p.isActive }); if (ok) fetchProducts(); }} title={p.isActive ? "Скрыть" : "Показать"}>
-                          {p.isActive
-                            ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.94 10.94 0 0112 20C7 20 2.73 16.89 1 12c.82-2.33 2.23-4.31 4.06-5.94"/><path d="M9.9 4.24A10.95 10.95 0 0112 4c5 0 9.27 3.11 11 8a11.8 11.8 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                            : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
-                        </button>
-                        {/* Archive */}
-                        <button className="cms-btn cms-btn-xs cms-btn-danger" onClick={() => setDeleteConfirm([p.id])} title={archiveView === "archived" ? "Удалить" : "В архив"}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-                        </button>
+                    <td className="cms-list-sum">{p.stock}</td>
+                    <td className="cms-col-actions">
+                      <div className="cms-row-actions">
+                        <IconButton icon="duplicate" label="Дублировать" shape="square" onClick={() => duplicateProduct(p)} />
+                        <IconButton icon="edit" label="Изменить" shape="square" onClick={() => openProduct(p)} />
+                        <IconButton icon="archive" label="Архивировать" shape="square" onClick={() => archiveProduct(p)} />
                       </div>
                     </td>
                   </tr>
@@ -980,7 +947,7 @@ export default function AdminProductsPage() {
                 )}
               </tbody>
             </table>
-          </div>
+          </DataList>
 
           {/* ── Mobile Cards ── */}
           <div className="cms-products-mobile-list">
@@ -1023,8 +990,6 @@ export default function AdminProductsPage() {
             ))}
             {filtered.length === 0 && <div className="cms-products-mobile-empty">Товары не найдены</div>}
           </div>
-        </div>
-      </main>
 
       {/* ═══ Edit Modal ═══ */}
       {(selected || isNew) && (
@@ -1033,15 +998,6 @@ export default function AdminProductsPage() {
             <div className="cms-modal-header">
               <h3 style={{ margin: 0, fontSize: 15 }}>{isNew ? "Новый товар" : (form.nameRu || form.name || "Редактирование")}</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-                {/* Lang toggle */}
-                <div style={{ display: "flex", background: "var(--cms-bg)", border: "1px solid var(--cms-border)", borderRadius: 6, overflow: "hidden", fontSize: 12 }}>
-                  {(["ru", "en"] as Lang[]).map(l => (
-                    <button key={l} type="button" onClick={() => setLang(l)}
-                      style={{ padding: "3px 10px", border: "none", cursor: "pointer", fontWeight: lang === l ? 700 : 400, background: lang === l ? "var(--cms-accent, #9b87f5)" : "transparent", color: lang === l ? "#fff" : "var(--cms-text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      {l}
-                    </button>
-                  ))}
-                </div>
                 <button className="cms-modal-close" onClick={closeDialog}>&times;</button>
               </div>
             </div>
@@ -1058,24 +1014,39 @@ export default function AdminProductsPage() {
 
               {/* ── Название ── */}
               <Section title="Название">
-                <input className="cms-input" placeholder={lang === "ru" ? "Название на русском" : "Name in English"}
-                  value={lang === "ru" ? form.nameRu : form.name}
-                  onChange={e => {
-                    if (lang === "ru") {
-                      const nameRu = e.target.value;
-                      setForm(prev => ({ ...prev, nameRu, ...(isNew && (!prev.slug || prev.slug === slugify(prev.nameRu)) ? { slug: slugify(nameRu) } : {}) }));
-                    } else {
-                      setForm(prev => ({ ...prev, name: e.target.value }));
-                    }
-                  }} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <label className="cms-label">RU
+                    <input className="cms-input" placeholder="Название на русском"
+                      value={form.nameRu}
+                      onChange={e => {
+                        const nameRu = e.target.value;
+                        setForm(prev => ({ ...prev, nameRu, ...(isNew && (!prev.slug || prev.slug === slugify(prev.nameRu)) ? { slug: slugify(nameRu) } : {}) }));
+                      }} />
+                  </label>
+                  <label className="cms-label">EN
+                    <input className="cms-input" placeholder="Name in English"
+                      value={form.name}
+                      onChange={e => setForm(prev => ({ ...prev, name: e.target.value }))} />
+                  </label>
+                </div>
               </Section>
 
               {/* ── Описание ── */}
               <Section title="Описание">
-                <textarea className="cms-textarea" rows={3} style={{ width: "100%" }}
-                  placeholder={lang === "ru" ? "Описание на русском" : "Description in English"}
-                  value={lang === "ru" ? form.descriptionRu : form.description}
-                  onChange={e => setForm(prev => lang === "ru" ? { ...prev, descriptionRu: e.target.value } : { ...prev, description: e.target.value })} />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <label className="cms-label">RU
+                    <textarea className="cms-textarea" rows={3} style={{ width: "100%" }}
+                      placeholder="Описание на русском"
+                      value={form.descriptionRu}
+                      onChange={e => setForm(prev => ({ ...prev, descriptionRu: e.target.value }))} />
+                  </label>
+                  <label className="cms-label">EN
+                    <textarea className="cms-textarea" rows={3} style={{ width: "100%" }}
+                      placeholder="Description in English"
+                      value={form.description}
+                      onChange={e => setForm(prev => ({ ...prev, description: e.target.value }))} />
+                  </label>
+                </div>
               </Section>
 
               {/* ── Товар ── */}
@@ -1083,15 +1054,38 @@ export default function AdminProductsPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
                   <label className="cms-label">
                     Цена (₽)
-                    <input className="cms-input" type="number" min="0" value={form.price} onChange={e => setForm({ ...form, price: Number(e.target.value) })} />
+                    <input className="cms-input" type="number" min="0" value={form.price} onChange={e => {
+                      const price = Number(e.target.value);
+                      const next = { ...form, price };
+                      if (form.oldPrice && form.oldPrice > 0 && price >= 0) {
+                        next.discount = Math.max(0, Math.min(100, Math.round((1 - price / form.oldPrice) * 100)));
+                      } else if (form.discount > 0 && form.discount < 100) {
+                        next.oldPrice = Math.round(price / (1 - form.discount / 100));
+                      }
+                      setForm(next);
+                    }} />
                   </label>
                   <label className="cms-label">
                     Прежняя цена
-                    <input className="cms-input" type="number" min="0" value={form.oldPrice || ""} onChange={e => setForm({ ...form, oldPrice: e.target.value ? Number(e.target.value) : null })} placeholder="—" />
+                    <input className="cms-input" type="number" min="0" value={form.oldPrice || ""} onChange={e => {
+                      const oldPrice = e.target.value ? Number(e.target.value) : null;
+                      const next = { ...form, oldPrice };
+                      if (oldPrice && oldPrice > 0 && form.price >= 0) {
+                        next.discount = Math.max(0, Math.min(100, Math.round((1 - form.price / oldPrice) * 100)));
+                      }
+                      setForm(next);
+                    }} placeholder="—" />
                   </label>
                   <label className="cms-label">
                     Скидка %
-                    <input className="cms-input" type="number" min="0" max="100" value={form.discount} onChange={e => setForm({ ...form, discount: Number(e.target.value) })} />
+                    <input className="cms-input" type="number" min="0" max="100" value={form.discount} onChange={e => {
+                      const discount = Number(e.target.value);
+                      const next = { ...form, discount };
+                      if (discount > 0 && discount < 100 && form.price > 0) {
+                        next.oldPrice = Math.round(form.price / (1 - discount / 100));
+                      }
+                      setForm(next);
+                    }} />
                   </label>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
@@ -1103,10 +1097,6 @@ export default function AdminProductsPage() {
                     Остаток (шт.)
                     <input className="cms-input" type="number" min="0" value={form.stock} onChange={e => setForm({ ...form, stock: Number(e.target.value) })} />
                   </label>
-                  <label className="cms-label">
-                    Порядок
-                    <input className="cms-input" type="number" value={form.sortOrder} onChange={e => setForm({ ...form, sortOrder: Number(e.target.value) })} />
-                  </label>
                 </div>
                 <label style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, marginTop: 12, padding: "12px 14px", border: `1px solid ${form.freeDelivery ? "rgba(34,197,94,0.55)" : "var(--cms-border)"}`, borderRadius: 10, background: form.freeDelivery ? "rgba(34,197,94,0.1)" : "rgba(255,255,255,0.025)", cursor: "pointer" }}>
                   <input type="checkbox" checked={form.freeDelivery} onChange={e => setForm(prev => ({ ...prev, freeDelivery: e.target.checked }))} />
@@ -1114,41 +1104,40 @@ export default function AdminProductsPage() {
                     <strong style={{ display: "block", color: form.freeDelivery ? "#4ade80" : "var(--cms-text-heading)", fontSize: 13 }}>Бесплатная доставка</strong>
                     <span style={{ display: "block", marginTop: 3, color: "var(--cms-text-muted)", fontSize: 11 }}>Если включено, доставка для заказа будет 0 ₽.</span>
                   </span>
-                  <code style={{ marginLeft: "auto", color: form.freeDelivery ? "#4ade80" : "var(--cms-text-muted)", fontSize: 11 }}>freeDelivery = {String(form.freeDelivery)}</code>
                 </label>
               </Section>
 
               {/* ── Статус / Плашки ── */}
-              <Section title="Статус и плашки">
+              <Section title="Статусы">
                 {(() => {
-                  const tog = (active: boolean, on: () => void, label: string, colorOn = "var(--cms-accent, #9b87f5)", bgOn = "rgba(155,135,245,0.15)") => (
+                  const tog = (active: boolean, on: () => void, label: string) => (
                     <button type="button" onClick={on} style={{
-                      padding: "5px 14px", borderRadius: 20, fontSize: 12, border: "1px solid",
-                      borderColor: active ? colorOn : "var(--cms-border)",
-                      background: active ? bgOn : "transparent",
-                      color: active ? colorOn : "var(--cms-text-muted)",
-                      cursor: "pointer", fontWeight: active ? 600 : 400, transition: "all 0.15s",
+                      padding: "5px 14px", borderRadius: 999, fontSize: 12, border: "1px solid",
+                      borderColor: active ? "#9ca3af" : "var(--cms-border)",
+                      background: active ? "rgba(156,163,175,0.22)" : "rgba(255,255,255,0.03)",
+                      color: active ? "#e5e7eb" : "#9ca3af",
+                      cursor: "pointer", fontWeight: active ? 650 : 400, transition: "all 0.15s",
                     }}>{label}</button>
                   );
                   return (
                     <>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
                         {tog(form.isActive, () => setForm(p => ({ ...p, isActive: !p.isActive })), "Активен")}
-                        {tog(form.isAvailable, () => setForm(p => ({ ...p, isAvailable: !p.isAvailable })), "Доступен", "#16a34a", "rgba(22,163,74,0.12)")}
-                        {tog(form.isPreorder, () => setForm(p => ({ ...p, isPreorder: !p.isPreorder, inStock: !p.isPreorder ? true : p.inStock })), "Предзаказ", "#f59e0b", "rgba(245,158,11,0.12)")}
+                        {tog(form.isAvailable, () => setForm(p => ({ ...p, isAvailable: !p.isAvailable })), "Доступен")}
+                        {tog(form.isPreorder, () => setForm(p => ({ ...p, isPreorder: !p.isPreorder, inStock: !p.isPreorder ? true : p.inStock })), "Предзаказ")}
                         {tog(form.isLimited, () => setForm(p => ({
                           ...p,
                           isLimited: !p.isLimited,
                           limitedEditionText: p.limitedEditionText || DEFAULT_LIMITED_EDITION_TEXT_RU,
                           limitedEditionTextEn: p.limitedEditionTextEn || DEFAULT_LIMITED_EDITION_TEXT_EN,
-                        })), "Лимитированный", "#8b5cf6", "rgba(139,92,246,0.12)")}
-                        {tog(form.isAuthor, () => setForm(p => ({ ...p, isAuthor: !p.isAuthor })), "Авторская", "#0ea5e9", "rgba(14,165,233,0.12)")}
-                        {tog(form.isSoldOut, () => setForm(p => ({ ...p, isSoldOut: !p.isSoldOut })), "Sold Out", "#ef4444", "rgba(239,68,68,0.12)")}
-                        {tog(form.inStock, () => setForm(p => ({ ...p, inStock: !p.inStock })), "В наличии", "#16a34a", "rgba(22,163,74,0.12)")}
-                        {tog(form.isSaleDisabled, () => setForm(p => ({ ...p, isSaleDisabled: !p.isSaleDisabled })), "Скоро", "#f59e0b", "rgba(245,158,11,0.12)")}
+                        })), "Лимитированный")}
+                        {tog(form.isAuthor, () => setForm(p => ({ ...p, isAuthor: !p.isAuthor })), "Авторская")}
+                        {tog(form.isSoldOut, () => setForm(p => ({ ...p, isSoldOut: !p.isSoldOut })), "Sold Out")}
+                        {tog(form.inStock, () => setForm(p => ({ ...p, inStock: !p.inStock })), "В наличии")}
+                        {tog(form.isSaleDisabled, () => setForm(p => ({ ...p, isSaleDisabled: !p.isSaleDisabled })), "Скоро")}
                       </div>
                       {form.isPreorder && (
-                        <div style={{ padding: "10px 12px", background: "rgba(245,158,11,0.07)", borderRadius: 8, border: "1px solid rgba(245,158,11,0.2)", marginBottom: 8 }}>
+                        <div style={{ padding: "10px 12px", background: "rgba(251,191,36,0.07)", borderRadius: 8, border: "1px solid rgba(251,191,36,0.2)", marginBottom: 8 }}>
                           <label className="cms-label">
                             Ориентировочный срок доставки
                             <input className="cms-input" type="date" value={form.preorderAvailableDate || ""}
@@ -1161,12 +1150,21 @@ export default function AdminProductsPage() {
                         </div>
                       )}
                       {form.isLimited && (
-                        <div style={{ padding: "10px 12px", background: "rgba(139,92,246,0.07)", borderRadius: 8, border: "1px solid rgba(139,92,246,0.2)" }}>
-                          <div style={{ fontSize: 11, color: "var(--cms-text-muted)", marginBottom: 4 }}>Описание тиража ({lang.toUpperCase()})</div>
-                          <textarea className="cms-textarea" rows={3} style={{ width: "100%" }}
-                            placeholder={lang === "ru" ? "Тираж ограничен..." : "Limited edition..."}
-                            value={lang === "ru" ? form.limitedEditionText : (form.limitedEditionTextEn || "")}
-                            onChange={e => setForm(prev => lang === "ru" ? { ...prev, limitedEditionText: e.target.value } : { ...prev, limitedEditionTextEn: e.target.value })} />
+                        <div style={{ padding: "10px 12px", background: "rgba(156,163,175,0.08)", borderRadius: 10, border: "1px solid var(--cms-border)" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                            <label className="cms-label">Тираж RU
+                              <textarea className="cms-textarea" rows={3} style={{ width: "100%" }}
+                                placeholder="Тираж ограничен..."
+                                value={form.limitedEditionText}
+                                onChange={e => setForm(prev => ({ ...prev, limitedEditionText: e.target.value }))} />
+                            </label>
+                            <label className="cms-label">Тираж EN
+                              <textarea className="cms-textarea" rows={3} style={{ width: "100%" }}
+                                placeholder="Limited edition..."
+                                value={form.limitedEditionTextEn || ""}
+                                onChange={e => setForm(prev => ({ ...prev, limitedEditionTextEn: e.target.value }))} />
+                            </label>
+                          </div>
                         </div>
                       )}
                     </>
@@ -1216,14 +1214,14 @@ export default function AdminProductsPage() {
               </Section>
 
               {/* ── Характеристики ── */}
-              <Section title={`Характеристики (${lang.toUpperCase()})`}>
-                <CharacteristicsEditor value={form.characteristics} onChange={val => setForm(prev => ({ ...prev, characteristics: val }))} lang={lang} />
+              <Section title="Характеристики">
+                <CharacteristicsEditor value={form.characteristics} onChange={val => setForm(prev => ({ ...prev, characteristics: val }))} />
               </Section>
 
             </div>
 
             <div className="cms-modal-actions">
-              <button className="cms-btn cms-btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Сохранение..." : "Сохранить"}</button>
+              <Button variant="primary" icon="save" onClick={handleSave} disabled={saving}>{saving ? "Сохранение..." : "Сохранить"}</Button>
               <button className="cms-btn" onClick={closeDialog}>Отмена</button>
             </div>
           </div>
@@ -1293,7 +1291,7 @@ export default function AdminProductsPage() {
         </div>
       )}
 
-      {notification && <div className="cms-toast">{notification}</div>}
-    </div>
+      {notification && <div className={adminToastClass(notification)}>{notification}</div>}
+    </AdminPage>
   );
 }

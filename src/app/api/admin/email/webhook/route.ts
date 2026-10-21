@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { Resend } from 'resend';
 import { withPrismaRetry } from '@/lib/prisma-retry';
+import { inboundThreadFields, readInReplyToHeader } from '@/lib/mail-thread';
+import { ensureAdminSchema } from '@/lib/ensure-schema';
 
 // Resend sends inbound emails as POST to this webhook.
 // Configure in Resend dashboard → Webhooks → Add endpoint:
@@ -32,6 +34,7 @@ export async function GET() {
 // POST: receive inbound email from Resend
 export async function POST(req: NextRequest) {
   try {
+    await ensureAdminSchema(prisma);
     const rawPayload = await req.text();
     if (rawPayload.length > 2_000_000) {
       return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
@@ -113,7 +116,7 @@ export async function POST(req: NextRequest) {
       const subject = String(emailData.subject || '(без темы)').slice(0, 500);
       const emailId = String(emailData.email_id || emailData.id || '').trim();
       const messageId = String(emailData.message_id || emailId || '').trim();
-      const inReplyTo = String(emailData.in_reply_to || emailData.reply_to || '').trim();
+      const inReplyToHeader = readInReplyToHeader(emailData);
 
       if (messageId) {
         const existing = await prisma.adminEmail.findFirst({
@@ -141,6 +144,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      const thread = await inboundThreadFields(prisma, {
+        fromAddr: fromAddr || '',
+        subject,
+        inReplyToHeader,
+        messageId: String(emailData.message_id || ''),
+      });
+
       await prisma.adminEmail.create({
         data: {
           direction: 'inbound',
@@ -152,7 +162,7 @@ export async function POST(req: NextRequest) {
           status: 'received',
           isRead: false,
           resendId: messageId,
-          inReplyTo,
+          ...thread,
         },
       });
 

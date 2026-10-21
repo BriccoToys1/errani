@@ -31,10 +31,11 @@ export async function PUT(req: NextRequest) {
     }
 
     const { email, name, currentPassword, newPassword } = await req.json();
+    // Login may be plain text (not necessarily an email address).
     const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
     const normalizedName = typeof name === 'string' ? name.trim() : '';
     if (
-      (normalizedEmail && (normalizedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)))
+      (normalizedEmail && (normalizedEmail.length < 1 || normalizedEmail.length > 254 || /\s/.test(normalizedEmail)))
       || normalizedName.length > 100
       || (typeof currentPassword === 'string' && currentPassword.length > 256)
       || (typeof newPassword === 'string' && newPassword.length > 256)
@@ -60,7 +61,7 @@ export async function PUT(req: NextRequest) {
     if (normalizedEmail && normalizedEmail !== record.email) {
       // Check uniqueness
       const exists = await prisma.admin.findUnique({ where: { email: normalizedEmail } });
-      if (exists) return NextResponse.json({ error: 'Этот email уже используется' }, { status: 400 });
+      if (exists) return NextResponse.json({ error: 'Этот логин уже используется' }, { status: 400 });
       updateData.email = normalizedEmail;
     }
 

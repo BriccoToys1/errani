@@ -5,7 +5,7 @@ export function Spinner({ className = '' }: { className?: string }) {
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
-            className="absolute w-1 h-3 bg-[#E8722A] rounded-full left-1/2 top-1/2 origin-[50%_150%]"
+            className="absolute w-1 h-3 bg-[#f58bdc] rounded-full left-1/2 top-1/2 origin-[50%_150%]"
             style={{
               transform: `rotate(${i * 36}deg) translateY(-150%)`,
               animation: `spinner-fade 1s linear infinite`,

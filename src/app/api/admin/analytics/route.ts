@@ -86,9 +86,13 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const requestedPeriod = searchParams.get('period') || '30';
+    const customFrom = searchParams.get('from');
+    const customTo = searchParams.get('to');
     const period = requestedPeriod === 'all'
       ? null
-      : Math.min(Math.max(Number.parseInt(requestedPeriod, 10) || 30, 1), 365);
+      : requestedPeriod === 'custom'
+        ? null
+        : Math.min(Math.max(Number.parseInt(requestedPeriod, 10) || 30, 1), 365);
     const now = new Date();
     const todayKey = moscowDateKey(now);
     const todayStart = moscowDayStart(todayKey);
@@ -98,14 +102,19 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'asc' },
       select: { createdAt: true },
     });
-    const start = period === null
+    let start = period === null
       ? firstView?.createdAt || todayStart
       : new Date(todayStart.getTime() - (period - 1) * 24 * 60 * 60 * 1000);
+    let end = now;
+    if (requestedPeriod === 'custom' && customFrom) {
+      start = moscowDayStart(customFrom.slice(0, 10));
+      end = customTo ? new Date(moscowDayStart(customTo.slice(0, 10)).getTime() + 24 * 60 * 60 * 1000 - 1) : now;
+    }
 
     const paidStatuses = ['paid', 'assembling', 'shipped', 'in_transit', 'delivered'];
     const [views, orders, allTimeRows, totalProducts, lastView] = await Promise.all([
       prisma.pageView.findMany({
-        where: { createdAt: { gte: start }, isBot: false },
+        where: { createdAt: { gte: start, lte: end }, isBot: false },
         orderBy: { createdAt: 'asc' },
         select: {
           sessionId: true, path: true, query: true, title: true, previousPath: true, referrer: true,
@@ -116,8 +125,8 @@ export async function GET(req: NextRequest) {
         },
       }),
       prisma.order.findMany({
-        where: { createdAt: { gte: start } },
-        select: { createdAt: true, status: true, totalAmount: true },
+        where: { createdAt: { gte: start, lte: end } },
+        select: { createdAt: true, status: true, totalAmount: true, customerEmail: true },
       }),
       prisma.$queryRaw<Array<{ views: number; sessions: number; unique_ips: number; avg_duration: number; bounces: number; pages_per_session: number }>>`
         WITH sessions AS (
@@ -276,6 +285,64 @@ export async function GET(req: NextRequest) {
     const totalPaidOrders = await prisma.order.count({ where: { status: { in: paidStatuses } } });
     const totalRevenue = await prisma.order.aggregate({ where: { status: { in: paidStatuses } }, _sum: { totalAmount: true } });
     const periodRevenue = paidOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+    const aov = paidOrders.length > 0 ? Math.round((periodRevenue / paidOrders.length) * 100) / 100 : 0;
+
+    const fromKey = moscowDateKey(start);
+    const toKey = moscowDateKey(end);
+    const expenses = await prisma.expense.findMany({
+      where: { date: { gte: fromKey, lte: toKey } },
+    });
+    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+    const marketingSpend = expenses
+      .filter((e) => /market|ads|реклам|маркетинг/i.test(e.category || '') || /market|ads|реклам|маркетинг/i.test(e.description || ''))
+      .reduce((sum, e) => sum + e.amount, 0);
+    const hasCogs = totalExpenses > 0;
+    const profit = hasCogs ? Math.round((periodRevenue - totalExpenses) * 100) / 100 : null;
+    const margin = hasCogs && periodRevenue > 0 ? Math.round(((periodRevenue - totalExpenses) / periodRevenue) * 1000) / 10 : null;
+    const uniqueCustomers = new Set(paidOrders.map((o) => o.customerEmail).filter(Boolean)).size;
+    const roas = marketingSpend > 0 ? Math.round((periodRevenue / marketingSpend) * 100) / 100 : null;
+    const cac = marketingSpend > 0 && uniqueCustomers > 0 ? Math.round((marketingSpend / uniqueCustomers) * 100) / 100 : null;
+    const ltv = uniqueCustomers > 0 ? Math.round((periodRevenue / uniqueCustomers) * 100) / 100 : null;
+
+    // SEO score from real site settings + product completeness
+    const [seoKeys, productSeoSample, robotsSetting] = await Promise.all([
+      prisma.siteSettings.findMany({ where: { key: { in: ['seo_global', 'seo_catalog', 'seo_oferta', 'seo_privacy'] } } }),
+      prisma.product.findMany({
+        where: { isActive: true },
+        select: { name: true, description: true, image: true, slug: true },
+        take: 50,
+      }),
+      prisma.siteSettings.findUnique({ where: { key: 'seo_robots' } }),
+    ]);
+    let seoPoints = 0;
+    let seoMax = 0;
+    const scoreSeoPage = (raw: string | undefined) => {
+      seoMax += 4;
+      if (!raw) return;
+      try {
+        const seo = JSON.parse(raw) as { title?: string; description?: string; ogImage?: string; keywords?: string[] };
+        if (seo.title && seo.title.length >= 10 && seo.title.length <= 70) seoPoints += 1;
+        if (seo.description && seo.description.length >= 50 && seo.description.length <= 160) seoPoints += 1;
+        if (seo.ogImage) seoPoints += 1;
+        if (Array.isArray(seo.keywords) ? seo.keywords.length > 0 : false) seoPoints += 1;
+      } catch { /* ignore */ }
+    };
+    for (const key of ['seo_global', 'seo_catalog', 'seo_oferta', 'seo_privacy']) {
+      scoreSeoPage(seoKeys.find((s) => s.key === key)?.value);
+    }
+    seoMax += 2;
+    if (robotsSetting?.value && /Sitemap:/i.test(robotsSetting.value)) seoPoints += 1;
+    if (robotsSetting?.value && /User-agent:/i.test(robotsSetting.value)) seoPoints += 1;
+    seoMax += 3;
+    if (productSeoSample.length > 0) {
+      const withDesc = productSeoSample.filter((p) => (p.description || '').length >= 40).length;
+      const withImage = productSeoSample.filter((p) => Boolean(p.image)).length;
+      const withSlug = productSeoSample.filter((p) => Boolean(p.slug)).length;
+      if (withDesc / productSeoSample.length >= 0.7) seoPoints += 1;
+      if (withImage / productSeoSample.length >= 0.9) seoPoints += 1;
+      if (withSlug / productSeoSample.length >= 0.95) seoPoints += 1;
+    }
+    const seoScore = seoMax > 0 ? Math.round((seoPoints / seoMax) * 100) : 0;
 
     const payload = {
       status: {
@@ -284,7 +351,23 @@ export async function GET(req: NextRequest) {
         lastEventAt: lastView?.createdAt?.toISOString() || null,
         hasFreshData: Boolean(lastView?.createdAt && now.getTime() - lastView.createdAt.getTime() < 24 * 60 * 60 * 1000),
       },
-      period: { value: requestedPeriod, from: start.toISOString(), to: now.toISOString() },
+      period: { value: requestedPeriod, from: start.toISOString(), to: end.toISOString() },
+      commerce: {
+        revenue: Math.round(periodRevenue * 100) / 100,
+        profit,
+        margin,
+        orders: paidOrders.length,
+        aov,
+        conversionRate: percent(paidOrders.length, sessions.size),
+        visitors: sessions.size,
+        roas,
+        cac,
+        ltv,
+        hasCogs,
+        marketingSpend: marketingSpend > 0 ? marketingSpend : null,
+        expenses: totalExpenses,
+      },
+      seo: { score: seoScore, checks: seoMax, passed: seoPoints },
       realtime: {
         onlineNow: onlineSessions.size,
         activePages: breakdown(activePageMap, onlineViews.length, 10),

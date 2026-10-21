@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { adminGuard } from '@/lib/admin-auth';
+import { flash, parseLang } from '@/lib/flash';
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -23,8 +24,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  let lang = parseLang(req.headers.get('accept-language'), 'ru');
   try {
     const body = await req.json();
+    lang = parseLang(body.language ?? body.lang, lang);
     const email = String(body.email || '').trim().toLowerCase();
     const name = String(body.name || '').trim();
     const productSlug = String(body.productSlug || '').trim();
@@ -34,18 +37,18 @@ export async function POST(req: NextRequest) {
     const requestTag = `WaitlistRequest_${productSlug}`;
 
     if (!name || !email || !productSlug || !productName) {
-      return NextResponse.json({ error: 'Name, email and product are required' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'waitlist.required') }, { status: 400 });
     }
 
     if (!consentPersonalData) {
       return NextResponse.json(
-        { error: 'Personal data consent is required' },
+        { error: flash(lang, 'waitlist.consent') },
         { status: 400 }
       );
     }
 
     if (!emailRegex.test(email)) {
-      return NextResponse.json({ error: 'Invalid email' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'waitlist.invalid_email') }, { status: 400 });
     }
 
     const existing = await prisma.waitlistRequest.findFirst({
@@ -57,7 +60,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
-      return NextResponse.json({ success: true, message: 'Already on waitlist' });
+      return NextResponse.json({ success: true, message: flash(lang, 'waitlist.already') });
     }
 
     const request = await prisma.waitlistRequest.create({
@@ -76,6 +79,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, id: request.id });
   } catch (error) {
     console.error('Error creating waitlist request:', error);
-    return NextResponse.json({ error: 'Failed to create waitlist request' }, { status: 500 });
+    return NextResponse.json({ error: flash(lang, 'waitlist.create_failed') }, { status: 500 });
   }
 }

@@ -1,9 +1,24 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import {
+  isPublicMaintenanceEnabled,
+  MAINTENANCE_MESSAGE,
+} from '@/lib/maintenance';
 
 // Public endpoint — no auth needed, used by middleware
 // Returns only site status flags, nothing sensitive
 export async function GET() {
+  if (isPublicMaintenanceEnabled()) {
+    return NextResponse.json(
+      {
+        siteDisabled: false,
+        maintenanceMode: true,
+        maintenanceMessage: MAINTENANCE_MESSAGE,
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+
   try {
     const settings = await prisma.siteSettings.findMany({
       where: { key: { in: ['general_settings'] } },
@@ -29,12 +44,17 @@ export async function GET() {
       { siteDisabled, maintenanceMode, maintenanceMessage },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+          // Must stay fresh — proxy gates the storefront on siteDisabled.
+          'Cache-Control': 'no-store',
         },
       }
     );
   } catch {
-    // DB unavailable — let site through
-    return NextResponse.json({ siteDisabled: false, maintenanceMode: false, maintenanceMessage: '' });
+    // DB unavailable — show maintenance instead of an empty broken shop
+    return NextResponse.json({
+      siteDisabled: false,
+      maintenanceMode: true,
+      maintenanceMessage: MAINTENANCE_MESSAGE,
+    });
   }
 }

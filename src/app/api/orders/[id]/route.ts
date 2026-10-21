@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { markOrderPaidAndDecrementStock } from '@/lib/stock';
 import { adminGuard } from '@/lib/admin-auth';
+import { sendOrderShippedEmail } from '@/lib/email';
+import { ensureAdminSchema } from '@/lib/ensure-schema';
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -40,6 +42,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (denied) return denied;
 
   try {
+    await ensureAdminSchema(prisma);
+  } catch (error) {
+    console.error('ensureAdminSchema failed', error);
+  }
+
+  try {
     const { id } = await params;
     const body = await req.json();
 
@@ -47,6 +55,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
       const { order } = await markOrderPaidAndDecrementStock(id);
       return NextResponse.json(order);
     }
+
+    const trackNumber = typeof body.trackNumber === 'string' ? body.trackNumber.trim() : undefined;
+    const deliveryService = typeof body.deliveryService === 'string' ? body.deliveryService.trim() : undefined;
+    const notifyShipped = Boolean(body.notifyShipped);
 
     const order = await prisma.order.update({
       where: { id },
@@ -69,8 +81,21 @@ export async function PUT(req: NextRequest, { params }: Params) {
         ...(body.shippingMethod !== undefined ? { shippingMethod: body.shippingMethod } : {}),
         ...(body.paymentMethod !== undefined ? { paymentMethod: body.paymentMethod } : {}),
         ...(body.totalAmount !== undefined ? { totalAmount: Number(body.totalAmount) } : {}),
+        ...(trackNumber !== undefined ? { trackNumber } : {}),
+        ...(deliveryService !== undefined ? { deliveryService } : {}),
+        ...(notifyShipped && body.status === 'shipped' ? { shippedNotifiedAt: new Date() } : {}),
       },
     });
+
+    if (notifyShipped && body.status === 'shipped' && order.customerEmail && (trackNumber || order.trackNumber)) {
+      await sendOrderShippedEmail({
+        recipientEmail: order.customerEmail,
+        customerName: order.customerName,
+        orderNumber: order.orderNumber,
+        deliveryService: deliveryService || order.deliveryService || '',
+        trackNumber: trackNumber || order.trackNumber || '',
+      });
+    }
 
     return NextResponse.json(order);
   } catch (error) {

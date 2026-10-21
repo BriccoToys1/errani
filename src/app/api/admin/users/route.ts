@@ -373,7 +373,11 @@ export async function GET(req: NextRequest) {
     if (freshest) {
       return NextResponse.json(freshest.payload, { headers: { 'X-Users-Cache': 'stale' } });
     }
-    return NextResponse.json({ users: [], total: 0, page: 1, pages: 1, degraded: true }, { status: 200 });
+    // Do not return empty 200 — that looks like "all users disappeared".
+    return NextResponse.json(
+      { error: 'Не удалось загрузить пользователей', degraded: true },
+      { status: 503, headers: { 'X-Users-Cache': 'unavailable' } }
+    );
   }
 }
 

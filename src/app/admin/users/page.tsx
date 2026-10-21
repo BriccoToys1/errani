@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AdminSidebar } from "../AdminSidebar";
+import { AdminPage } from "../AdminPage";
+import { HeaderActions, IconButton, SearchField, Toolbar, ScrollArea, useContactSheet, PageLoading } from "@/components/admin";
 
 interface OrderItem {
   productName: string;
@@ -77,7 +78,7 @@ function UserAvatar({ name }: { name: string }) {
       width: 44,
       height: 44,
       borderRadius: "50%",
-      background: "linear-gradient(135deg, var(--cms-accent) 0%, #2d98da 100%)",
+      background: "var(--cms-accent)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -93,6 +94,7 @@ function UserAvatar({ name }: { name: string }) {
 
 export default function AdminUsersPage() {
   const router = useRouter();
+  const contactSheet = useContactSheet();
   const [users, setUsers] = useState<CustomerProfile[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -137,8 +139,20 @@ export default function AdminUsersPage() {
       return;
     }
 
+    if (!res.ok) {
+      notify("Не удалось загрузить клиентов — показаны последние данные");
+      setLoading(false);
+      return;
+    }
+
     const data = await res.json();
-    const allUsers: CustomerProfile[] = data.users || [];
+    const allUsers: CustomerProfile[] = Array.isArray(data.users) ? data.users : [];
+    // Keep previous list if the payload is empty due to a transient failure shape.
+    if (!Array.isArray(data.users)) {
+      notify("Не удалось загрузить клиентов — показаны последние данные");
+      setLoading(false);
+      return;
+    }
     const filtered = v === "blocked" ? allUsers.filter(u => u.badges?.includes("__blocked__")) : allUsers;
     setUsers(filtered);
     setTotal(v === "blocked" ? filtered.length : (data.total || 0));
@@ -302,55 +316,35 @@ export default function AdminUsersPage() {
     .filter((profile) => selectedEmails[profile.email])
     .map((profile) => ({ email: profile.email, name: profile.name || profile.email }));
 
+  if (loading && users.length === 0) return <PageLoading />;
+
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
-        <div className="cms-header">
-          <div>
-            <h1 className="cms-header-title">Клиенты</h1>
-            <p style={{ fontSize: "13px", color: "var(--cms-text-muted)", marginTop: "2px" }}>{total} профилей</p>
-          </div>
-          <div className="cms-header-actions">
-            <button className="cms-btn cms-btn-sm cms-btn-primary" onClick={() => setShowNewClient(true)} title="Добавить клиента">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </button>
-          </div>
-        </div>
+    <AdminPage
+      title="Клиенты"
+      count={total}
+      fill
+      actions={
+        <HeaderActions>
+          <IconButton icon="add" label="Добавить" shape="plain" onClick={() => setShowNewClient(true)} />
+          <IconButton icon="export" label="Скачать" shape="plain" onClick={() => { window.location.href = "/api/admin/export?type=users&format=xls"; }} />
+          <IconButton icon="refresh" label="Обновить" shape="plain" onClick={() => window.location.reload()} />
+        </HeaderActions>
+      }
+    >
 
-        {notification && <div className="cms-notification">{notification}</div>}
-
-        <div className="cms-content">
-          <form onSubmit={onSearch} style={{ marginBottom: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <input
-              className="cms-input"
-              style={{ width: "320px" }}
-              placeholder="Поиск по имени, email, городу, бейджу..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3 }}>
-              <button className={`cms-btn cms-btn-sm${view === 'active' ? ' cms-btn-primary' : ''}`} onClick={() => setView('active')} style={{ fontSize: 12 }}>Все</button>
-              <button className={`cms-btn cms-btn-sm${view === 'blocked' ? ' cms-btn-primary' : ''}`} onClick={() => setView('blocked')} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                Заблокированные
-              </button>
-              <button className={`cms-btn cms-btn-sm${view === 'archived' ? ' cms-btn-primary' : ''}`} onClick={() => setView('archived')} style={{ fontSize: 12 }}>Архив</button>
-            </div>
-            <button type="submit" className="cms-btn cms-btn-sm cms-btn-secondary">Найти</button>
-            {search && (
+          <Toolbar>
+            <SearchField value={search} onChange={setSearch} style={{ width: 280 }} />
+            <IconButton icon="block" label="Заблокированные" shape="square" active={view === 'blocked'} onClick={() => setView(view === 'blocked' ? 'active' : 'blocked')} />
+            <IconButton icon="archive" label="Архив" shape="square" active={view === 'archived'} onClick={() => setView(view === 'archived' ? 'active' : 'archived')} />
+{search && (
               <button type="button" className="cms-btn cms-btn-sm cms-btn-ghost" onClick={() => { setSearch(""); fetchUsers("", 1, view); }}>
                 Сбросить
               </button>
             )}
-          </form>
+          </Toolbar>
 
-          {loading ? (
-            <div style={{ padding: "48px", textAlign: "center", color: "var(--cms-text-muted)" }}>
-              <div className="cms-spinner" style={{ margin: "0 auto 12px" }} />
-              Загрузка...
-            </div>
-          ) : users.length === 0 ? (
+          <ScrollArea>
+          {users.length === 0 ? (
             <div className="cms-card" style={{ padding: "44px", textAlign: "center", color: "var(--cms-text-muted)" }}>
               Профили не найдены
             </div>
@@ -361,168 +355,49 @@ export default function AdminUsersPage() {
                 const canGetRegularBadge = profile._count.orders >= 10 && !profile.badges.includes("Постоянный покупатель");
                 return (
                   <div key={profile.id} className="cms-card" style={{ border: "1px solid var(--cms-border)", padding: "14px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "10px" }}>
                       <UserAvatar name={profile.name || profile.email} />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.name || "Без имени"}</div>
-                        <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profile.email}</div>
-                      </div>
-                      {profile.archived && <span className="cms-badge">Архив</span>}
-                      {profile.badges?.includes('__blocked__') && (
-                        <span
-                          className="cms-badge cms-badge-red"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            background: 'rgba(239,68,68,0.16)',
-                            border: '1px solid rgba(239,68,68,0.45)',
-                            color: '#fda4af',
-                          }}
-                        >
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                          Заблокирован
-                        </span>
-                      )}
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "10px", fontSize: "12px" }}>
-                      <div><strong>Заказы:</strong> {profile._count.orders}</div>
-                      <div><strong>Сумма:</strong> {formatMoney(profile.totalSpent || 0, latest?.currency || "RUB")}</div>
-                      <div><strong>Телефон:</strong> {profile.phone || "—"}</div>
-                      <div><strong>Город:</strong> {profile.city || "—"}</div>
-                      <div><strong>Страна:</strong> {COUNTRY_NAMES[profile.country] || profile.country || "—"}</div>
-                      <div><strong>Последний:</strong> {latest ? formatDate(latest.createdAt) : "—"}</div>
-                    </div>
-
-                    <div style={{ fontSize: "12px", marginBottom: "10px", color: "var(--cms-text-muted)" }}>
-                      Адрес: {[profile.street, profile.house && `д. ${profile.house}`, profile.apartment && `кв. ${profile.apartment}`, profile.zipCode].filter(Boolean).join(", ") || "—"}
-                    </div>
-
-                    <div style={{ marginBottom: "10px" }}>
-                      <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Бейджи</div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
-                        {(profile.badges || []).filter(b => b !== '__blocked__').length > 0 ? profile.badges.filter(b => b !== '__blocked__').map((badge) => (
-                          <span key={badge} className="cms-badge cms-badge-blue" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                            {badge}
-                            <button onClick={() => removeBadge(profile, badge)} style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", lineHeight: 1 }}>×</button>
-                          </span>
-                        )) : <span style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>нет бейджей</span>}
-                      </div>
-
-                      <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
-                        <input
-                          className="cms-input cms-input-sm"
-                          placeholder="Новый бейдж"
-                          value={badgeInputs[profile.email] || ""}
-                          onChange={(e) => setBadgeInputs((prev) => ({ ...prev, [profile.email]: e.target.value }))}
-                        />
-                        <button
-                          className="cms-btn cms-btn-xs"
-                          disabled={pending === profile.email}
-                          onClick={() => addBadge(profile, badgeInputs[profile.email] || "")}
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                        {QUICK_BADGES.map((b) => (
-                          <button key={b} className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => addBadge(profile, b)} disabled={pending === profile.email}>
-                            {b}
-                          </button>
-                        ))}
-                        {canGetRegularBadge && (
-                          <button className="cms-btn cms-btn-xs" onClick={() => addBadge(profile, "Постоянный покупатель")} disabled={pending === profile.email}>
-                            + Постоянный покупатель (10+)
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div style={{ marginBottom: "10px" }}>
-                      <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Items on cart (последний заказ)</div>
-                      {profile.cartItems.length > 0 ? (
-                        <ul style={{ margin: 0, paddingLeft: "18px", fontSize: "12px" }}>
-                          {profile.cartItems.slice(0, 6).map((item, idx) => (
-                            <li key={`${profile.id}-${idx}`}>{item.productName} × {item.quantity}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>нет данных</div>
-                      )}
-                    </div>
-
-                    <div style={{ marginBottom: "12px" }}>
-                      <div style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--cms-text-muted)", marginBottom: "6px" }}>Заказы</div>
-                      {profile.orders.length > 0 ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "140px", overflow: "auto" }}>
-                          {profile.orders.slice(0, 4).map((order) => (
-                            <div key={order.id} style={{ border: "1px solid var(--cms-border)", borderRadius: "8px", padding: "8px" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", fontSize: "12px" }}>
-                                <strong>#{order.orderNumber}</strong>
-                                <span>{formatMoney(order.totalAmount, order.currency)}</span>
-                              </div>
-                              <div style={{ fontSize: "11px", color: "var(--cms-text-muted)", marginTop: "2px" }}>
-                                {formatDate(order.createdAt)} • {order.status}
-                              </div>
-                              <div style={{ fontSize: "11px", marginTop: "4px", color: "var(--cms-text-muted)" }}>
-                                {order.items.map((i) => `${i.productName} × ${i.quantity}`).join("; ")}
-                              </div>
-                            </div>
-                          ))}
+                        <div style={{ fontSize: "12px", color: "var(--cms-text-muted)", marginTop: 4, lineHeight: 1.4 }}>
+                          {[
+                            profile.street,
+                            profile.house && `д. ${profile.house}`,
+                            profile.apartment && `кв. ${profile.apartment}`,
+                            profile.zipCode,
+                            profile.city,
+                            COUNTRY_NAMES[profile.country] || profile.country,
+                          ].filter(Boolean).join(", ") || "Адрес не указан"}
                         </div>
-                      ) : (
-                        <div style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>заказов нет</div>
-                      )}
-                    </div>
-
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
-                      {/* Archive / Restore */}
-                      <button
-                        className="cms-btn cms-btn-xs cms-btn-ghost"
-                        onClick={() => toggleArchive(profile)}
-                        disabled={pending === profile.email}
-                        title={profile.archived ? "Восстановить из архива" : "В архив"}
-                      >
-                        {profile.archived ? (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
-                        ) : (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-                        )}
-                      </button>
-                      {/* Block / Unblock */}
-                      <button
-                        className="cms-btn cms-btn-xs cms-btn-ghost"
-                        onClick={() => {
-                          const isBlocked = profile.badges?.includes('__blocked__');
-                          if (!confirm(isBlocked ? `Подтвердите разблокировку клиента ${profile.email}` : `Подтвердите блокировку клиента ${profile.email}`)) return;
-                          setUsers(prev => prev.map(u => {
-                            if (u.email !== profile.email) return u;
-                            const badges = isBlocked
-                              ? (u.badges || []).filter(b => b !== '__blocked__')
-                              : [...(u.badges || []).filter(b => b !== '__blocked__'), '__blocked__'];
-                            return { ...u, badges };
-                          }));
-                          patchProfile(profile.email, { blocked: !isBlocked }, isBlocked ? "Клиент разблокирован" : "Клиент заблокирован");
-                        }}
-                        disabled={pending === profile.email}
-                        title={profile.badges?.includes('__blocked__') ? "Разблокировать клиента" : "Заблокировать клиента"}
-                        style={{
-                          color: profile.badges?.includes('__blocked__') ? '#f87171' : undefined,
-                          borderColor: profile.badges?.includes('__blocked__') ? 'rgba(239,68,68,0.45)' : undefined,
-                          background: profile.badges?.includes('__blocked__') ? 'rgba(239,68,68,0.12)' : undefined,
-                        }}
-                      >
-                        {profile.badges?.includes('__blocked__') ? (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                        ) : (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="11" width="18" height="11" rx="2"/>
-                            <path d="M16 11V7a4 4 0 00-8 0"/>
-                          </svg>
-                        )}
-                      </button>
+                        <div style={{ display: "flex", gap: 14, marginTop: 8, fontSize: 12 }}>
+                          <span><strong>Заказы:</strong> {profile._count.orders}</span>
+                          <span><strong>Сумма:</strong> {formatMoney(profile.totalSpent || 0, latest?.currency || "RUB")}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, flexShrink: 0 }}>
+                        <IconButton icon="archive" label={profile.archived ? "Восстановить" : "В архив"} shape="square" onClick={() => toggleArchive(profile)} disabled={pending === profile.email} />
+                        <IconButton
+                          icon="block"
+                          label={profile.badges?.includes('__blocked__') ? "Разблокировать" : "Заблокировать"}
+                          shape="square"
+                          tone={profile.badges?.includes('__blocked__') ? 'danger' : 'default'}
+                          onClick={() => {
+                            const isBlocked = profile.badges?.includes('__blocked__');
+                            if (!confirm(isBlocked ? `Подтвердите разблокировку клиента ${profile.email}` : `Подтвердите блокировку клиента ${profile.email}`)) return;
+                            setUsers(prev => prev.map(u => {
+                              if (u.email !== profile.email) return u;
+                              const badges = isBlocked
+                                ? (u.badges || []).filter(b => b !== '__blocked__')
+                                : [...(u.badges || []).filter(b => b !== '__blocked__'), '__blocked__'];
+                              return { ...u, badges };
+                            }));
+                            patchProfile(profile.email, { blocked: !isBlocked }, isBlocked ? "Клиент разблокирован" : "Клиент заблокирован");
+                          }}
+                          disabled={pending === profile.email}
+                        />
+                        <IconButton icon="phone" label={profile.phone || "Нет телефона"} shape="square" disabled={!profile.phone} onClick={() => profile.phone && navigator.clipboard.writeText(profile.phone)} />
+                        <IconButton icon="mail" label={profile.email} shape="square" onClick={() => contactSheet.open({ type: "email", value: profile.email })} />
+                      </div>
                     </div>
                   </div>
                 );
@@ -537,8 +412,7 @@ export default function AdminUsersPage() {
               <button className="cms-btn cms-btn-sm cms-btn-ghost" disabled={page >= pages} onClick={() => fetchUsers(search, page + 1, view)}>→</button>
             </div>
           )}
-        </div>
-      </main>
+          </ScrollArea>
 
       {/* New Client Modal */}
       {showNewClient && (
@@ -610,6 +484,7 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
-    </div>
+      {contactSheet.node}
+    </AdminPage>
   );
 }

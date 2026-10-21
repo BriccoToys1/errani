@@ -14,7 +14,11 @@ APP_DIR="${APP_DIR:-/var/www/errani}"
 echo "Deploy target: ${SERVER_USER}@${SERVER_HOST}:${APP_DIR}"
 
 echo "Uploading project files..."
-COPYFILE_DISABLE=1 tar \
+# Avoid macOS xattr noise on Linux extract (LIBARCHIVE.xattr.* warnings).
+export COPYFILE_DISABLE=1
+export COPY_EXTENDED_ATTRIBUTES_DISABLE=1
+tar \
+  --no-xattrs \
   --exclude='./.git' \
   --exclude='./node_modules' \
   --exclude='node_modules' \

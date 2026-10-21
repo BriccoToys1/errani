@@ -1,0 +1,55 @@
+иконки:
+
+Обновление <i class="fi fi-rr-refresh"></i> 
+Экспорт <i class="fi fi-rr-download"></i>
+Перейти <i class="fi fi-rr-site-alt"></i>
+Просмотреть <i class="fi fi-rr-eye"></i>
+Скрыть<i class="fi fi-rr-eye-crossed"></i>
+Удалить <i class="fi fi-rr-trash"></i>
+Добавить / Написать <i class="fi fi-rr-add"></i> (без надписей, только иконка)
+Рассылка <i class="fi fi-rr-envelopes"></i> (без надписей, только иконка)
+Reply / Ответить <i class="fi fi-rr-reply-all"></i>
+Forward / Переслать <i class="fi fi-rr-redo"></i>
+Скопировать <i class="fi fi-rr-copy"></i>
+Фильтр <i class="fi fi-rr-settings-sliders"></i>
+Сортировка <i class="fi fi-rr-apps-sort"></i>
+Выйти <i class="fi fi-rr-exit"></i>
+Закрыть <i class="fi fi-rr-cross"></i>
+Архив <i class="fi fi-rr-inbox-full"></i>
+Файл <i class="fi fi-rr-folder"></i>
+Пользователь <i class="fi fi-rr-user"></i>
+
+Дашборд <i class="fi fi-rr-dashboard-panel"></i>
+Почта <i class="fi fi-rr-envelope"></i>
+Заказы <i class="fi fi-rr-rectangle-list"></i>
+Товары <i class="fi fi-rr-tags"></i>
+Медиа <i class="fi fi-rr-images"></i>
+Заявки <i class="fi fi-rr-suggestion"></i>
+В ожидании <i class="fi fi-rr-duration-alt"></i>
+Клиенты <i class="fi fi-rr-users-alt"></i>
+Отзывы <i class="fi fi-rr-feedback-review"></i>
+Настройки <i class="fi fi-rr-settings"></i>
+
+Телефон <i class="fi fi-rr-phone-flip"></i>
+Править/Изменить <i class="fi fi-rr-pencil"></i>
+Чек <i class="fi fi-rr-document"></i>
+
+Стрелка вниз <i class="fi fi-rr-angle-small-down"></i>
+Стрелка вверх <i class="fi fi-rr-angle-small-up"></i>
+Звезда <i class="fi fi-rr-star"></i>
+Галочка <i class="fi fi-rr-check"></i>
+Сохранить <i class="fi fi-rr-disk"></i>
+Поиск / Лупа <i class="fi fi-rr-search"></i>
+Заменить <i class="fi fi-rr-shuffle"></i>
+Прикрепить / Скрепка <i class="fi fi-rr-paperclip-vertical"></i>
+
+
+- оплата <i class="fi fi-rr-error-receipt"></i>
+- 404 <i class="fi fi-rr-404"></i>
+- отсуствие соединения <i class="fi fi-rr-not-found"></i>
+- ошибка разработчика <i class="fi fi-rr-error-bug"></i>
+- что-либо пропущено (например не заполнено что-то) <i class="fi fi-rr-exclamation"></i>
+- что-то с документом <i class="fi fi-rr-document-circle-wrong"></i>
+
+- все успешно <i class="fi fi-rr-badge-check"></i>
+- галочка <i class="fi fi-rr-shield-trust"></i>

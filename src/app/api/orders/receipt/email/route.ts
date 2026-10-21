@@ -5,39 +5,42 @@ import { buildReceiptHtml } from '@/lib/receipt-builder';
 import { htmlToPdf } from '@/lib/pdf';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import { refreshPaidOrderStatus } from '@/lib/payment-status';
+import { flash, parseLang } from '@/lib/flash';
 
 const recentSends = new Map<string, number>();
 const RESEND_DELAY_MS = 60_000;
 
 export async function POST(req: NextRequest) {
+  let lang = parseLang(req.headers.get('accept-language'), 'ru');
   try {
     const rate = consumeRateLimit(req, { key: 'receipt-email', limit: 5, windowMs: 60 * 60_000 });
     if (!rate.allowed) {
       return NextResponse.json(
-        { error: 'Too many receipt requests' },
+        { error: flash(lang, 'receipt.rate_limit') },
         { status: 429, headers: { 'Retry-After': String(rate.retryAfter) } }
       );
     }
 
-    const body = await req.json() as { orderNumber?: string };
+    const body = await req.json() as { orderNumber?: string; language?: string; lang?: string };
+    lang = parseLang(body.language ?? body.lang, lang);
     const orderNumber = body.orderNumber?.trim();
 
     if (!orderNumber || orderNumber.length > 64 || !/^ER-[A-Z0-9-]+$/.test(orderNumber)) {
-      return NextResponse.json({ error: 'Missing order number' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'order.missing_number') }, { status: 400 });
     }
 
     const lastSentAt = recentSends.get(orderNumber) || 0;
     if (Date.now() - lastSentAt < RESEND_DELAY_MS) {
-      return NextResponse.json({ error: 'Receipt was already sent recently' }, { status: 429 });
+      return NextResponse.json({ error: flash(lang, 'receipt.already_sent') }, { status: 429 });
     }
 
     const refreshed = await refreshPaidOrderStatus(orderNumber);
     if (!refreshed) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+      return NextResponse.json({ error: flash(lang, 'order.not_found') }, { status: 404 });
     }
 
     if (refreshed.status !== 'paid') {
-      return NextResponse.json({ error: 'Receipt is available after successful payment' }, { status: 409 });
+      return NextResponse.json({ error: flash(lang, 'receipt.after_payment') }, { status: 409 });
     }
 
     const order = await prisma.order.findUnique({
@@ -46,11 +49,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (!order) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+      return NextResponse.json({ error: flash(lang, 'order.not_found') }, { status: 404 });
     }
 
     if (order.status !== 'paid') {
-      return NextResponse.json({ error: 'Receipt is available after successful payment' }, { status: 409 });
+      return NextResponse.json({ error: flash(lang, 'receipt.after_payment') }, { status: 409 });
     }
 
     const receiptHtml = buildReceiptHtml({
@@ -70,13 +73,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (!sent) {
-      return NextResponse.json({ error: 'Failed to send receipt' }, { status: 502 });
+      return NextResponse.json({ error: flash(lang, 'receipt.send_failed') }, { status: 502 });
     }
 
     recentSends.set(orderNumber, Date.now());
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, message: flash(lang, 'receipt.sent') });
   } catch (error) {
     console.error('Receipt email error:', error);
-    return NextResponse.json({ error: 'Failed to send receipt' }, { status: 500 });
+    return NextResponse.json({ error: flash(lang, 'receipt.send_failed') }, { status: 500 });
   }
 }

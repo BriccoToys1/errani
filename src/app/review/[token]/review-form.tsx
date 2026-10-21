@@ -214,7 +214,7 @@ export default function ReviewForm({ token }: { token: string }) {
       alignItems: 'center',
       justifyContent: 'flex-start',
       padding: '48px 16px 48px',
-      background: 'radial-gradient(ellipse at 50% 0%, rgba(232,114,42,0.06) 0%, var(--bg) 60%)',
+      background: 'radial-gradient(ellipse at 50% 0%, rgba(245,139,220,0.06) 0%, var(--bg) 60%)',
     }}>
       <div style={{
         width: '100%',
@@ -228,7 +228,7 @@ export default function ReviewForm({ token }: { token: string }) {
         {/* Header */}
         <div style={{ padding: '32px 32px 24px', borderBottom: '1px solid var(--border)' }}>
           <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text)' }}>
-            {T.title} <span style={{ color: '#E8722A' }}>{title}</span>
+            {T.title} <span style={{ color: '#f58bdc' }}>{title}</span>
           </h1>
           <p style={{ margin: '8px 0 0', color: 'var(--text-dim-2)', fontSize: '13px', lineHeight: 1.6 }}>
             {T.subtitle}
@@ -238,7 +238,7 @@ export default function ReviewForm({ token }: { token: string }) {
         <div style={{ padding: '28px 32px 32px' }}>
           {loading && (
             <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-dim-2)' }}>
-              <div style={{ width: 32, height: 32, border: '2px solid rgba(232,114,42,0.28)', borderTopColor: '#E8722A', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 0.8s linear infinite' }} />
+              <div style={{ width: 32, height: 32, border: '2px solid rgba(245,139,220,0.28)', borderTopColor: '#f58bdc', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 0.8s linear infinite' }} />
               {T.checking}
             </div>
           )}
@@ -294,7 +294,7 @@ export default function ReviewForm({ token }: { token: string }) {
                     fontFamily: 'inherit',
                     transition: 'border-color 0.2s',
                   }}
-                  onFocus={(e) => { e.target.style.borderColor = 'rgba(232,114,42,0.65)'; }}
+                  onFocus={(e) => { e.target.style.borderColor = 'rgba(245,139,220,0.65)'; }}
                   onBlur={(e) => { e.target.style.borderColor = 'var(--border-2)'; }}
                 />
               </div>
@@ -313,7 +313,7 @@ export default function ReviewForm({ token }: { token: string }) {
                         <div key={url} style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', aspectRatio: '1', background: 'var(--surface-3)', border: '1px solid var(--border-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
                           {isVideo ? (
                             <>
-                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#E8722A" strokeWidth="1.5"><rect x="2" y="2" width="20" height="20" rx="3"/><path d="M10 8l6 4-6 4V8z" fill="#E8722A" stroke="none"/></svg>
+                              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f58bdc" strokeWidth="1.5"><rect x="2" y="2" width="20" height="20" rx="3"/><path d="M10 8l6 4-6 4V8z" fill="#f58bdc" stroke="none"/></svg>
                               <span style={{ fontSize: 9, color: 'var(--text-dim-2)', textAlign: 'center', padding: '0 4px', lineHeight: 1.3 }}>{url.split('/').pop()?.slice(0, 16)}</span>
                             </>
                           ) : (
@@ -337,14 +337,14 @@ export default function ReviewForm({ token }: { token: string }) {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: '11px 18px', borderRadius: 12,
-                    background: 'rgba(232,114,42,0.06)',
-                    border: '1px dashed rgba(232,114,42,0.4)',
-                    color: '#E8722A', cursor: uploading ? 'wait' : 'pointer',
+                    background: 'rgba(245,139,220,0.06)',
+                    border: '1px dashed rgba(245,139,220,0.4)',
+                    color: '#f58bdc', cursor: uploading ? 'wait' : 'pointer',
                     fontSize: 14, fontFamily: 'inherit', transition: 'all 0.2s',
                     opacity: media.length >= 8 ? 0.4 : 1,
                   }}
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E8722A" strokeWidth="2">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f58bdc" strokeWidth="2">
                     <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
                   </svg>
                   {uploading ? T.uploading : T.attachFiles}
@@ -376,13 +376,13 @@ export default function ReviewForm({ token }: { token: string }) {
                   borderRadius: 14,
                   border: 'none',
                   background: canSubmit
-                    ? 'linear-gradient(135deg, #E8722A 0%, #C45A1A 100%)'
+                    ? 'linear-gradient(135deg, #f58bdc 0%, #e06cc4 100%)'
                     : 'var(--surface-2)',
                   color: canSubmit ? '#fff' : 'var(--text-dim-3)',
                   fontSize: 15, fontWeight: 700,
                   cursor: canSubmit ? 'pointer' : 'not-allowed',
                   transition: 'all 0.2s',
-                  boxShadow: canSubmit ? '0 4px 20px rgba(232,114,42,0.4)' : 'none',
+                  boxShadow: canSubmit ? '0 4px 20px rgba(245,139,220,0.4)' : 'none',
                   fontFamily: 'inherit',
                 }}
               >

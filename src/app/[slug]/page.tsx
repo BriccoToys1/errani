@@ -4,6 +4,7 @@ import { cache } from 'react';
 import prisma from '@/lib/db';
 import { withPrismaRetry } from '@/lib/prisma-retry';
 import { normalizeProductMedia } from '@/lib/product-media';
+import { normalizeStockFlags } from '@/lib/product-stock';
 import { ProductContent } from './ProductContent';
 
 export const dynamic = 'force-dynamic';
@@ -36,9 +37,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   if (!SAFE_SLUG_PATTERN.test(slug)) return { title: 'Товар не найден' };
 
-  // Keep metadata DB-free to reduce pressure on Neon during traffic spikes.
-  const readable = slug.replace(/-/g, ' ');
-  return { title: `${readable} — errani` };
+  // Keep metadata DB-free to reduce pressure on the database during traffic spikes.
+  // Do not append "— errani" here: root layout title.template already does that.
+  const readable = slug
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+  return { title: readable || 'Товар' };
 }
 
 export default async function ProductPage({ params }: Props) {
@@ -54,7 +60,8 @@ export default async function ProductPage({ params }: Props) {
 
   if (!product || !product.isActive) notFound();
   const normalizedProduct = await normalizeProductMedia(product);
-  const canBePurchased = product.inStock && !product.isSaleDisabled && product.stock > 0 && (product.isAvailable ?? true);
+  const stock = normalizeStockFlags(product);
+  const canBePurchased = Boolean(stock.inStock);
 
   return (
     <ProductContent

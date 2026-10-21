@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { AdminSidebar } from "../AdminSidebar";
+import { AdminPage } from "../AdminPage";
+import { HeaderActions, IconButton, SearchField, Toolbar, DataList, useContactSheet, PageLoading } from "@/components/admin";
+import { adminToastClass, refreshAdminCounts } from "@/lib/admin-client";
 
 interface Inquiry {
   id: string;
@@ -31,6 +33,7 @@ const ALL_STATUSES = ["new", "read", "replied", "closed", "archived"];
 
 export default function AdminInquiriesPage() {
   const router = useRouter();
+  const contactSheet = useContactSheet();
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Inquiry | null>(null);
@@ -146,44 +149,33 @@ export default function AdminInquiriesPage() {
     try {
       await fetch("/api/inquiries", { method: "PUT", headers: { Authorization: `Bearer ${token}` } });
       notify("Все заявки отмечены как прочитанные");
+      refreshAdminCounts();
       fetchInquiries();
     } catch { /* ignore */ }
   };
 
   const newCount = inquiries.filter((i) => i.status === "new").length;
 
-  if (loading) return <div className="cms-loading"><div className="cms-spinner" /> Загрузка...</div>;
+  if (loading) return <PageLoading />;
 
   return (
-    <div className="cms-root">
-      <AdminSidebar />
-      <main className="cms-main">
-        <div className="cms-header">
-          <h1 className="cms-header-title">
-            Заявки
-            {newCount > 0 && <span className="cms-badge cms-badge-notify" style={{ marginLeft: "10px", fontSize: "12px" }}>{newCount} новых</span>}
-          </h1>
-          <div className="cms-header-actions">
-            <span style={{ fontSize: "13px", color: "var(--cms-text-muted)" }}>{inquiries.length} всего</span>
-            <button className={`cms-refresh-btn`} onClick={fetchInquiries} title="Обновить">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-            </button>
-            <button className="cms-btn cms-btn-sm" onClick={markAllRead} title="Отметить все как прочитанные">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-        </div>
+    <AdminPage
+      title="Заявки"
+      fill
+      notifyCount={newCount > 0 ? newCount : undefined}
+      actions={
+        <HeaderActions>
+          <IconButton icon="export" label="Скачать" shape="plain" onClick={() => { window.location.href = "/api/admin/export?type=inquiries&format=xls"; }} />
+          <IconButton icon="refresh" label="Обновить" shape="plain" onClick={() => { setLoading(true); fetchInquiries(); }} />
+          {newCount > 0 && (
+            <IconButton icon="view" label="Просмотреть" shape="plain" onClick={() => { void markAllRead(); setFilterStatus("new"); }} />
+          )}
+        </HeaderActions>
+      }
+    >
 
-        <div className="cms-content">
-          {/* Toolbar */}
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "12px" }}>
-            <input
-              className="cms-input cms-input-sm"
-              placeholder="Поиск..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{ width: "180px" }}
-            />
+          <Toolbar>
+            <SearchField value={search} onChange={setSearch} style={{ width: 220 }} />
             <select className="cms-select cms-select-sm" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="all">Все статусы</option>
               {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_MAP[s]?.label ?? s}</option>)}
@@ -193,56 +185,55 @@ export default function AdminInquiriesPage() {
                 {filterStatus === "archived" ? `Удалить навсегда (${checkedIds.size})` : `В архив (${checkedIds.size})`}
               </button>
             )}
-          </div>
+          </Toolbar>
 
-          {/* Table */}
-          <div className="cms-table-wrap">
+          <DataList>
             <table className="cms-table">
               <thead>
                 <tr>
-                  <th style={{ width: 36 }}>
+                  <th className="cms-col-check">
                     <input type="checkbox" checked={checkedIds.size === filtered.length && filtered.length > 0} onChange={toggleAll} />
                   </th>
-                  <th>Имя</th>
-                  <th>Email</th>
-                  <th>Телефон</th>
-                  <th style={{ width: "30%" }}>Сообщение</th>
-                  <th>Статус</th>
-                  <th>Источник</th>
-                  <th>Дата</th>
-                  <th style={{ width: 80 }}>Действия</th>
+                  <th style={{ width: "16%" }}>Имя</th>
+                  <th style={{ width: "16%" }}>Email</th>
+                  <th style={{ width: "12%" }}>Телефон</th>
+                  <th style={{ width: "20%" }}>Сообщение</th>
+                  <th className="cms-col-status">Статус</th>
+                  <th style={{ width: "10%" }}>Источник</th>
+                  <th style={{ width: "10%" }}>Дата</th>
+                  <th className="cms-col-actions" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((inquiry) => (
                   <tr key={inquiry.id} className={`${checkedIds.has(inquiry.id) ? "cms-row-selected" : ""} ${inquiry.status === "new" ? "cms-row-new" : ""}`}>
-                    <td><input type="checkbox" checked={checkedIds.has(inquiry.id)} onChange={() => toggleCheck(inquiry.id)} /></td>
-                    <td className="cms-td-bold">{inquiry.name}</td>
+                    <td className="cms-col-check"><input type="checkbox" checked={checkedIds.has(inquiry.id)} onChange={() => toggleCheck(inquiry.id)} /></td>
                     <td>
-                      <a href={`mailto:${inquiry.email}`} style={{ color: "var(--cms-accent)" }}>{inquiry.email}</a>
+                      <div className="cms-list-client">
+                        <span className="cms-list-client-actions">
+                          {inquiry.phone ? (
+                            <IconButton icon="phone" label={inquiry.phone} shape="square" size="sm" onClick={() => contactSheet.open({ type: "phone", value: inquiry.phone! })} />
+                          ) : null}
+                          <IconButton icon="mail" label={inquiry.email} shape="square" size="sm" onClick={() => contactSheet.open({ type: "email", value: inquiry.email })} />
+                        </span>
+                        <span className="cms-list-client-name">{inquiry.name}</span>
+                      </div>
                     </td>
-                    <td>
-                      {inquiry.phone ? (
-                        <a href={`tel:${inquiry.phone}`} style={{ color: "var(--cms-accent)" }}>{inquiry.phone}</a>
-                      ) : "—"}
-                    </td>
-                    <td style={{ maxWidth: "300px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {inquiry.message.substring(0, 80)}{inquiry.message.length > 80 ? "..." : ""}
-                    </td>
-                    <td>
+                    <td className="cms-list-clamp-24">{inquiry.email}</td>
+                    <td>{inquiry.phone || "—"}</td>
+                    <td><div className="cms-list-clamp-35">{inquiry.message}</div></td>
+                    <td className="cms-col-status">
                       <span className={`cms-badge ${STATUS_MAP[inquiry.status]?.cls ?? "cms-badge"}`}>
                         {STATUS_MAP[inquiry.status]?.label ?? inquiry.status}
                       </span>
                     </td>
-                    <td style={{ fontSize: "12px", color: "var(--cms-text-muted)" }}>{inquiry.source}</td>
+                    <td style={{ color: "var(--cms-text-muted)" }}>{inquiry.source}</td>
                     <td>{new Date(inquiry.createdAt).toLocaleDateString("ru-RU")}</td>
-                    <td>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => openInquiry(inquiry)} title="Просмотр">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                      </button>
-                      <button className="cms-btn cms-btn-xs cms-btn-ghost" onClick={() => setDeleteConfirm([inquiry.id])} title="Архив / удалить" style={{ color: "var(--cms-danger)" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-                      </button>
+                    <td className="cms-col-actions">
+                      <div className="cms-row-actions">
+                        <IconButton icon="view" label="Просмотр" shape="square" onClick={() => openInquiry(inquiry)} />
+                        <IconButton icon="archive" label="Архив" shape="square" tone="danger" onClick={() => setDeleteConfirm([inquiry.id])} />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -251,8 +242,7 @@ export default function AdminInquiriesPage() {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
+          </DataList>
 
         {/* Detail Modal */}
         {selected && (
@@ -266,7 +256,13 @@ export default function AdminInquiriesPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "20px" }}>
                   <div>
                     <label className="cms-label">Email</label>
-                    <a href={`mailto:${selected.email}`} style={{ color: "var(--cms-accent)" }}>{selected.email}</a>
+                    <button
+                      type="button"
+                      className="cms-linkbtn"
+                      onClick={() => router.push(`/admin/email?thread=${encodeURIComponent(selected.email.trim().toLowerCase())}`)}
+                    >
+                      {selected.email}
+                    </button>
                   </div>
                   <div>
                     <label className="cms-label">Телефон</label>
@@ -355,9 +351,9 @@ export default function AdminInquiriesPage() {
 
         {/* Notification */}
         {notification && (
-          <div className="cms-notification">{notification}</div>
+          <div className={adminToastClass(notification)}>{notification}</div>
         )}
-      </main>
-    </div>
+      {contactSheet.node}
+    </AdminPage>
   );
 }

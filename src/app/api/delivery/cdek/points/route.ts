@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CdekError, getCdekPickupPoints, getCdekPickupPointsForLocation } from '@/lib/cdek';
+import { flash, langFromRequest } from '@/lib/flash';
 
 export async function GET(req: NextRequest) {
+  const lang = langFromRequest(req);
   try {
     const { searchParams } = new URL(req.url);
     const city = searchParams.get('city')?.trim() || '';
@@ -13,7 +15,7 @@ export async function GET(req: NextRequest) {
     const latitude = latitudeRaw ? Number(latitudeRaw) : null;
     const longitude = longitudeRaw ? Number(longitudeRaw) : null;
     if (!cityCode && city.length < 2) {
-      return NextResponse.json({ error: 'Введите город.' }, { status: 400 });
+      return NextResponse.json({ error: flash(lang, 'cdek.enter_city') }, { status: 400 });
     }
 
     const points = cityCode
@@ -31,9 +33,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(points, { headers: { 'Cache-Control': 'private, max-age=300' } });
   } catch (error) {
     if (error instanceof CdekError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json({ error: error.localize(lang) }, { status: error.status });
     }
     console.error('Unexpected CDEK pickup points error:', error);
-    return NextResponse.json({ error: 'Не удалось загрузить пункты выдачи СДЭК.' }, { status: 500 });
+    return NextResponse.json({ error: flash(lang, 'cdek.load_points_failed') }, { status: 500 });
   }
 }
